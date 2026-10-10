@@ -38,3 +38,12 @@ array, USB mic, webcam mic) expose `IAcousticEchoCancellationControl` and accept
 reference; AEC, noise suppression and beamforming are on by default in Communications mode.
 Option A is therefore available. Next: measure echo reduction with
 `aec_test --play` (plays a clip, records raw and AEC'd mic in parallel).
+
+## Update 2026-10-10 (measured)
+Mikkel's speakers are a **Logitech Z337 over Bluetooth A2DP** (no AUX cable available). With the
+laptop microphone array, Windows communications-mode AEC referenced to the Z337 removed only
+~4 dB of echo; GCC-PHAT finds the played clip clearly in its output. The OEM AEC can't follow the
+large, drifting Bluetooth delay. **Option A is rejected for this setup; go with option B** (own
+AEC3 on the raw mic with the loopback as reference), preceded by a chirp calibration that
+measures the delay. Noise suppression from Windows (~18 dB on room noise) remains attractive and
+may be kept by capturing in Communications mode with AEC disabled, if the driver allows it.

@@ -18,7 +18,7 @@ Landscape researched 2026-10-10.
 | Embedder | harrier-oss-v1-270m (MIT, MMTEB v2 66.5) | EmbeddingGemma 2 (Apache, 61.4, multimodal) | v0.2 bake-off |
 | Reranker | bge-reranker-v2-m3 | Qwen3-Reranker | v0.2 |
 | Vector store | SQLite + FTS5 + sqlite-vec | Tantivy for Danish BM25, LanceDB | Decided ([0007](adr/0007-memory-model.md)) |
-| AEC | **Windows comms AEC** with speakers as reference: supported on all 3 mics (probe 2026-10-10) | WebRTC AEC3 + DeepFilterNet | Echo reduction to be measured (`aec_test --play`) |
+| AEC | **Own WebRTC AEC3** (pure-Rust `aec3`) with loopback reference | Windows comms AEC: supported by the driver but only **~4 dB** on the Bluetooth Z337 | Calibration + tuning next (aec-lab) |
 
 Checked and rejected for now: KittenTTS 2 (no Danish), Kokoro for Danish (no Danish), full-duplex
 speech-to-speech models (none with usable Danish locally), LiveKit turn detector (no Danish),

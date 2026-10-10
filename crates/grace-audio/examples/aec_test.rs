@@ -2,6 +2,7 @@
 //!
 //!   cargo run --release -p grace-audio --example aec_test -- --play [--mic <name>] [--speakers <name>] [--clip <wav>]
 //!
+//! `--analyse <dir>` re-analyses a saved run without playing anything.
 //! Devices default to `config/audio.json`. Without `--play` it only prints which devices and
 //! clip it would use: this tool makes noise.
 //!
@@ -112,19 +113,43 @@ fn load_clip(path: Option<String>) -> anyhow::Result<(Vec<f32>, u32)> {
     Ok((out, rate))
 }
 
-fn dbfs(samples: &[f32]) -> f64 {
-    if samples.is_empty() {
-        return f64::NEG_INFINITY;
-    }
-    let rms =
-        (samples.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / samples.len() as f64).sqrt();
-    20.0 * rms.max(1e-9).log10()
+/// Mean power per 10 ms frame.
+fn envelope(take: &Take) -> Vec<f64> {
+    let frame = take.rate as usize / 100;
+    take.samples
+        .chunks_exact(frame)
+        .map(|c| c.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / frame as f64)
+        .collect()
 }
 
-fn window(take: &Take, from: Duration, to: Duration) -> &[f32] {
-    let a = (from.as_secs_f64() * take.rate as f64) as usize;
-    let b = ((to.as_secs_f64() * take.rate as f64) as usize).min(take.samples.len());
-    &take.samples[a.min(b)..b]
+fn to_db(power: f64) -> f64 {
+    10.0 * power.max(1e-12).log10()
+}
+
+fn correlation(a: &[f64], b: &[f64]) -> f64 {
+    let la: Vec<f64> = a.iter().map(|&x| to_db(x)).collect();
+    let lb: Vec<f64> = b.iter().map(|&x| to_db(x)).collect();
+    let (ma, mb) = (
+        la.iter().sum::<f64>() / la.len() as f64,
+        lb.iter().sum::<f64>() / lb.len() as f64,
+    );
+    let cov: f64 = la.iter().zip(&lb).map(|(x, y)| (x - ma) * (y - mb)).sum();
+    let va: f64 = la.iter().map(|x| (x - ma).powi(2)).sum();
+    let vb: f64 = lb.iter().map(|y| (y - mb).powi(2)).sum();
+    cov / (va.sqrt() * vb.sqrt()).max(1e-12)
+}
+
+/// Lag (in 10 ms frames) at which `mic` best follows `reference`, searched up to 4 s.
+fn best_lag(reference: &[f64], mic: &[f64]) -> usize {
+    (0..400.min(mic.len().saturating_sub(100)))
+        .max_by(|&a, &b| {
+            let score = |lag: usize| {
+                let n = reference.len().min(mic.len() - lag);
+                correlation(&mic[lag..lag + n], &reference[..n])
+            };
+            score(a).total_cmp(&score(b))
+        })
+        .unwrap_or(0)
 }
 
 fn save(dir: &Path, take: &Take) -> anyhow::Result<()> {
@@ -142,7 +167,113 @@ fn save(dir: &Path, take: &Take) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Prints echo metrics for (raw, aec, loopback) recordings.
+fn analyse(takes: &[Take], render_started_ms: Option<f64>) -> anyhow::Result<()> {
+    let [raw, aec, lp] = [&takes[0], &takes[1], &takes[2]];
+
+    // Align the mic to the speaker signal by loudness-envelope correlation (robust to room
+    // reverb and Bluetooth codecs, unlike a sample-level fit).
+    let (env_raw, env_aec, env_lp) = (envelope(raw), envelope(aec), envelope(lp));
+    let lag = best_lag(&env_lp, &env_raw);
+    let n = env_lp
+        .len()
+        .min(env_raw.len().saturating_sub(lag))
+        .min(env_aec.len().saturating_sub(lag));
+    anyhow::ensure!(n > 200, "recordings too short to analyse");
+    let lp = &env_lp[..n];
+    let mut sorted = lp.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let (loud_t, pause_t) = (sorted[n * 70 / 100], sorted[n * 15 / 100]);
+    let stats = |env: &[f64]| {
+        let m = &env[lag..lag + n];
+        // Medians, not means: room-noise bursts (a cough, a door) would dominate a power mean.
+        let median = |pred: &dyn Fn(f64) -> bool| {
+            let mut v: Vec<f64> = m
+                .iter()
+                .zip(lp)
+                .filter(|(_, l)| pred(**l))
+                .map(|(e, _)| *e)
+                .collect();
+            v.sort_by(f64::total_cmp);
+            v.get(v.len() / 2).copied().unwrap_or(1e-12)
+        };
+        let (loud, pause) = (median(&|l| l >= loud_t), median(&|l| l <= pause_t));
+        // Echo power = level while the clip is loud minus the floor in its pauses.
+        let echo = loud - pause;
+        (to_db(loud), to_db(pause), echo, correlation(m, lp))
+    };
+    let (raw_loud, raw_pause, raw_echo, raw_corr) = stats(&env_raw);
+    let (aec_loud, aec_pause, aec_echo, aec_corr) = stats(&env_aec);
+    // The mic stream started at ~0 and the render stream at `render_started`; the remainder is
+    // the acoustic path, including any Bluetooth buffering.
+    let delay_ms = render_started_ms.map(|r| lag as f64 * 10.0 - r);
+
+    println!(
+        "
+{:<5} {:>11} {:>12} {:>14}",
+        "", "clip loud", "clip pauses", "follows clip"
+    );
+    println!(
+        "{:<5} {:>8.1} dB {:>9.1} dB {:>14.2}",
+        "raw", raw_loud, raw_pause, raw_corr
+    );
+    println!(
+        "{:<5} {:>8.1} dB {:>9.1} dB {:>14.2}",
+        "aec", aec_loud, aec_pause, aec_corr
+    );
+    match delay_ms {
+        Some(d) => println!("\nspeaker → mic delay (incl. Bluetooth): ~{d:.0} ms"),
+        None => println!("\nspeaker → mic delay: unknown (no meta.json)"),
+    }
+    println!("alignment: mic lags the speaker signal by {} ms", lag * 10);
+    if raw_echo <= 0.0 {
+        println!(
+            "echo reduction:        not measurable (no echo above the room floor in the raw mic)"
+        );
+    } else if aec_echo <= 0.0 {
+        println!(
+            "echo reduction:        > {:.1} dB (residual below the AEC noise floor)",
+            to_db(raw_echo) - aec_pause
+        );
+    } else {
+        println!(
+            "echo reduction:        {:.1} dB   (good AEC: 25+ dB)",
+            to_db(raw_echo) - to_db(aec_echo)
+        );
+    }
+    println!("noise floor reduction: {:.1} dB", raw_pause - aec_pause);
+    if raw_echo <= 0.0 || to_db(raw_echo) - raw_pause < 6.0 {
+        println!("
+WARNING: the clip was barely louder than the room in the raw mic; turn the speakers up or reduce room noise.");
+    }
+    Ok(())
+}
+
+fn load_take(dir: &Path, name: &'static str) -> anyhow::Result<Take> {
+    let mut r = hound::WavReader::open(dir.join(format!("{name}.wav")))?;
+    let rate = r.spec().sample_rate;
+    let samples = r.samples::<f32>().collect::<Result<_, _>>()?;
+    Ok(Take {
+        name,
+        rate,
+        samples,
+    })
+}
+
 fn main() -> anyhow::Result<()> {
+    if let Some(dir) = arg("--analyse") {
+        let dir = PathBuf::from(dir);
+        let takes = vec![
+            load_take(&dir, "raw")?,
+            load_take(&dir, "aec")?,
+            load_take(&dir, "loopback")?,
+        ];
+        let meta: Option<serde_json::Value> = std::fs::read_to_string(dir.join("meta.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok());
+        return analyse(&takes, meta.and_then(|m| m["render_started_ms"].as_f64()));
+    }
+
     wasapi::com_init()?;
     // Devices come from config/audio.json unless overridden on the command line.
     let prefs = wasapi::DevicePrefs::load(Path::new("config/audio.json"))?;
@@ -185,50 +316,35 @@ Dry run. Add --play to play the clip through the speakers and measure."
         ),
     ];
 
-    thread::sleep(BASELINE);
+    // WASAPI loopback delivers no packets while nothing renders, so render digital silence
+    // around the clip: the loopback recording then covers the whole render timeline.
     let mut render = Render::open(&speakers)?;
-    let pcm = wasapi::resample_linear(&clip, clip_rate, render.rate());
-    let play_from = started.elapsed();
-    println!(
-        "playing {:.1} s ...",
-        pcm.len() as f64 / render.rate() as f64
-    );
+    let rate = render.rate() as usize;
+    let pad = |d: Duration| rate * d.as_millis() as usize / 1000;
+    let mut pcm = vec![0.0; pad(BASELINE)];
+    pcm.extend(wasapi::resample_linear(&clip, clip_rate, render.rate()));
+    pcm.extend(std::iter::repeat_n(0.0, pad(TAIL)));
+    let render_started = started.elapsed();
+    println!("playing {:.1} s ...", pcm.len() as f64 / rate as f64);
     render.play_blocking(&pcm)?;
-    let play_to = started.elapsed();
-    thread::sleep(TAIL);
+    thread::sleep(Duration::from_millis(500)); // let the Bluetooth/room tail arrive
     stop.store(true, Ordering::Relaxed);
 
     let takes: Vec<Take> = takes
         .into_iter()
         .map(|h| h.join().expect("capture thread panicked"))
         .collect::<anyhow::Result<_>>()?;
-
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let dir = PathBuf::from(format!("bench-results/aec/{stamp}"));
     std::fs::create_dir_all(&dir)?;
-    println!(
-        "\n{:<9} {:>12} {:>12}",
-        "stream", "quiet dBFS", "playing dBFS"
-    );
-    let mut levels = std::collections::HashMap::new();
     for take in &takes {
-        // Skip the first 300 ms of the baseline: streams settle after Start().
-        let quiet = dbfs(window(take, Duration::from_millis(300), BASELINE));
-        let playing = dbfs(window(take, play_from, play_to));
-        println!("{:<9} {quiet:>12.1} {playing:>12.1}", take.name);
-        levels.insert(take.name, (quiet, playing));
         save(&dir, take)?;
     }
-    let (_, raw) = levels["raw"];
-    let (aec_quiet, aec) = levels["aec"];
-    println!(
-        "\necho reduction (raw → aec, while playing): {:.1} dB",
-        raw - aec
-    );
-    println!(
-        "aec residual above its own quiet floor:    {:.1} dB",
-        aec - aec_quiet
-    );
+    std::fs::write(
+        dir.join("meta.json"),
+        format!("{{\"render_started_ms\": {}}}", render_started.as_millis()),
+    )?;
+    analyse(&takes, Some(render_started.as_secs_f64() * 1000.0))?;
     println!("recordings: {}", dir.display());
     Ok(())
 }

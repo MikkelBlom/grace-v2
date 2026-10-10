@@ -1,0 +1,5 @@
+{
+  "_comment": "Preferred audio devices, matched case-insensitively against Windows friendly names, first match wins. Used by the engine and the audio test tools.",
+  "speakers": ["Z337"],
+  "microphone": ["Microphone Array"]
+}

@@ -305,6 +305,8 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "hound",
+ "serde",
+ "serde_json",
  "windows",
 ]
 

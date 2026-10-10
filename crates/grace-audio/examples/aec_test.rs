@@ -2,7 +2,8 @@
 //!
 //!   cargo run --release -p grace-audio --example aec_test -- --play [--mic <name>] [--speakers <name>] [--clip <wav>]
 //!
-//! Without `--play` it only prints which devices and clip it would use: this tool makes noise.
+//! Devices default to `config/audio.json`. Without `--play` it only prints which devices and
+//! clip it would use: this tool makes noise.
 //!
 //! Plays a clip through the speakers while recording, in parallel:
 //! - the microphone RAW (no voice processing): how much echo reaches the mic;
@@ -143,13 +144,15 @@ fn save(dir: &Path, take: &Take) -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     wasapi::com_init()?;
+    // Devices come from config/audio.json unless overridden on the command line.
+    let prefs = wasapi::DevicePrefs::load(Path::new("config/audio.json"))?;
     let mic = match arg("--mic") {
         Some(n) => wasapi::find(Flow::Capture, &[&n])?,
-        None => wasapi::default_endpoint(Flow::Capture, true)?,
+        None => prefs.microphone()?,
     };
     let speakers = match arg("--speakers") {
         Some(n) => wasapi::find(Flow::Render, &[&n])?,
-        None => wasapi::find(Flow::Render, &["speaker", "højttaler", "realtek"])?,
+        None => prefs.speakers()?,
     };
     println!("mic:      {}\nspeakers: {}", mic.name, speakers.name);
     let (clip, clip_rate) = load_clip(arg("--clip"))?;

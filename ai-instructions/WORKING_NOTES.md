@@ -42,8 +42,7 @@
 - `aec_test` plays sound: it requires `--play`. An accidental run played 17 s through the
   speakers once (a `--help` check); never probe it with arbitrary flags.
 - sherpa-onnx CUDA wheels need cuBLAS/cuDNN on PATH; prepend `torch/lib` (done in tts.py).
-- Default render device was Mikkel's Buds4 Pro earbuds at the time; speakers are
-  "Speakers (Realtek(R) Audio)". Default comms mic is "USB Audio Device".
+- Devices: speakers = **Logitech Z337**, mic = laptop **Microphone Array (Realtek)**, set in `config/audio.json`. Never use the VF0700 (webcam) or the USB Audio Device. The Realtek "Speakers" are the laptop speakers, not his.
 - llama-server pick: `-ngl 99 -c 16384 -np 2 -fa on -ctk q8_0 -ctv q8_0 --reasoning off --swa-full`.
   Without `--swa-full` Gemma 4 pays ~180 ms fixed prefill per request (log warns "cache_reuse is not
   supported by this context"). Don't leave llama-server running after a session: ~10 GB VRAM.

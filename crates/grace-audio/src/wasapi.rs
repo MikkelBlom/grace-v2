@@ -90,6 +90,46 @@ pub fn find(flow: Flow, needles: &[&str]) -> anyhow::Result<Endpoint> {
     bail!("no {flow:?} endpoint matching {needles:?}; have {names:?}")
 }
 
+/// Preferred devices from `config/audio.json` (see that file). Missing file or no match falls
+/// back to the Windows default, with a warning, rather than guessing a different device.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct DevicePrefs {
+    #[serde(default)]
+    pub speakers: Vec<String>,
+    #[serde(default)]
+    pub microphone: Vec<String>,
+}
+
+impl DevicePrefs {
+    pub fn load(path: &std::path::Path) -> anyhow::Result<Self> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => Ok(serde_json::from_str(&text)
+                .with_context(|| format!("parsing {}", path.display()))?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn speakers(&self) -> anyhow::Result<Endpoint> {
+        resolve(Flow::Render, &self.speakers, false)
+    }
+
+    pub fn microphone(&self) -> anyhow::Result<Endpoint> {
+        resolve(Flow::Capture, &self.microphone, true)
+    }
+}
+
+fn resolve(flow: Flow, names: &[String], communications: bool) -> anyhow::Result<Endpoint> {
+    if names.is_empty() {
+        return default_endpoint(flow, communications);
+    }
+    let needles: Vec<&str> = names.iter().map(String::as_str).collect();
+    find(flow, &needles).or_else(|e| {
+        eprintln!("warning: {e}; using the Windows default {flow:?} device");
+        default_endpoint(flow, communications)
+    })
+}
+
 fn device(ep: &Endpoint) -> anyhow::Result<IMMDevice> {
     Ok(unsafe { enumerator()?.GetDevice(&HSTRING::from(ep.id.as_str()))? })
 }

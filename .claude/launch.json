@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "grace-debug",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run", "-q", "-p", "grace-debug", "--", "--ui-dir", "crates/grace-debug/ui"],
+      "port": 7700
+    }
+  ]
+}

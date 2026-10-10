@@ -1,0 +1,16 @@
+/target
+# Runtime output
+/traces
+/bench-results
+*.log
+# Python bench environments and downloaded/converted models
+/bench/.venv*
+/bench/.models
+__pycache__/
+# Fixtures: audio comes from licensed datasets or personal recordings, never committed.
+# Manifests and sentence lists are small and are committed.
+/fixtures/**/*.wav
+/fixtures/stt/manifest.jsonl
+# Secrets
+.env
+.env.*

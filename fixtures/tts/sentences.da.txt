@@ -1,0 +1,12 @@
+# Typical Grace replies: short acknowledgements, everyday answers, numbers, names, and English
+# tech words mixed into Danish. One sentence per line, because the engine streams per sentence.
+Ja, det klarer jeg.
+Et øjeblik, jeg kigger lige efter.
+Klokken er kvart over tre.
+I morgen bliver det overskyet med op til fjorten grader og lidt regn om eftermiddagen.
+Jeg har fundet tre filer i mappen Projekter, der hedder noget med budget.
+Det lyder som en god idé, men jeg ville teste det først, før vi bygger videre på det.
+Jeg åbner Visual Studio Code for dig nu.
+Søgningen gav fire resultater, og det mest relevante er fra Danmarks Statistik.
+Undskyld, det hørte jeg ikke helt. Kan du sige det igen?
+Din dev-server på port tre tusind kører stadig, men databasen svarer ikke.

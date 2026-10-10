@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license-file = "LICENSE"
+repository = "https://github.com/MikkelBlom/grace-v2"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.dev]
+# Keep incremental rebuilds fast; dependencies optimized so audio/bench code is usable in dev.
+debug = 1
+[profile.dev.package."*"]
+opt-level = 2

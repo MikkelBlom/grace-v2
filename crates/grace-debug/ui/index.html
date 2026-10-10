@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grace Debug</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a21; --line: #252b36; --text: #d7dce4; --muted: #7d8696;
+    --accent: #e8b04a;
+    --vad: #5b8def; --turn: #8a6cf0; --stt: #3fb98a; --llm: #e8b04a; --tool: #e0715c;
+    --tts: #4fb3d9; --other: #6b7383;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 system-ui, sans-serif; }
+  header { display: flex; gap: 16px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: .04em; }
+  header h1 span { color: var(--accent); }
+  select, label { font: inherit; color: var(--text); }
+  select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; max-width: 60vw; }
+  .stat { margin-left: auto; color: var(--muted); font-family: var(--mono); }
+  main { padding: 16px; display: grid; gap: 14px; max-width: 1400px; }
+  .turn { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .turn-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 10px; }
+  .turn-head b { font-family: var(--mono); }
+  .kpi { font-family: var(--mono); color: var(--muted); }
+  .kpi em { font-style: normal; color: var(--text); }
+  .kpi.hot em { color: var(--accent); }
+  .row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 70px; gap: 0 10px; align-items: center; min-height: 22px; }
+  .label { font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .label .model { opacity: .6; }
+  .track { position: relative; height: 14px; }
+  .bar { position: absolute; top: 0; height: 14px; border-radius: 3px; min-width: 2px; }
+  .dot { position: absolute; top: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--text); transform: translateX(-4px); }
+  .dur { font-family: var(--mono); text-align: right; }
+  .fields { grid-column: 1 / -1; font-family: var(--mono); color: var(--muted); font-size: 12px; padding: 0 0 4px 12px; white-space: pre-wrap; }
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+  summary { cursor: pointer; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; margin-top: 8px; }
+  td { padding: 2px 8px 2px 0; vertical-align: top; border-top: 1px solid var(--line); }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  @media (max-width: 640px) { .row { grid-template-columns: 110px 1fr 56px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>GRACE <span>debug</span></h1>
+  <select id="session"></select>
+  <label><input type="checkbox" id="live" checked> live</label>
+  <div class="stat" id="stat"></div>
+</header>
+<main id="main"><div class="empty">No trace files yet. Run something that traces into the traces directory.</div></main>
+<script>
+const COLORS = { vad: 'var(--vad)', turn: 'var(--turn)', stt: 'var(--stt)', llm: 'var(--llm)', tool: 'var(--tool)', tts: 'var(--tts)' };
+const sel = document.getElementById('session');
+const live = document.getElementById('live');
+const main = document.getElementById('main');
+const stat = document.getElementById('stat');
+let current = null, offset = 0, records = [];
+
+const stageOf = r => (r.fields && r.fields.stage) || r.name;
+const colorOf = r => COLORS[stageOf(r).split('.')[0]] || 'var(--other)';
+const ms = us => (us / 1000).toFixed(us < 10000 ? 1 : 0);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function loadSessions() {
+  const list = await (await fetch('/api/sessions')).json();
+  const keep = sel.value;
+  sel.innerHTML = list.map(s => `<option value="${esc(s.name)}">${esc(s.name)} (${(s.bytes / 1024).toFixed(1)} KB)</option>`).join('');
+  if (list.length && !list.some(s => s.name === keep)) sel.value = list[0].name; else if (keep) sel.value = keep;
+  if (sel.value && sel.value !== current) switchTo(sel.value);
+}
+
+function switchTo(name) { current = name; offset = 0; records = []; poll(); }
+
+async function poll() {
+  if (!current) return;
+  const res = await fetch(`/api/sessions/${encodeURIComponent(current)}?offset=${offset}`);
+  if (!res.ok) return;
+  const chunk = await res.json();
+  if (chunk.offset < offset) records = []; // file was truncated/rotated
+  offset = chunk.offset;
+  if (chunk.records.length) { records.push(...chunk.records); render(); }
+  else if (!records.length) render();
+}
+
+// Response latency = end of the user's speech → end of time-to-first-audio.
+function kpis(turn) {
+  const end = r => r.ts_us + (r.dur_us || 0);
+  const find = s => turn.find(r => r.kind === 'span' && stageOf(r) === s);
+  const speech = find('vad.speech'), ttfa = find('tts.ttfa');
+  const out = [];
+  if (speech && ttfa) out.push(['speech end → first audio', end(ttfa) - end(speech), true]);
+  for (const s of ['stt', 'llm.ttft', 'tts.ttfa']) { const r = find(s); if (r) out.push([s, r.dur_us, false]); }
+  return out;
+}
+
+function depthOf(r, byId) {
+  let d = 0, p = r.parent_id;
+  while (p != null && byId.has(p) && d < 12) { d++; p = byId.get(p).parent_id; }
+  return d;
+}
+
+function renderTurn(id, turn) {
+  const byId = new Map(turn.filter(r => r.span_id != null).map(r => [r.span_id, r]));
+  const t0 = Math.min(...turn.map(r => r.ts_us));
+  const t1 = Math.max(...turn.map(r => r.ts_us + (r.dur_us || 0)));
+  const span = Math.max(t1 - t0, 1);
+  const rows = turn
+    .filter(r => !(r.kind === 'span' && r.name === 'turn'))
+    .sort((a, b) => a.ts_us - b.ts_us)
+    .map(r => {
+      const left = ((r.ts_us - t0) / span) * 100;
+      const indent = '&nbsp;'.repeat(depthOf(r, byId) * 2);
+      const model = r.fields && r.fields.model ? ` <span class="model">${esc(r.fields.model)}</span>` : '';
+      const extra = Object.entries(r.fields || {}).filter(([k]) => !['stage', 'model', 'turn'].includes(k));
+      const fields = extra.length ? `<div class="fields">${esc(extra.map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join('  '))}</div>` : '';
+      if (r.kind === 'span') {
+        const width = ((r.dur_us || 0) / span) * 100;
+        return `<div class="row"><div class="label">${indent}${esc(stageOf(r))}${model}</div><div class="track"><div class="bar" style="left:${left}%;width:${width}%;background:${colorOf(r)}"></div></div><div class="dur">${ms(r.dur_us || 0)} ms</div>${fields}</div>`;
+      }
+      return `<div class="row"><div class="label">${indent}• ${esc(r.name)}</div><div class="track"><div class="dot" style="left:${left}%"></div></div><div class="dur">${r.level === 'INFO' ? '' : esc(r.level)}</div>${fields}</div>`;
+    }).join('');
+  const k = kpis(turn).map(([name, us, hot]) => `<span class="kpi${hot ? ' hot' : ''}">${esc(name)} <em>${ms(us)} ms</em></span>`).join('');
+  return `<section class="turn"><div class="turn-head"><b>${esc(id)}</b><span class="kpi">total <em>${ms(span)} ms</em></span>${k}</div>${rows}</section>`;
+}
+
+function render() {
+  if (!records.length) { main.innerHTML = '<div class="empty">This session has no records yet.</div>'; stat.textContent = ''; return; }
+  const turns = new Map(), loose = [];
+  for (const r of records) { if (r.turn) { if (!turns.has(r.turn)) turns.set(r.turn, []); turns.get(r.turn).push(r); } else loose.push(r); }
+  const ordered = [...turns.entries()].sort((a, b) => Math.min(...b[1].map(r => r.ts_us)) - Math.min(...a[1].map(r => r.ts_us)));
+  const log = loose.slice(-300).reverse().map(r => `<tr><td>${new Date(r.ts_us / 1000).toLocaleTimeString()}</td><td>${esc(r.level)}</td><td>${esc(r.kind === 'span' ? stageOf(r) + ' ' + ms(r.dur_us || 0) + ' ms' : r.name)}</td><td>${esc(JSON.stringify(r.fields || {}))}</td></tr>`).join('');
+  main.innerHTML = ordered.map(([id, t]) => renderTurn(id, t)).join('') +
+    `<details${ordered.length ? '' : ' open'}><summary>Process log (${loose.length} outside turns)</summary><table>${log}</table></details>`;
+  stat.textContent = `${turns.size} turns · ${records.length} records`;
+}
+
+sel.addEventListener('change', () => switchTo(sel.value));
+loadSessions();
+setInterval(() => { if (live.checked) { poll(); loadSessions(); } }, 1000);
+</script>
+</body>
+</html>

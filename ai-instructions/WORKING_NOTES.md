@@ -1,0 +1,34 @@
+# Working notes
+
+## Environment / gotchas
+- **Bench Python envs** are `uv` venvs with `--system-site-packages`, reusing the global Python
+  3.12 CUDA torch (2.11.0+cu128, needed for the 5090 / Blackwell). One venv per conflicting
+  candidate: `bench/.venv` (transformers 4.57, sherpa-onnx, supertonic, pyarrow) and
+  `bench/.venv-chatterbox` (transformers 5.2, numpy < 2.4). Never `pip install` a package that
+  pulls its own torch into these venvs: chatterbox deps pulled a CPU torch 2.14 once and broke CUDA.
+  If it happens: `uv pip uninstall --python <venv python> torch torchaudio`.
+- **Windows pipes default to cp1252**: Python runners must `reconfigure(encoding="utf-8")`
+  (done in `bench/runners/common.py`) or æøå break the JSON protocol.
+- **FLEURS ids are per sentence, not per recording**; clip ids add an index.
+- **CoRal v3 is gated** (auto-approve): Mikkel must click "request access" on HF.
+- **GitHub project board** needs the `project` token scope: `gh auth refresh -s project`
+  (interactive, Mikkel runs it).
+
+## Measurements so far (details in docs/MODELS.md)
+- Whisper-family STT has a near-fixed cost (encoder runs a padded 30 s window): edda on
+  CTranslate2 ≈ 240 ms regardless of clip length. Transducers (ekko) scale with length.
+- Chatterbox (Røst 350m) ≈ 2 s per sentence non-streaming; RTF 0.44, so streaming could work.
+- Piper ≈ 90 ms per sentence on CPU; quality is the known weak point.
+
+## Open questions
+- AEC option A (Windows comms AEC with render-endpoint reference) may not be exposed by this
+  laptop's audio driver; check before building option B.
+- E4B (Tau2 42) vs 12B (Tau2 69): published agentic scores favour 12B strongly; decide on our
+  own tool traces in v0.3, measuring TTFT too.
+- `ekko-v1-tiny` licence is a custom composite (NVIDIA Open Model + CoRal + CC-BY); read before
+  depending on it.
+
+## Decisions made (and why), not yet worth an ADR
+- Bench runners are separate processes speaking JSON lines, so any language and any runtime
+  can be compared; model load is excluded from per-request latency.
+- `grace-debug` polls once a second with byte offsets instead of SSE; simpler, good enough.

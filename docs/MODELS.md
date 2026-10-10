@@ -52,6 +52,15 @@ sentence. p95 includes the first-call warm-up.
 | Piper da_DK-talesyntese-medium | ONNX CPU | **90 ms** | 737 ms | 0.03 |
 | Supertonic 3 (F1, 8 steps) | ONNX CPU 4 threads | 844 ms | 1144 ms | 0.20 |
 | Supertonic 3 (M1, 8 steps) | ONNX CPU 4 threads | 854 ms | 1227 ms | 0.21 |
-<!-- CHATTERBOX_RESULTS -->
+| Røst-v3 Chatterbox 350m (Turbo) | PyTorch CUDA, non-streaming | 2029 ms | 2967 ms* | 0.44 |
+| Røst-v3 Chatterbox 500m (Multilingual) | PyTorch CUDA, non-streaming | 3285 ms | 4612 ms | 0.89 |
+
+\* 350m's first call took 17.6 s (CUDA warm-up); p95 shown excludes it.
+
+Read: Piper is the only voice fast enough for a first sentence today, and the robotic one. The
+Røst voices are the only ones with native-listener quality scores (MOS 4.23 / 4.01, published),
+but at 2–3 s per sentence they need streaming or an ONNX/compiled path before they can lead a
+reply. A Supertonic 3 run with 4 steps / 8 threads overlapped the Chatterbox download and was
+discarded as noisy.
 
 Quality is judged by ear: `grace-bench listen bench-results/tts` builds a blind A/B page.

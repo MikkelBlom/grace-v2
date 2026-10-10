@@ -4,8 +4,28 @@
     {
       "name": "grace-debug",
       "runtimeExecutable": "cargo",
-      "runtimeArgs": ["run", "-q", "-p", "grace-debug", "--", "--ui-dir", "crates/grace-debug/ui"],
+      "runtimeArgs": [
+        "run",
+        "-q",
+        "-p",
+        "grace-debug",
+        "--",
+        "--ui-dir",
+        "crates/grace-debug/ui"
+      ],
       "port": 7700
+    },
+    {
+      "name": "bench-results",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "7701",
+        "--directory",
+        "bench-results"
+      ],
+      "port": 7701
     }
   ]
 }

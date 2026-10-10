@@ -12,14 +12,13 @@ Landscape researched 2026-10-10.
 | STT (fast/partials) | **ekko-v1-tiny** (Parakeet 110M, sherpa-onnx) | — | Measured; licence is custom, check before shipping |
 | VAD | Silero VAD v6 | TEN VAD | Not measured yet |
 | End of turn | Pipecat Smart Turn v3.2 (Danish listed) | silence timeout | Not measured yet |
-| LLM | **Gemma 4 E4B** (start here) | Gemma 4 12B (Tau2 69 vs 42), Qwen3.5-9B (Tau2 79, Danish unproven) | v0.3 bake-off on our tool traces |
+| LLM | **Gemma 4 12B** (decided 2026-10-10; Tau2 69 vs E4B's 42) | E4B as fast router, Qwen3.5-9B (Tau2 79, Danish unproven) | v0.3 bake-off on our tool traces |
 | LLM runtime | llama.cpp `llama-server` (child process) | mistral.rs embedded (Rust, needs own CUDA build on Windows) | — |
-| TTS Danish | see results | — | Blind listening test pending |
-| TTS English | Kokoro-82M | Chatterbox Turbo | Not measured yet |
+| TTS (reply voice) | **English** for now ([0011](adr/0011-reply-language.md)): Pocket TTS (CPU, streaming) vs Kokoro (CUDA) | Danish voices below | Blind listening test pending |
 | Embedder | harrier-oss-v1-270m (MIT, MMTEB v2 66.5) | EmbeddingGemma 2 (Apache, 61.4, multimodal) | v0.2 bake-off |
 | Reranker | bge-reranker-v2-m3 | Qwen3-Reranker | v0.2 |
 | Vector store | SQLite + FTS5 + sqlite-vec | Tantivy for Danish BM25, LanceDB | Decided ([0007](adr/0007-memory-model.md)) |
-| AEC | Windows comms AEC vs WebRTC AEC3 | DeepFilterNet residual | v0.1 bake-off |
+| AEC | **Windows comms AEC** with speakers as reference: supported on all 3 mics (probe 2026-10-10) | WebRTC AEC3 + DeepFilterNet | Echo reduction to be measured (`aec_test --play`) |
 
 Checked and rejected for now: KittenTTS 2 (no Danish), Kokoro for Danish (no Danish), full-duplex
 speech-to-speech models (none with usable Danish locally), LiveKit turn detector (no Danish),
@@ -63,4 +62,23 @@ but at 2–3 s per sentence they need streaming or an ONNX/compiled path before 
 reply. A Supertonic 3 run with 4 steps / 8 threads overlapped the Chatterbox download and was
 discarded as noisy.
 
-Quality is judged by ear: `grace-bench listen bench-results/tts` builds a blind A/B page.
+## TTS English — 10 typical Grace sentences, 2026-10-10
+
+Grace may answer in English while Mikkel speaks Danish ([0011](adr/0011-reply-language.md)).
+
+| Voice | Runtime | ttfa p50 | ttfa p95 | RTF p50 | Licence |
+|---|---|---|---|---|---|
+| **Pocket TTS** (Kyutai, alba) | torch **CPU**, streaming | **94 ms** | 232 ms | 0.33 | CC-BY-4.0 |
+| Kokoro-82M v1.0 (af_heart) | sherpa-onnx **CUDA** | 250 ms | 388 ms* | 0.08 | Apache 2.0 |
+| Kokoro-82M v1.0 (af_heart) | sherpa-onnx CPU 4 threads | 711 ms | 1158 ms | 0.24 | Apache 2.0 |
+| Kokoro-82M v1.0 (am_michael) | sherpa-onnx CPU 4 threads | 639 ms | 1604 ms | 0.27 | Apache 2.0 |
+| Supertonic 3 (F1, en) | ONNX CPU 4 threads | 1081 ms | 2199 ms | 0.27 | OpenRAIL-M |
+| Chatterbox Turbo (en) | PyTorch CUDA, non-streaming | 1405 ms | 3533 ms | 0.38 | MIT |
+
+\* Kokoro CUDA's first call took 54 s (CUDA/cuDNN warm-up); the engine must warm it at startup.
+
+Read: Pocket TTS streams its first audio in ~90 ms using only the CPU, which keeps the GPU for the
+LLM. Kokoro on CUDA is the fallback if Pocket's quality loses the listening test. Both are far
+inside the latency budget; the choice is quality, by ear.
+
+Quality is judged by ear: `grace-bench listen bench-results/tts` (Danish) and `grace-bench listen bench-results/en/tts` (English) build blind A/B pages.

@@ -1,0 +1,12 @@
+# Typical Grace replies in English (Mikkel speaks Danish, Grace may answer in English).
+# Danish names and places appear because they will in practice.
+Sure, I can do that.
+One moment, let me check.
+It's a quarter past three.
+Tomorrow will be cloudy in Aarhus, up to fourteen degrees, with some rain in the afternoon.
+I found three files in your Projects folder with budget in the name.
+That sounds like a good idea, but I'd test it before we build on top of it.
+Opening Visual Studio Code for you now.
+The search returned four results, and the most relevant one is from Statistics Denmark.
+Sorry, I didn't quite catch that. Could you say it again?
+Your dev server on port three thousand is still running, but the database isn't responding.

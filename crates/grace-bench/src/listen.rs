@@ -53,10 +53,13 @@ h1 { font-size:16px; } p { color:var(--muted); }
 .c b { width:22px; font-family:monospace; } .lbl { color:var(--accent); font-family:monospace; visibility:hidden; }
 .rev .lbl { visibility:visible; } audio { height:32px; max-width:100%; } select { font:inherit; }
 button { font:inherit; padding:6px 12px; margin-right:8px; }
+.bar { position:sticky; top:0; background:var(--bg); padding:10px 0; z-index:1; border-bottom:1px solid var(--line); }
+#out { position:fixed; right:16px; bottom:16px; max-width:min(420px, calc(100vw - 32px)); margin:0; padding:12px 14px;
+  background:var(--panel); border:1px solid var(--accent); border-radius:8px; white-space:pre-wrap; display:none; }
 </style></head><body><main>
 <h1>Blind TTS comparison</h1>
-<p>Each sentence is spoken by every voice in random order. Rate 1–5, then reveal. Ratings stay in this page.</p>
-<button id="rev">Reveal labels</button><button id="exp">Export ratings</button>
+<p>Each sentence is spoken by every voice in random order. Rate 1–5, then reveal. Ratings are saved in this browser.</p>
+<div class="bar"><button id="rev">Reveal labels</button><button id="exp">Show results</button><span id="count"></span></div>
 <div id="list"></div><pre id="out"></pre>
 <script>
 const voices = __DATA__;
@@ -72,12 +75,33 @@ for (const id of ids) {
      <span class="lbl">${t.label}</span></div>`).join('');
   list.appendChild(s);
 }
+// Ratings persist per sentence+voice, so a reload (which reshuffles) keeps them.
+const KEY = 'grace-listen-ratings';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; } };
+const save = r => { try { localStorage.setItem(KEY, JSON.stringify(r)); } catch {} };
+const ratings = load();
+const selects = [...document.querySelectorAll('select')];
+const count = () => { document.getElementById('count').textContent = `${selects.filter(s => s.value).length}/${selects.length} rated`; };
+selects.forEach(s => {
+  const k = `${s.dataset.id}|${s.dataset.label}`;
+  if (ratings[k]) s.value = ratings[k];
+  s.onchange = () => { if (s.value) ratings[k] = s.value; else delete ratings[k]; save(ratings); count(); };
+});
+count();
 document.getElementById('rev').onclick = () => document.body.classList.toggle('rev');
-document.getElementById('exp').onclick = () => {
+document.getElementById('exp').onclick = async () => {
   const scores = {};
-  document.querySelectorAll('select').forEach(s => { if (s.value) (scores[s.dataset.label] ||= []).push(+s.value); });
-  const rows = Object.entries(scores).map(([l, v]) => `${l}: mean ${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(2)} over ${v.length}`);
-  document.getElementById('out').textContent = rows.join('\n') || 'No ratings yet.';
+  selects.forEach(s => { if (s.value) (scores[s.dataset.label] ||= []).push(+s.value); });
+  const rows = Object.entries(scores)
+    .map(([l, v]) => [l, v.reduce((a, b) => a + b, 0) / v.length, v.length])
+    .sort((a, b) => b[1] - a[1])
+    .map(([l, m, n]) => `${l}: ${m.toFixed(2)} (${n} ratings)`);
+  const text = rows.join('\n') || 'No ratings yet.';
+  const out = document.getElementById('out');
+  let copied = false;
+  try { await navigator.clipboard.writeText(text); copied = true; } catch {}
+  out.textContent = text + (rows.length && copied ? '\n\nCopied to clipboard.' : '');
+  out.style.display = 'block';
 };
 </script></main></body></html>
 "#;

@@ -32,3 +32,15 @@
 - Bench runners are separate processes speaking JSON lines, so any language and any runtime
   can be compared; model load is excluded from per-request latency.
 - `grace-debug` polls once a second with byte offsets instead of SSE; simpler, good enough.
+
+## 2026-10-10 (session 2)
+- Board: **"Grace v2"** = project #2 (https://github.com/users/MikkelBlom/projects/2), copied from
+  v1's board #1 (left untouched). Fields: Status (Todo/In Progress/Testing/Done), Module. Add every
+  new issue to it: `gh project item-add 2 --owner MikkelBlom --url <issue url>`.
+- CoRal v3 still 403 for HF account `Mikkell` (mikkelblom@live.dk) after Mikkel requested access;
+  Pocket TTS (also auto-gated) downloads fine, so CoRal likely needs manual approval.
+- `aec_test` plays sound: it requires `--play`. An accidental run played 17 s through the
+  speakers once (a `--help` check); never probe it with arbitrary flags.
+- sherpa-onnx CUDA wheels need cuBLAS/cuDNN on PATH; prepend `torch/lib` (done in tts.py).
+- Default render device was Mikkel's Buds4 Pro earbuds at the time; speakers are
+  "Speakers (Realtek(R) Audio)". Default comms mic is "USB Audio Device".

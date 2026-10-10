@@ -31,3 +31,10 @@ embeddings) without changing this design.
 - Clock drift between a USB mic and the speakers needs compensation; the built-in mic usually
   shares the codec clock.
 - Reference implementation worth reading first: KoljaB/echoff (WASAPI loopback + WebRTC APM).
+
+## Update 2026-10-10
+`crates/grace-audio/examples/aec_probe.rs`: all three microphones on this laptop (built-in Realtek
+array, USB mic, webcam mic) expose `IAcousticEchoCancellationControl` and accept the speakers as
+reference; AEC, noise suppression and beamforming are on by default in Communications mode.
+Option A is therefore available. Next: measure echo reduction with
+`aec_test --play` (plays a clip, records raw and AEC'd mic in parallel).

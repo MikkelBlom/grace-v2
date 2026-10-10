@@ -44,3 +44,6 @@
 - sherpa-onnx CUDA wheels need cuBLAS/cuDNN on PATH; prepend `torch/lib` (done in tts.py).
 - Default render device was Mikkel's Buds4 Pro earbuds at the time; speakers are
   "Speakers (Realtek(R) Audio)". Default comms mic is "USB Audio Device".
+- llama-server pick: `-ngl 99 -c 16384 -np 2 -fa on -ctk q8_0 -ctv q8_0 --reasoning off --swa-full`.
+  Without `--swa-full` Gemma 4 pays ~180 ms fixed prefill per request (log warns "cache_reuse is not
+  supported by this context"). Don't leave llama-server running after a session: ~10 GB VRAM.

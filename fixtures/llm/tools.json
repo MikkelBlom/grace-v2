@@ -1,0 +1,6 @@
+[
+  {"type":"function","function":{"name":"web_search","description":"Search the web for current information. Returns titles, snippets and URLs.","parameters":{"type":"object","properties":{"query":{"type":"string","description":"Search query, in the language most likely to find good results."}},"required":["query"]}}},
+  {"type":"function","function":{"name":"open_program","description":"Start an installed application on this PC by name.","parameters":{"type":"object","properties":{"name":{"type":"string","description":"Application name, e.g. 'Visual Studio Code', 'Spotify'."}},"required":["name"]}}},
+  {"type":"function","function":{"name":"file_search","description":"Find files and folders on this PC by name or content.","parameters":{"type":"object","properties":{"query":{"type":"string"},"kind":{"type":"string","enum":["any","file","folder"]}},"required":["query"]}}},
+  {"type":"function","function":{"name":"get_time","description":"Current local date and time.","parameters":{"type":"object","properties":{}}}}
+]

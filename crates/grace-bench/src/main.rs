@@ -9,6 +9,7 @@
 //! `<out>/summary.jsonl`, so results accumulate across sessions and machines.
 
 mod listen;
+mod llm;
 mod metrics;
 mod runner;
 
@@ -66,6 +67,20 @@ enum Cmd {
     },
     /// Builds a blind A/B listening page from every TTS label under `dir`.
     Listen { dir: PathBuf },
+    /// LLM latency and tool-choice accuracy against a running llama-server.
+    Llm {
+        #[arg(long, default_value = "http://127.0.0.1:8080")]
+        url: String,
+        /// Directory with `system.md`, `tools.json` and `prompts.jsonl`.
+        #[arg(long, default_value = "fixtures/llm")]
+        fixtures: PathBuf,
+        #[arg(long)]
+        label: String,
+        #[arg(long, default_value = "bench-results")]
+        out: PathBuf,
+        #[arg(long, default_value_t = 2)]
+        repeat: usize,
+    },
 }
 
 /// One line of an STT manifest. `audio` is relative to the manifest file.
@@ -121,6 +136,19 @@ fn main() -> anyhow::Result<()> {
             out,
             runner,
         } => run_tts(&sentences, &label, &out, &runner),
+        Cmd::Llm {
+            url,
+            fixtures,
+            label,
+            out,
+            repeat,
+        } => llm::run(llm::Options {
+            url: &url,
+            dir: &fixtures,
+            label: &label,
+            out: &out,
+            repeat,
+        }),
         Cmd::Listen { dir } => {
             let page = listen::build(&dir)?;
             println!("wrote {}", page.display());

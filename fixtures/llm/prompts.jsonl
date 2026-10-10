@@ -1,0 +1,10 @@
+{"id":"chat-hej","text":"Hej Grace, hvordan går det?","expect":"chat"}
+{"id":"chat-idea","text":"Jeg overvejer at skrive min egen database i Rust, er det en god idé?","expect":"chat"}
+{"id":"chat-explain","text":"Kan du kort forklare forskellen på en proces og en tråd?","expect":"chat"}
+{"id":"chat-stt-noise","text":"hvad synes du om at jeg bruger postgress til det her projekt","expect":"chat"}
+{"id":"tool-time","text":"Hvad er klokken?","expect":"tool:get_time"}
+{"id":"tool-open","text":"Åbn lige Visual Studio Code for mig","expect":"tool:open_program"}
+{"id":"tool-search","text":"Hvem vandt Tour de France i år?","expect":"tool:web_search"}
+{"id":"tool-file","text":"Find den fil med budgettet jeg lavede i sidste uge","expect":"tool:file_search"}
+{"id":"chat-joke","text":"Fortæl mig en kort joke om programmører","expect":"chat"}
+{"id":"chat-advice","text":"Jeg er træt i dag, har du et godt råd til at komme i gang?","expect":"chat"}

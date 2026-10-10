@@ -11,7 +11,12 @@
 | FLEURS-da fixtures | Implemented | 60 clips via `bench/fetch_fixtures.py` | 2026-10-10 | — | — |
 | CoRal v3 fixtures | Planned | Conversation + read-aloud clips | — | — | Mikkel must request HF access |
 | Own-voice fixtures | Planned | Mikkel's recordings through speakers + mic | — | recorder script | — |
-| Audio engine | Planned (v0.1) | WASAPI I/O, AEC, VAD, Smart Turn, STT, TTS adapters | — | — | — |
+| `grace-audio` WASAPI | Implemented | Capture (raw / communications+AEC reference / loopback), render, resample | 2026-10-10 | — | — |
+| AEC probe + test | Implemented | `aec_probe` (capabilities), `aec_test --play` (echo reduction) | 2026-10-10 | grace-audio | Mikkel runs --play |
+| `grace-llm` | Implemented | llama-server SSE client (content/reasoning/tool deltas), sentence splitter | 2026-10-10 | — | — |
+| `grace-bench llm` | Implemented | TTFT, first speakable piece, decode speed, tool-choice accuracy | 2026-10-10 | grace-llm | — |
+| Runtime fetch | Implemented | `scripts/fetch_runtime.py`: pinned llama.cpp b11539 + Gemma 4 12B QAT | 2026-10-10 | — | — |
+| Audio engine | Planned (v0.1) | VAD, Smart Turn, STT, TTS adapters wired to TurnMachine | — | grace-audio | — |
 | Harness | Planned (v0.1) | Conversation actor, llama-server client, IPC | — | engine | — |
 | Memory | Planned (v0.2) | ADR 0007 | — | harness | — |
 | Tools | Planned (v0.3) | ADR 0010: web search, open program, file search | — | harness | — |

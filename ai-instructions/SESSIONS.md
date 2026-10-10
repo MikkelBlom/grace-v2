@@ -17,3 +17,20 @@ runner protocol (fixed). The `gh` token lacks the `project` scope, so the board 
 
 **Next steps:** CoRal + own-voice STT fixtures; blind TTS listening test; then v0.1 audio engine
 starting with the AEC bake-off.
+
+## 2026-10-10 (later) — Claude Code (Opus 5.5): reply language, voices, AEC probe, LLM latency
+**Summary:** Mikkel chose Gemma 4 12B and accepted English replies to Danish speech (ADR 0011).
+Built the "Grace v2" project board (#2, copied from v1's #1, which stays untouched) with all
+issues. Fixed the listening page export (results rendered off-screen; ratings now persist).
+English TTS bake-off: Pocket TTS ~94 ms first audio on CPU, Kokoro ~250 ms on CUDA. grace-audio:
+WASAPI capture/render/loopback wrappers, AEC probe (all 3 mics support Windows AEC with a chosen
+reference), echo-reduction test `aec_test --play`. grace-llm: llama-server streaming client and
+sentence splitter. grace-bench `llm`: Gemma 4 12B QAT on llama.cpp b11539 with `--swa-full`
+reaches TTFT 53 ms, first speakable piece 239 ms, 20/20 tool choice, ~9.9 GB VRAM.
+
+**Issues encountered:** CoRal v3 still 403 for Mikkel's HF account. A `--help` probe of
+aec_test played 17 s of audio through the speakers (tool now needs `--play`). Gemma's SWA cache
+disabled prefix reuse until `--swa-full`. sherpa-onnx CUDA needs torch/lib on PATH.
+
+**Next steps:** Mikkel runs `aec_test --play` and the English listening test. Then VAD v6 +
+Smart Turn adapters, engine process with the turn machine, first live loop.

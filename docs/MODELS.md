@@ -81,4 +81,25 @@ Read: Pocket TTS streams its first audio in ~90 ms using only the CPU, which kee
 LLM. Kokoro on CUDA is the fallback if Pocket's quality loses the listening test. Both are far
 inside the latency budget; the choice is quality, by ear.
 
+## LLM — Gemma 4 12B on llama-server, 10 Danish requests × 2, 2026-10-10
+
+Requests use a Grace-style system prompt (~490 tokens) plus four tool definitions; the server
+reuses that prefix from its KV cache, so each request prefills only the ~20–30 new tokens.
+"First piece" is when the sentence splitter releases the first speakable chunk of a direct
+answer: what TTS waits for.
+
+| Config | Tool choice | TTFT p50 | TTFT p95 | First piece p50 | First piece p95 | Decode | VRAM |
+|---|---|---|---|---|---|---|---|
+| QAT Q4_0, c 32K, np 2, q8 KV | 20/20 | 195 ms | 320 ms | 395 ms | 649 ms | 49 tok/s | ~7.9 GB |
+| + `--swa-full`, c 32K | 10/10 | 53 ms | 260 ms | 235 ms | 389 ms | 51 tok/s | ~13 GB |
+| **+ `--swa-full`, c 16K** (pick) | **20/20** | **53 ms** | 243 ms | **239 ms** | 419 ms | 49 tok/s | **~9.9 GB** |
+
+Without `--swa-full`, llama.cpp disables cache reuse for Gemma's sliding-window layers and pays
+a fixed ~180 ms prefill on every request. Pick: llama.cpp b11539 CUDA 13.4,
+`-ngl 99 -c 16384 -np 2 -fa on -ctk q8_0 -ctv q8_0 --reasoning off --swa-full`.
+Decode at ~50 tok/s is the next lever (MTP speculative decoding, issue #26).
+
+One finding for the harness: asked "who won the Tour de France this year?", the model searched
+for "2024": it doesn't know today's date. The system prompt must carry the current date.
+
 Quality is judged by ear: `grace-bench listen bench-results/tts` (Danish) and `grace-bench listen bench-results/en/tts` (English) build blind A/B pages.

@@ -104,6 +104,8 @@ def main():
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--voice", default=None, help="prompt WAV to clone (default: the repo's conds.pt)")
     ap.add_argument("--llm-load", action="store_true")
+    ap.add_argument("--temp", type=float, default=None, help="350m: override temperature (card: 0.7-0.8)")
+    ap.add_argument("--top-k", type=int, default=None, help="350m: override top_k (card: 600-1000)")
     ap.add_argument("--no-cfg", action="store_true", help="500m: skip classifier-free guidance (one row instead of two)")
     ap.add_argument("--prompt-tokens", type=int, default=None, help="S3Gen keeps only the last N prompt tokens")
     ap.add_argument("--label", required=True)
@@ -143,6 +145,10 @@ def main():
     else:
         from roest_fast import Roest
         m = Roest(args.model, dtype=dtype, s3gen=args.s3gen, cfg=not args.no_cfg)
+        if args.temp is not None:
+            m.sampling.temperature = args.temp
+        if args.top_k is not None:
+            m.sampling.top_k = args.top_k
         if args.voice:
             m.set_voice(args.voice)
         sr = m.sr
@@ -217,7 +223,7 @@ def main():
     short = [r["ttfa_ms"] for r in ok if len(r["text"]) <= 40]
     summ = dict(
         label=args.label, model=args.model, mode=args.mode, dtype=args.dtype, s3gen=args.s3gen,
-        first=args.first, chunk=args.chunk, cfg=not args.no_cfg, prompt_tokens=args.prompt_tokens, llm_load=args.llm_load, voice=args.voice or "builtin conds.pt",
+        first=args.first, chunk=args.chunk, cfg=not args.no_cfg, prompt_tokens=args.prompt_tokens, temp=args.temp, top_k=args.top_k, llm_load=args.llm_load, voice=args.voice or "builtin conds.pt",
         n=len(ok), errors=len(rows) - len(ok), load_ms=round(load_ms), warmup_ms=round(warm_ms), gpu_before=gpu_busy,
         ttfa_p50=p(ttfa, 50), ttfa_p95=p(ttfa, 95), ttfa_max=p(ttfa, 100), ttfa_short_p50=p(short, 50),
         total_p50=p([r["total_ms"] for r in ok], 50), rtf_p50=round(float(np.median([r["rtf"] for r in ok])), 3),

@@ -14,14 +14,15 @@ and a row in out_dir/manifest.jsonl (text, voice, engine, seconds, and with --ch
 transcript and CER; lines that stay above --max-cer after retries are marked "rejected").
 
 Voices: fixtures/corpora/voices/manifest.jsonl (built by build_voice_bank.py): ~10 s prompts of
-CC0 NST Danish speakers, plus "default" (the model repo's built-in conditioning).
+CC0 NST Danish speakers, "coral-mic"/"coral-nic" (CoRal TTS professional speakers, CC0, recorded for
+synthesis) and "default" (the model repo's built-in conditioning).
 
 Engines (licence-driven, see docs/MODELS.md "TTS Danish (Røst v3)"):
 - "mtl-base": Resemble AI's multilingual Chatterbox (MIT, no use restrictions). Clones bank voices.
 - "500m" / "350m": CoRal Røst v3. Their OpenRAIL licence forbids synthesising a natural person's
   voice without that person's prior informed consent, which the NST speakers never gave, so they
   only speak the "default" voice here.
-"auto" picks mtl-base for bank voices and Røst 500m for "default".
+"auto" picks mtl-base for NST voices and Røst 500m for "default", "coral-mic" and "coral-nic".
 Output is Perth-watermarked (imperceptible) unless --no-watermark, so synthetic clips stay
 identifiable if they ever leak out of the training set.
 """
@@ -61,10 +62,15 @@ def voices() -> dict:
     return out
 
 
+def roest_ok(voice_id: str) -> bool:
+    """Røst may speak only voices whose speaker consented to synthesis (built-in, CoRal TTS)."""
+    return voice_id == "default" or bool(voices().get(voice_id, {}).get("consented_for_tts"))
+
+
 def engine_for(voice_id: str, engine: str = "auto") -> str:
     if engine == "auto":
-        return "500m" if voice_id == "default" else "mtl-base"
-    if engine in ROEST_ENGINES and voice_id != "default":
+        return "500m" if roest_ok(voice_id) else "mtl-base"
+    if engine in ROEST_ENGINES and not roest_ok(voice_id):
         raise ValueError(f"Røst ({engine}) may not clone '{voice_id}': its licence bans synthesising a natural "
                          "person's voice without their consent. Use engine mtl-base or auto.")
     return engine
@@ -156,7 +162,7 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rng = random.Random(args.seed)
-    bank_ids = [v for v in bank if v != "default"]
+    bank_ids = [v for v in bank if not roest_ok(v)]  # "random" draws from the many-speaker NST bank
     todo = [json.loads(l) for l in Path(args.lines).read_text(encoding="utf-8").splitlines() if l.strip()]
     with open(out / "manifest.jsonl", "a", encoding="utf-8") as man:
         for i, item in enumerate(todo):

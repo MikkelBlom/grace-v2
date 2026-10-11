@@ -69,7 +69,8 @@ Python). `fast` = `bench/synth/roest_fast.py`: same weights and sampling, but st
 every T3 decode step and the S3Gen chunk windows as CUDA graphs (kernel launches cost ~20–50 µs
 each on this Windows box, so stock is launch-bound), bf16, sentence streamed with a 16-token
 (0.64 s) first chunk. Stability = edda-v0.2 transcript vs text (CER, numbers normalised).
-Voice: the repos' `conds.pt`, which is Resemble AI's default speaker, not CoRal's Mic/Nic.
+Voice: the repos' `conds.pt`, which is Resemble AI's default speaker, not CoRal's Mic/Nic (those
+runs follow below the table).
 **The GPU was 50–98 % busy with other work during every run**, so absolute times are inflated.
 
 | Config | ttfa p50 | ttfa p95 | RTF p50 | CER | clips > 20 % CER | VRAM |
@@ -114,7 +115,27 @@ remotely or by update (7). Watermarking is not a licence term: the Perth waterma
 Weights: only T3 is fine-tuned; `s3gen`, `ve` and `conds.pt` are byte-identical to Resemble AI's
 MIT releases. CoRal's Mic and Nic (the voices behind MOS 4.01/4.23) are not shipped; using them
 needs reference clips from `CoRal-project/coral-tts` (CC0, two professional speakers, made for
-speech synthesis; not the OpenRAIL-D CoRal ASR set). Not fetched: needs Mikkel's go-ahead.
+speech synthesis; not the OpenRAIL-D CoRal ASR set).
+
+### With CoRal's Mic and Nic, quiet GPU (4–11 % busy), 30 sentences, 2026-10-11
+
+Mikkel approved CoRal TTS prompts: one ~9 s CC0 clip per speaker
+(`fixtures/corpora/voices/coral-tts/`, in the voice manifest as `coral-mic` / `coral-nic`).
+
+| Config | ttfa p50 | ttfa p95 | RTF p50 | CER | clips > 20 % CER | gaps |
+|---|---|---|---|---|---|---|
+| 350m fast, Mic | 111 ms | 117 ms | 0.15 | 8.4 % | 2/30 | 0 |
+| 350m fast, Nic | 123 ms | 132 ms | 0.16 | 12.3 % | 4/30 | 0 |
+| 350m fast, built-in voice | 120 ms | 133 ms | 0.16 | – | – | 0 |
+| **500m fast (2-step S3Gen), Mic** | **142 ms** | 153 ms | 0.20 | **1.3 %** | 0/30 | 0 |
+| **500m fast (2-step S3Gen), Nic** | **158 ms** | 169 ms | 0.21 | **0.8 %** | 0/30 | 0 |
+
+On a quiet GPU both models are inside the ≲ 250 ms budget. With Mic/Nic the 500m is far more
+accurate than the 350m (which mispronounces more with these prompts; the card's temp 0.7 /
+top_k 600 did not help: Mic 10.5 %, Nic 13.5 %). One 500m Mic run with llama-server decoding *and*
+another job holding the GPU at 95 % gave 538 ms and gaps in 27/30 sentences: contention, not the
+model, is the open risk, so TTS and LLM decode must be scheduled/measured together in a live test.
+Listening clips: `bench-results/tts-da/listen/roest-{350m,500m}-{mic,nic}_*.wav`.
 
 ## Synthetic Danish speech — `bench/synth/tts_da.py`, 2026-10-11
 

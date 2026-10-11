@@ -273,6 +273,10 @@ class Roest:
             self.tts.conds = Conditionals.load(model_dir(self.name) / "conds.pt").to(self.device)
         else:
             if self.name == "350m":
+                # upstream loudness normalisation returns float64 under NumPy 2, which the
+                # S3 tokenizer rejects; keep it float32
+                norm = type(self.tts).norm_loudness
+                self.tts.norm_loudness = lambda wav, sr, **k: np.asarray(norm(self.tts, wav, sr, **k), np.float32)
                 self.tts.prepare_conditionals(str(prompt_wav))
             else:
                 self.tts.prepare_conditionals(str(prompt_wav), exaggeration=0.5)

@@ -3,7 +3,8 @@
 //!   cargo run --release -p grace-audio --example calibrate -- --play
 //!
 //! Plays three short sweeps (~6 s total) on the speakers from `config/audio.json` while
-//! recording the raw mic. Keep the room quiet. Without `--play` it only shows the devices.
+//! recording the raw mic. Keep the room quiet. Without `--play` it only shows the devices;
+//! `--check` opens the streams without playing anything.
 //! Results go to `data/calibration.json` (one entry per speaker); the recordings go to
 //! `bench-results/calibration/<time>/` for offline echo-canceller work.
 
@@ -34,6 +35,18 @@ fn main() -> anyhow::Result<()> {
     let prefs = DevicePrefs::load(Path::new("config/audio.json"))?;
     let (mic, speakers) = (prefs.microphone()?, prefs.speakers()?);
     println!("mic:      {}\nspeakers: {}", mic.name, speakers.name);
+    if std::env::args().any(|a| a == "--check") {
+        // Opens every stream calibration needs without starting playback: silent.
+        use grace_audio::wasapi::{Capture, CaptureMode, Render};
+        Render::open(&speakers)?;
+        Capture::open(&mic, &CaptureMode::Raw)?;
+        Capture::open(&speakers, &CaptureMode::Loopback)?;
+        println!(
+            "
+check: all streams open; calibration can run."
+        );
+        return Ok(());
+    }
     if !std::env::args().any(|a| a == "--play") {
         println!("\nDry run. Add --play to play the calibration sweeps (~6 s).");
         return Ok(());

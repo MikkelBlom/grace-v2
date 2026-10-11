@@ -191,3 +191,15 @@ Gemma 4 12B extractor (temperature 0.2), probes answered at temperature 0. 246 c
 Remaining failures: renames/updates said mid-session in an interrupted turn, Danish number
 words ("femoghalvfems" stored as ninety), commitments not closed after being acted on. Run-to-run
 noise of the extractor is a few checks; compare categories, not single checks.
+
+## Non-speech → STT — 100 ESC-50 room-sound scenes through grace-sim, 2026-10-11
+
+VAD (full chain) triggered on 1/100 scenes (2.4 per hour). Fed directly to STT anyway:
+edda-v0.2 wrote text on 100/100 (avg_logprob filter caught 50); ekko-v1-tiny on 8/100, single
+words. The ekko cross-check keeps 40/40 clean, 36/40 distant, 39/40 talked-over pilot utterances.
+Decision: [ADR 0016](adr/0016-hallucination-check-by-transducer.md). Under a busy GPU (other
+tracks training) edda took 1.3-4 s per clip, ekko 60-200 ms on CPU; edda latency must be
+re-measured on an idle GPU.
+
+Memory run d (unknown-id updates kept as adds, number words in the duplicate check, commitments
+plus facts): 216/246 vs 217 (within noise); interrupted 24 → 28 of 30.

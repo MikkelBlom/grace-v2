@@ -67,6 +67,7 @@ impl Stt {
         }
         Ok(Transcript {
             text: v["text"].as_str().unwrap_or("").to_owned(),
+            check_text: v["check_text"].as_str().unwrap_or("").to_owned(),
             avg_logprob: v["avg_logprob"].as_f64().unwrap_or(0.0),
             no_speech_prob: v["no_speech_prob"].as_f64().unwrap_or(0.0),
             ms: v["ms"].as_f64().unwrap_or(0.0),
@@ -74,11 +75,10 @@ impl Stt {
     }
 }
 
-/// Below this mean token log-probability a transcript is treated as invented.
-const HALLUCINATION_LOGPROB: f64 = -0.55;
-
 pub struct Transcript {
     pub text: String,
+    /// What ekko-v1-tiny (a transducer, run alongside) heard: the hallucination check.
+    pub check_text: String,
     pub avg_logprob: f64,
     pub no_speech_prob: f64,
     pub ms: f64,
@@ -86,10 +86,12 @@ pub struct Transcript {
 
 impl Transcript {
     /// Whisper invents fluent sentences from noise ("Tvernes ændring er blevet fornøjet at vente
-    /// en anden opslag" from a breath). Calibrated 2026-10-11 on edda-v0.2: 30 FLEURS speech clips
-    /// score avg_logprob ≥ -0.29, 9 noise clips ≤ -0.62; no_speech_prob is ~0 for both, useless.
+    /// en anden opslag", "Tester en to tre ..."), so its text is dropped when ekko, which rarely
+    /// invents, heard no words at all. grace-sim (ADR 0016): catches 92/100 non-speech clips and
+    /// drops 0/40 clean, 4/40 distant and 1/40 talked-over real utterances; the old avg_logprob
+    /// < -0.55 rule caught 50/100 and dropped 16/40 distant and 15/40 talked-over utterances.
     pub fn looks_hallucinated(&self) -> bool {
-        self.avg_logprob < HALLUCINATION_LOGPROB
+        !self.text.trim().is_empty() && !self.check_text.chars().any(char::is_alphanumeric)
     }
 }
 
@@ -188,4 +190,27 @@ pub fn write_wav(path: &std::path::Path, pcm: &[f32], rate: u32) -> anyhow::Resu
 /// Linear upsampling from the TTS rate to the speaker rate; fine for v0.1 (24→48 kHz is 2×).
 pub fn resample(pcm: &[f32], from: u32, to: u32) -> Vec<f32> {
     grace_audio::wasapi::resample_linear(pcm, from, to)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn t(text: &str, check: &str) -> Transcript {
+        Transcript {
+            text: text.into(),
+            check_text: check.into(),
+            avg_logprob: -0.3,
+            no_speech_prob: 0.0,
+            ms: 0.0,
+        }
+    }
+
+    #[test]
+    fn dropped_only_when_the_check_heard_nothing() {
+        assert!(t("Tester en to tre fire fem.", "").looks_hallucinated());
+        assert!(t("Tester en to tre fire fem.", " . ").looks_hallucinated());
+        assert!(!t("Min søster bor i Aarhus.", "min søster bor i århus").looks_hallucinated());
+        assert!(!t("", "").looks_hallucinated(), "nothing to drop");
+    }
 }

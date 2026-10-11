@@ -289,6 +289,14 @@ impl MemoryService {
             info!(op = name, text = %text, "memory: only for now, not stored");
             return Ok(());
         }
+        // A model sometimes updates an id it invented; the knowledge itself is still Mikkel's
+        // (evidence checked above), so keep it as a new memory rather than drop it.
+        let name = if name == "update" && !known.contains(&id) {
+            info!(id, text = %text, "memory: update of an unknown id kept as add");
+            "add"
+        } else {
+            name
+        };
         match name {
             "add" if !text.is_empty() => {
                 let e = self.embedder.embed("document", &[&text]).await?.remove(0);
@@ -402,6 +410,43 @@ fn parse_day(s: &str) -> Option<f64> {
     Some(t.timestamp() as f64)
 }
 
+const NUMBER_WORDS: &[&str] = &[
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+    "hundred",
+    "thousand",
+    "first",
+    "second",
+    "third",
+    "half",
+];
+
 const MONTHS_AND_DAYS: &[&str] = &[
     "january",
     "february",
@@ -430,7 +475,8 @@ const NOT_NAMES: &[&str] = &[
     "In", "At",
 ];
 
-/// The details an embedding glosses over: numbers, dates, and names (capitalised words). Two
+/// The details an embedding glosses over: numbers (digits or words), dates, and names
+/// (capitalised words). Two
 /// facts with different specifics are never duplicates.
 fn specifics(text: &str) -> std::collections::BTreeSet<String> {
     text.split(|c: char| !c.is_alphanumeric())
@@ -439,6 +485,7 @@ fn specifics(text: &str) -> std::collections::BTreeSet<String> {
             let lower = w.to_lowercase();
             w.chars().any(|c| c.is_ascii_digit())
                 || MONTHS_AND_DAYS.contains(&lower.as_str())
+                || NUMBER_WORDS.contains(&lower.as_str())
                 || (w.chars().next().is_some_and(char::is_uppercase) && !NOT_NAMES.contains(w))
         })
         .map(str::to_lowercase)
@@ -479,10 +526,10 @@ Only Mikkel's own words are a source. Grace's answer is context: she may be repe
 Speech recognition makes mistakes: if his words look garbled, nonsensical or like a misheard phrase, store nothing from them.
 Do not remember: small talk, greetings, questions he asked, tests of the system, vague moods, or anything already covered by an existing memory.
 'lasting' is true only for things that stay true beyond today. Requests for this moment or this conversation ('be quiet', 'speak slower', 'say it again', 'not today', 'hold din kæft') are lasting=false; a lasting wish sounds like 'always', 'from now on', 'in general'.
-Write each memory in English, third person ('Mikkel ...'), short, one claim per memory. Turn relative dates into absolute dates by looking them up in the calendar above (never compute weekdays yourself), and write dates in words: '14 December 2026', never '2026-12-14'. Never add details he didn't say: no invented dates, places or reasons.
+Write each memory in English, third person ('Mikkel ...'), short, one claim per memory, numbers as digits ('turns 95', '52 guests'). Turn relative dates into absolute dates by looking them up in the calendar above (never compute weekdays yourself), and write dates in words: '14 December 2026', never '2026-12-14'. Never add details he didn't say: no invented dates, places or reasons.
 Kinds: 'user' = Mikkel's life, people, plans, projects and circumstances; 'preference' = how Mikkel wants Grace to talk or behave; 'grace' = about Grace herself; 'environment' = Mikkel's computer, devices and setup.
 Operations on memories: 'add' (id 0) for a new memory. 'update' with an existing id when the exchange changes that memory (a new value, a corrected detail). 'invalidate' with an existing id when it is simply no longer true: cancelled, finished, sold, ended (do not add a 'was cancelled' memory). Never leave two memories that contradict each other.
-Operations on commitments (things Grace should bring up later): 'commit' only when Mikkel explicitly asks Grace to remind him, ask him, or check on something later (never on your own initiative); 'text' says what Grace should do ('Ask Mikkel for the details of his 16 November assignment'); 'due' (only this field uses YYYY-MM-DD) is the first day to bring it up, or '' for the next conversation. 'done' with an open commitment's id when this exchange fulfils it: he gave the details, did the thing, or acknowledged the reminder. 'cancel' with an open commitment's id when he no longer wants it.
+Operations on commitments (things Grace should bring up later): 'commit' only when Mikkel explicitly asks Grace to remind him, ask him, or check on something later (never on your own initiative); 'text' says what Grace should do ('Ask Mikkel for the details of his 16 November assignment'); 'due' (only this field uses YYYY-MM-DD) is the first day to bring it up, or '' for the next conversation. 'done' with an open commitment's id when this exchange fulfils it: he gave the details, did the thing, or acknowledged the reminder. 'cancel' with an open commitment's id when he no longer wants it. A commitment never replaces facts: also add the facts he stated (a reminder to renew a passport that expires in February is a commitment plus the fact about the expiry).
 Confidence: 0.9 when Mikkel stated it plainly, 0.6 when inferred.
 Most exchanges contain nothing worth remembering: then return an empty list.";
 
@@ -611,6 +658,10 @@ mod tests {
         assert_ne!(
             specifics("Mikkel's sister Ida lives in Odense."),
             specifics("Mikkel's sister Sofie lives in Odense.")
+        );
+        assert_ne!(
+            specifics("Mikkel's grandfather turns ninety on 21 November 2026."),
+            specifics("Mikkel's grandfather turns ninety-five on 21 November 2026.")
         );
         assert_eq!(
             specifics("Mikkel's sister Sofie lives in Copenhagen."),

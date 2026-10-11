@@ -5,14 +5,15 @@
 Two localhost TCP ports, newline-delimited JSON, audio as base64 little-endian float32 mono:
 
   STT 127.0.0.1:7810   {"id": 1, "rate": 16000, "audio": "<b64>"}
-                       -> {"id": 1, "text": "...", "ms": 210.5}
+                       -> {"id": 1, "text": "...", "check_text": "...", "ms": 210.5}
   TTS 127.0.0.1:7811   {"id": 2, "text": "Hello there."}
                        -> {"id": 2, "rate": 24000, "pcm": "<b64>"}   (streamed, several)
                        -> {"id": 2, "done": true, "first_ms": 90.1, "total_ms": 400.2}
                        {"cancel": 2}   stops request 2 between chunks
 
-Models: edda-v0.2 (Danish STT, CTranslate2 int8 on CUDA) and Kyutai Pocket TTS (English, CPU,
-streaming), per docs/MODELS.md. Each connection is served on its own thread; one STT and one TTS
+Models: edda-v0.2 (Danish STT, CTranslate2 int8 on CUDA), ekko-v1-tiny (Danish transducer on
+CPU, run alongside edda as a hallucination check: `check_text`), and Kyutai Pocket TTS (English,
+CPU, streaming), per docs/MODELS.md. Each connection is served on its own thread; one STT and one TTS
 model are shared behind locks.
 """
 
@@ -35,26 +36,60 @@ def log(*a):
     print(*a, file=sys.stderr, flush=True)
 
 
+class Check:
+    """ekko-v1-tiny: a transducer, which (unlike Whisper) almost never invents sentences from
+    noise. grace-sim: edda wrote text on 100/100 non-speech clips, ekko on 8 (single words)."""
+
+    def __init__(self):
+        import sherpa_onnx
+        from huggingface_hub import snapshot_download
+
+        root = Path(snapshot_download("RyeAI/ekko-v1-tiny", allow_patterns=["onnx-sherpa/*"])) / "onnx-sherpa"
+        self.rec = sherpa_onnx.OfflineRecognizer.from_transducer(
+            encoder=str(root / "encoder.int8.onnx"), decoder=str(root / "decoder.int8.onnx"),
+            joiner=str(root / "joiner.int8.onnx"), tokens=str(root / "tokens.txt"),
+            num_threads=4, provider="cpu", model_type="nemo_transducer",
+        )
+
+    def transcribe(self, audio):
+        stream = self.rec.create_stream()
+        stream.accept_waveform(16000, audio)
+        self.rec.decode_stream(stream)
+        return stream.result.text.strip()
+
+
 class Stt:
     def __init__(self):
         from faster_whisper import WhisperModel
 
         self.model = WhisperModel(str(STT_MODEL), device="cuda", compute_type="int8_float16")
+        self.check = Check()
         self.lock = threading.Lock()
         self.transcribe(np.zeros(16000, np.float32))  # warm up CUDA kernels
 
     def transcribe(self, audio):
         with self.lock:
+            # ekko on the CPU while edda runs on the GPU: the check adds no latency.
+            check = {}
+            t0 = time.perf_counter()
+
+            def run_check():
+                check["text"] = self.check.transcribe(audio)
+                check["ms"] = (time.perf_counter() - t0) * 1000
+
+            t = threading.Thread(target=run_check)
+            t.start()
             segs, _ = self.model.transcribe(
                 audio, language="da", beam_size=1, vad_filter=False,
                 without_timestamps=True, condition_on_previous_text=False,
             )
             segs = list(segs)
             text = " ".join(s.text.strip() for s in segs).strip()
-            # Whisper's own doubt signals, so the engine can drop hallucinations on noise.
             avg_logprob = min((s.avg_logprob for s in segs), default=0.0)
             no_speech = max((s.no_speech_prob for s in segs), default=1.0)
-            return text, avg_logprob, no_speech
+            edda_ms = (time.perf_counter() - t0) * 1000
+            t.join()
+            return text, avg_logprob, no_speech, check.get("text", ""), edda_ms, check.get("ms")
 
 
 class Tts:
@@ -99,9 +134,11 @@ class SttHandler(Handler):
             try:
                 audio = np.frombuffer(base64.b64decode(req["audio"]), dtype="<f4")
                 assert req.get("rate", 16000) == 16000, "STT expects 16 kHz"
-                text, avg_logprob, no_speech = self.server.stt.transcribe(audio)
-                self.send({"id": req["id"], "text": text, "avg_logprob": avg_logprob,
-                           "no_speech_prob": no_speech, "ms": (time.perf_counter() - started) * 1000})
+                text, avg_logprob, no_speech, check, edda_ms, check_ms = self.server.stt.transcribe(audio)
+                self.send({"id": req["id"], "text": text, "check_text": check,
+                           "edda_ms": edda_ms, "check_ms": check_ms,
+                           "avg_logprob": avg_logprob, "no_speech_prob": no_speech,
+                           "ms": (time.perf_counter() - started) * 1000})
             except Exception as e:  # report, keep serving
                 self.send({"id": req.get("id"), "error": f"{type(e).__name__}: {e}"})
 
@@ -171,7 +208,7 @@ class Server(socketserver.ThreadingTCPServer):
 
 def main():
     started = time.perf_counter()
-    log("loading STT (edda-v0.2) ...")
+    log("loading STT (edda-v0.2 + ekko-v1-tiny check) ...")
     stt = Stt()
     cfg_path = ROOT / "config" / "speech.json"
     cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}

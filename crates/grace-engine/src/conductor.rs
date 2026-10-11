@@ -309,7 +309,7 @@ fn spawn_pause_work(
         match result {
             Ok(t) => {
                 let hallucinated = t.looks_hallucinated();
-                info!(parent: &span, text = %t.text, server_ms = t.ms, avg_logprob = t.avg_logprob,
+                info!(parent: &span, text = %t.text, check = %t.check_text, server_ms = t.ms, avg_logprob = t.avg_logprob,
                     no_speech_prob = t.no_speech_prob, hallucinated, "transcript");
                 // A dropped transcript ends the turn as "no words" (DropTurn), nothing is answered.
                 let text = if hallucinated { String::new() } else { t.text };

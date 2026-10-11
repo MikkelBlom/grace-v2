@@ -21,5 +21,6 @@ edit history.
 | [0013](0013-single-capture-path.md) | One capture path: STT reads the echo-cancelled signal | Accepted |
 | [0014](0014-stt-reads-linear-aec.md) | STT reads AEC3's linear output; test on simulated rooms | Accepted |
 | [0015](0015-memory-facts-and-commitments.md) | Memory: facts rendered by code, commitments table, quoted evidence | Accepted |
+| [0016](0016-hallucination-check-by-transducer.md) | Drop invented transcripts when ekko hears nothing | Accepted |
 
 Template: [0000-template.md](0000-template.md).

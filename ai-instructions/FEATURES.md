@@ -16,7 +16,9 @@
 | `grace-llm` | Implemented | llama-server SSE client (content/reasoning/tool deltas), sentence splitter | 2026-10-10 | — | — |
 | `grace-bench llm` | Implemented | TTFT, first speakable piece, decode speed, tool-choice accuracy | 2026-10-10 | grace-llm | — |
 | Runtime fetch | Implemented | `scripts/fetch_runtime.py`: pinned llama.cpp b11539 + Gemma 4 12B QAT | 2026-10-10 | — | — |
-| Audio engine | Planned (v0.1) | VAD, Smart Turn, STT, TTS adapters wired to TurnMachine | — | grace-audio | — |
-| Harness | Planned (v0.1) | Conversation actor, llama-server client, IPC | — | engine | — |
+| Speech server | Implemented | `services/speech_server.py`: edda STT + Pocket TTS over local TCP, cancellable streaming | 2026-10-11 | bench venv | — |
+| Engine `grace` | Implemented, untested live | Dual-path capture, AEC3 + delay tracking, VAD gate, Smart Turn, conductor, sentence-streamed replies, barge-in, traces | 2026-10-11 | all crates | Mikkel's first live run |
+| Launcher | Implemented | `scripts/grace.ps1` (+ `-SelfTest`) | 2026-10-11 | — | — |
+| Harness split | Planned | Conversation logic in its own process (now inside the engine's conductor) | — | engine | — |
 | Memory | Planned (v0.2) | ADR 0007 | — | harness | — |
 | Tools | Planned (v0.3) | ADR 0010: web search, open program, file search | — | harness | — |

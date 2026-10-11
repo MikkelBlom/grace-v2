@@ -8,8 +8,9 @@ This is a ground-up rebuild. [Grace v1](https://github.com/MikkelBlom/project-gr
 parts worked but never felt usable day to day; [the lessons](docs/LESSONS-FROM-V1.md) shaped
 this version.
 
-**Status:** v0.0, foundation. Tracing, the debug viewer, the turn-taking core and the model
-bake-off harness exist; there is no live voice loop yet. See the [roadmap](docs/ROADMAP.md).
+**Status:** v0.1 in progress. The engine runs the full voice loop (echo cancellation, VAD,
+end-of-turn detection, speech recognition, Gemma 4 12B, streamed voice, interruptions), and is
+waiting for its first live tests. See the [roadmap](docs/ROADMAP.md).
 
 ## Goals
 - **Near-instant replies.** Target under 800 ms from the end of your sentence to her first word.
@@ -65,7 +66,12 @@ measurements: [docs/MODELS.md](docs/MODELS.md). Design decisions: [docs/adr](doc
 
 | Path | What |
 |---|---|
-| `crates/grace-core` | Pure logic, no IO: the turn-taking state machine |
+| `crates/grace-engine` | `grace`: the voice engine (audio threads, AEC3, VAD, Smart Turn, conductor) |
+| `crates/grace-audio` | WASAPI capture/render/loopback, calibration, AEC probes |
+| `crates/grace-vad` | Silero VAD v6, Smart Turn v3.2, Whisper log-mel features |
+| `crates/grace-llm` | llama-server streaming client and sentence splitter |
+| `services/` | `speech_server.py`: keeps STT (edda) and TTS (Pocket TTS) warm |
+| `crates/grace-core` | Pure logic, no IO: turn-taking state machine, VAD gate |
 | `crates/grace-trace` | Non-blocking JSONL tracing used by every process |
 | `crates/grace-debug` | Live per-turn latency waterfall at `http://127.0.0.1:7700` |
 | `crates/grace-bench` | Model bake-off harness (STT, TTS, blind listening page) |
@@ -73,7 +79,15 @@ measurements: [docs/MODELS.md](docs/MODELS.md). Design decisions: [docs/adr](doc
 | `fixtures/` | Test sentences and manifests (audio is recreated by script, never committed) |
 | `docs/` | ADRs, roadmap, model register, lessons from v1 |
 
-## Running what exists
+## Running Grace
+
+```bash
+python scripts/fetch_runtime.py      # pinned llama.cpp build + models, once
+./scripts/grace.ps1                  # starts llama-server + speech server if needed, then the engine
+cargo run -p grace-debug             # live per-turn timeline at http://127.0.0.1:7700
+```
+
+## Running the tools
 
 Windows 11, Rust stable, NVIDIA GPU for the bench runners, Python 3.12 for the Python runners.
 

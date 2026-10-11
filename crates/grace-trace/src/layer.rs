@@ -209,13 +209,28 @@ where
         let meta = span.metadata();
         let parent_id = span.parent().map(|p| p.id().into_u64());
         let mut extensions = span.extensions_mut();
-        let Some(state) = extensions.remove::<SpanState>() else {
+        let Some(mut state) = extensions.remove::<SpanState>() else {
             return;
         };
+        // `backdate_us`: the span really began this long before it was created (e.g. speech
+        // the VAD only confirms after a few frames). Shift the start back, extend the duration.
+        let backdate = state
+            .fields
+            .remove("backdate_us")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        // `trim_us`: the span really ended this long before it was closed.
+        let trim = state
+            .fields
+            .remove("trim_us")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         self.send(Record {
             kind: Kind::Span,
-            ts_us: state.ts_us,
-            dur_us: Some(state.started.elapsed().as_micros() as u64),
+            ts_us: state.ts_us.saturating_sub(backdate),
+            dur_us: Some(
+                (state.started.elapsed().as_micros() as u64 + backdate).saturating_sub(trim),
+            ),
             service: self.service.clone(),
             name: meta.name().to_owned(),
             target: meta.target().to_owned(),

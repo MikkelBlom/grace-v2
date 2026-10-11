@@ -70,3 +70,17 @@ fn torn_last_line_is_skipped() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].name, "ok");
 }
+
+#[test]
+fn backdate_shifts_start_and_extends_duration() {
+    let dir = tempfile::tempdir().unwrap();
+    let (layer, guard) = JsonlLayer::new("test", dir.path(), "s3").unwrap();
+    tracing::subscriber::with_default(Registry::default().with(layer), || {
+        let span = info_span!("stage", stage = "vad.speech", backdate_us = 250_000u64);
+        drop(span);
+    });
+    guard.flush();
+    let r = &read_session(&guard.path).unwrap()[0];
+    assert!(r.dur_us.unwrap() >= 250_000);
+    assert!(!r.fields.contains_key("backdate_us"));
+}

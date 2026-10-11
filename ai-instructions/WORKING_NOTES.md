@@ -85,3 +85,11 @@
   and re-score as silence grows, to cut premature replies (25/60 cut-offs scored "complete").
 - bench/.venv: something pulled huggingface_hub 2.2 (breaks transformers 4.57); pinned back to
   0.36. Pin it if installing anything new there.
+- Engine architecture as built (2026-10-11): llama-server + speech_server.py hold the models; the
+  `grace` engine (0.1 s startup) runs capture ×3 (raw mic, comms mic, loopback), always-on render
+  (silence when idle keeps BT awake + loopback continuous), frontend thread (align by QPC clock,
+  AEC3, decimate, VAD, gate, GCC delay tracker every 2 s), and the async conductor (TurnMachine,
+  Smart Turn + STT on pause, LLM → sentence splitter → TTS → render, barge-in cancel). The
+  conversation logic is still inside the engine (conductor); ADR 0002's separate harness process
+  is deferred until there is enough harness to warrant it.
+- Selftest: `./scripts/grace.ps1 -SelfTest` (silent). Engine-only restart: `cargo run --release -p grace`.

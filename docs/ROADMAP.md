@@ -13,20 +13,22 @@ Tooling that every later step leans on.
 - [x] `grace-bench`: language-agnostic bake-off harness (STT, TTS, blind listening page)
 - [x] First STT bake-off (FLEURS-da): edda-v0.2, Røst-v3, ekko-v1-tiny
 - [x] First Danish TTS bake-off: Piper, Supertonic 3, Røst-v3 Chatterbox 350m/500m
-- [ ] STT bake-off on CoRal v3 conversation + Mikkel's own recordings
+- [ ] STT bake-off on CoRal v3 conversation + Mikkel's own recordings (CoRal access pending)
 - [ ] Blind listening test of the TTS candidates (Mikkel, ideally others too)
 
 ## v0.1 — A live conversation
 Talk to Grace in Danish through the speakers and interrupt her.
-- [ ] Audio I/O in Rust (WASAPI mic + render + loopback)
-- [ ] Echo cancellation bake-off A/B/C and integration ([0006](adr/0006-echo-cancellation.md))
-- [ ] Silero VAD v6 + Smart Turn v3.2 driving `TurnMachine`
-- [ ] STT adapter (pick from bake-off) with speculative transcription
-- [ ] `llama-server` child process, Gemma 4 E4B, streaming, prefix caching
-- [ ] Sentence-streamed TTS adapter and playback with ducking and cancel
-- [ ] IPC between engine and harness; harness restart without losing models
+- [x] Audio I/O in Rust (WASAPI mic + render + loopback, clock-timestamped)
+- [x] Echo cancellation bake-off: own AEC3 wins on Bluetooth; dual path ([0012](adr/0012-dual-path-capture.md))
+- [x] Silero VAD v6 + Smart Turn v3.2 driving `TurnMachine`
+- [x] STT (edda-v0.2 via speech server) with speculative transcription
+- [x] `llama-server` with Gemma 4 12B, streaming, prefix caching (`scripts/grace.ps1`)
+- [x] Sentence-streamed TTS (Pocket TTS) and always-on playback with ducking and cancel
+- [x] Models live in separate servers; engine restarts in ~0.1 s (harness split comes with v0.2+)
 - [ ] Media-playback false-trigger fixture (must be 0) and latency budget check
 - [ ] Live test: speech end → first audio measured on real turns
+- [ ] Continuous delay tracking verified live (tracker built, issue)
+- [ ] Speaker calibration on request (#32)
 
 ## v0.2 — Memory that persists
 - [ ] SQLite schema: facts (bitemporal, provenance, confidence), episodes

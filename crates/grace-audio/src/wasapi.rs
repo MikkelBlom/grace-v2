@@ -414,6 +414,39 @@ impl Render {
         self.fmt.rate
     }
 
+    /// Starts the stream for incremental writing with [`Self::write`].
+    pub fn start(&self) -> anyhow::Result<()> {
+        unsafe { self.client.Start()? };
+        Ok(())
+    }
+
+    /// Frames that can be written right now without blocking.
+    pub fn writable(&self) -> anyhow::Result<usize> {
+        Ok((self.buffer_frames - unsafe { self.client.GetCurrentPadding()? }) as usize)
+    }
+
+    /// Frames queued in the device buffer but not yet played.
+    pub fn queued(&self) -> anyhow::Result<usize> {
+        Ok(unsafe { self.client.GetCurrentPadding()? } as usize)
+    }
+
+    /// Writes mono samples (at [`Self::rate`]) to every channel; at most [`Self::writable`] frames.
+    pub fn write(&mut self, mono: &[f32]) -> anyhow::Result<()> {
+        if mono.is_empty() {
+            return Ok(());
+        }
+        let ch = self.fmt.channels as usize;
+        unsafe {
+            let data = self.render.GetBuffer(mono.len() as u32)? as *mut f32;
+            let dst = std::slice::from_raw_parts_mut(data, mono.len() * ch);
+            for (frame, &s) in dst.chunks_exact_mut(ch).zip(mono) {
+                frame.fill(s);
+            }
+            self.render.ReleaseBuffer(mono.len() as u32, 0)?;
+        }
+        Ok(())
+    }
+
     /// Plays mono samples (already at [`Self::rate`]) to completion, blocking.
     pub fn play_blocking(&mut self, mono: &[f32]) -> anyhow::Result<()> {
         let ch = self.fmt.channels as usize;

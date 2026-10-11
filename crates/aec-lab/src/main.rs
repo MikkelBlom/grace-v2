@@ -119,13 +119,20 @@ fn main() -> anyhow::Result<()> {
         .export_metrics(true)
         .build()?;
     let frame = format.sample_count();
+    // `--warm` runs the recording through once first and keeps only the second pass: the state
+    // a continuously running Grace would be in, with the canceller already adapted to the room.
+    let passes = if flag("--warm") { 2 } else { 1 };
     let mut out = Vec::with_capacity(mic.len());
     let mut buf = vec![0.0f32; frame];
-    for (cap, ren) in mic.chunks_exact(frame).zip(render.chunks_exact(frame)) {
-        pipeline.handle_render_frame(ren)?;
-        if pipeline.process_capture_frame(cap, &mut buf)? {
-            out.extend_from_slice(&buf);
+    for pass in 0..passes {
+        out.clear();
+        for (cap, ren) in mic.chunks_exact(frame).zip(render.chunks_exact(frame)) {
+            pipeline.handle_render_frame(ren)?;
+            if pipeline.process_capture_frame(cap, &mut buf)? {
+                out.extend_from_slice(&buf);
+            }
         }
+        let _ = pass;
     }
     let mut metrics = None;
     while let Some(m) = pipeline.try_pull_metrics()? {

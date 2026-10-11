@@ -57,3 +57,12 @@
   render[k] = lp[k + offset + lead]. With that, AEC3's estimated delay ≈ lead.
 - Pure-Rust aec3 works: synthetic speech echo (50 ms, small IR, noise) → 21–28 dB reduction.
   Sweeps are a poor AEC adaptation signal (one band at a time): use speech runs for AEC tuning.
+- VAD acceptance (2026-10-11): our AEC3, adapted + VadGate talking boost → 0.0 s false speech on
+  17 s of Grace through the Z337 (raw 15.7 s, Windows AEC 15.2 s). AEC3 needs ~5-10 s of Grace
+  speech to converge: the engine must run it continuously and persist nothing yet (re-adapts per
+  launch; consider warming it with the calibration/first reply). Double-talk is the weak side:
+  near-end speech 6 dB below echo is only partly detected. Next: real double-talk recording
+  (Mikkel reads aloud during aec_test playback), AEC3 suppressor tuning.
+- AGC2 in the aec3 linear pipeline must stay off for VAD purposes? Mixed: it boosts residual
+  (bad for level metrics) but VAD false speech was lower with it (1.7 s vs 3.7 s first pass).
+  Decide with real double-talk data.

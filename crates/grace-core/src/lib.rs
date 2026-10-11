@@ -2,3 +2,4 @@
 //! inputs and a caller-supplied clock, so it is tested without audio, models or threads.
 
 pub mod turn;
+pub mod vad_gate;

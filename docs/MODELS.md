@@ -10,7 +10,7 @@ Landscape researched 2026-10-10.
 |---|---|---|---|
 | STT (final) | **edda-v0.2** (Whisper turbo FT, Apache 2.0) | Brage v1 (gated), Røst-v3 | Measured, see below |
 | STT (fast/partials) | **ekko-v1-tiny** (Parakeet 110M, sherpa-onnx) | — | Measured; licence is custom, check before shipping |
-| VAD | Silero VAD v6 | TEN VAD | Not measured yet |
+| VAD | **Silero VAD v6.2.3** (ONNX, 1 CPU thread, ~0.1 ms per 32 ms frame) | TEN VAD | Speech found in 60/60 FLEURS clips |
 | End of turn | Pipecat Smart Turn v3.2 (Danish listed) | silence timeout | Not measured yet |
 | LLM | **Gemma 4 12B** (decided 2026-10-10; Tau2 69 vs E4B's 42) | E4B as fast router, Qwen3.5-9B (Tau2 79, Danish unproven) | v0.3 bake-off on our tool traces |
 | LLM runtime | llama.cpp `llama-server` (child process) | mistral.rs embedded (Rust, needs own CUDA build on Windows) | — |
@@ -101,5 +101,23 @@ Decode at ~50 tok/s is the next lever (MTP speculative decoding, issue #26).
 
 One finding for the harness: asked "who won the Tour de France this year?", the model searched
 for "2024": it doesn't know today's date. The system prompt must carry the current date.
+
+## Echo + VAD acceptance — Z337 (Bluetooth) speakers, laptop mic array, 2026-10-11
+
+Calibration: playback→mic 110 ms (spread 13 ms). Recording: 17 s of Grace's (Kokoro) voice
+through the speakers; "speech" = seconds Silero VAD + gate reports while only Grace is talking.
+
+| Signal | False speech | Notes |
+|---|---|---|
+| Raw mic | 15.7 s | VAD hears all of Grace |
+| Windows communications AEC | 15.2 s | no practical help on Bluetooth |
+| Our AEC3 (+NS), first pass | 3.7 s | still converging on the first sentences |
+| Our AEC3, adapted (`--warm`) | 0.3–0.4 s | |
+| **Our AEC3, adapted + talking boost** | **0.0 s** | target met on this recording |
+
+Double-talk (a FLEURS Danish speaker mixed in while Grace talks, adapted AEC + boost): talker at
+the echo's level detected (starts ~1 s late); 6 dB quieter, patchy; 12 dB quieter (below room
+noise), missed. AEC3's suppressor dampens near-end speech during double-talk: tune it, and
+confirm with Mikkel's real voice over playback.
 
 Quality is judged by ear: `grace-bench listen bench-results/tts` (Danish) and `grace-bench listen bench-results/en/tts` (English) build blind A/B pages.

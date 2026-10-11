@@ -19,6 +19,10 @@ LLAMA_ASSETS = [
     f"llama-{LLAMA_BUILD}-bin-win-cuda-13.4-x64.zip",
     "cudart-llama-bin-win-cuda-13.4-x64.zip",
 ]
+FILES = [
+    # (url, name): plain downloads, pinned by tag.
+    ("https://github.com/snakers4/silero-vad/raw/v6.2.3/src/silero_vad/data/silero_vad.onnx", "silero_vad_v6.2.3.onnx"),
+]
 MODELS = [
     # (repo, file): Google's quantization-aware-trained Q4_0, better than post-hoc Q4 at the same size.
     ("google/gemma-4-12B-it-qat-q4_0-gguf", "gemma-4-12b-it-qat-q4_0.gguf"),
@@ -39,6 +43,16 @@ def fetch_llama():
     print(f"llama.cpp {LLAMA_BUILD}: {dest}")
 
 
+def fetch_files():
+    dest = ROOT / "models"
+    dest.mkdir(parents=True, exist_ok=True)
+    for url, name in FILES:
+        if not (dest / name).exists():
+            print(f"downloading {url}")
+            urllib.request.urlretrieve(url, dest / name)
+        print(f"file: {dest / name}")
+
+
 def fetch_models():
     for repo, name in MODELS:
         path = hf_hub_download(repo, name, local_dir=ROOT / "models")
@@ -47,4 +61,5 @@ def fetch_models():
 
 if __name__ == "__main__":
     fetch_llama()
+    fetch_files()
     fetch_models()

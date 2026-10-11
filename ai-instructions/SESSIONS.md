@@ -54,3 +54,8 @@ literature reviews (memory systems, Danish far-field STT, local fine-tuning) rec
 `docs/research/2026-10-11-foundations.md`. Found v1's personality spec in `config/personality.json`.
 **Issues encountered:** none; no code changed.
 **Next steps:** Mikkel decides on the proposed order (eval sets first). See WORKING_NOTES.
+
+## 2026-10-11 — Claude Code (Opus 5.5): fact gates and test data
+**Summary:** Researched "Jev"-style fast fact gates and data sources that don't need Mikkel.
+Added v0.2.5 Foundations to the roadmap (v0.3 paused) and the "not the test set" rule to CLAUDE.md.
+**Next steps:** build `grace-sim` injection tier and the STT eval sets first.

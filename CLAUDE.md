@@ -14,6 +14,9 @@ chosen by bake-off. Start with [README.md](README.md), then `ai-instructions/IND
   ([ADR 0006](docs/adr/0006-echo-cancellation.md)). The media false-trigger test stays at 0.
 - **Live test before done.** A milestone is not done until it was used with the speakers on and
   its trace was checked.
+- **Mikkel is not the test set.** Tuning, training and regression tests run on public corpora,
+  synthetic data and automated harnesses (simulated users, injected or re-recorded audio), never
+  on hours of him talking. His live sessions are a final check and a source of failure cases.
 - **Measure, don't guess.** Model and design choices are backed by `grace-bench` results or
   traces, recorded in `docs/MODELS.md` or an ADR.
 - **Small scope.** Only the tools a milestone needs. New ideas go to `ai-instructions/FUTURE_IDEAS.md`

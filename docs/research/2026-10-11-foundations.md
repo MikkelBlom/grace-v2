@@ -94,3 +94,39 @@ v1's spec is `config/personality.json` in the v1 repo (not HTML): witty *and war
 humour, sharp but never arrogant, "a sharp friend, not a manual", honest pushback done kindly,
 vary wording, match his tone, infer misheard words, ask "did you mean…?" before acting on
 nonsense, `<SKIP>` for pure backchannel, plus examples.
+
+## Follow-up: fast fact gates ("Jev"-style)
+
+"Jev" is TypeSafe's closed cloud "System One" model: typed questions in, calibrated typed answers
+out, 70–500 ms. Supermemory found it good for routing ("search memory?"), weak for compaction and
+delete gates. https://supermemory.ai/blog/jev-memory-context-engineering/ — Open local clones:
+laya-multilingual (Apache-2.0, mmBERT-base 322M, ~7–33 ms/question, ONNX, needs calibration;
+https://github.com/NandhaKishorM/laya), others too new to trust. JEPA (V-JEPA etc.) is vision
+world-modelling and no fit.
+Plan: a per-turn gate as a 4-way logprob classification on the resident Gemma ("new fact /
+update / commitment / nothing") plus top-k fact recall; ScandiNLI (Danish NLI,
+https://huggingface.co/alexandrainst/scandi-nli-large) as a contradiction hint; Gemma + JSON
+schema only when the gate fires, citing episode ids. Log gate decisions as labels; later distil to
+a classifier on harrier embeddings or fine-tune laya. A gate saves calls; it doesn't make updates
+correct — only log-is-truth does.
+
+## Follow-up: test and training data without Mikkel
+
+- STT eval: CoRal v3 conversation test (8.7 h, 24 speakers, gated: accept terms on HF), Common
+  Voice 25 da (CC0), FLEURS da. Far-field via RIRs (BUT ReverbDB CC-BY, pyroomacoustics) and
+  noise (MUSAN CC-BY).
+- STT fine-tune: CoRal v3 train (156 h conversation + 521 h read), FT Speech (research-only), NST.
+- Smart Turn: pipecat v3.2 train/test (CC-BY, 271k rows, only 2.5 % Danish in test, ~77 %
+  synthetic) + Danish synthetic per the Pipecat recipe (Gemma sentences complete / cut / filler,
+  voiced by Røst v3 Chatterbox with voices cloned from CC0 Common Voice clips) + CoRal cuts;
+  SamtaleBank and DanPASS for real Danish turn structure (small, partly password).
+- **CoRal is OpenRAIL-D: no speech synthesis use** — never clone TTS voices from CoRal audio.
+- Echo/barge-in: Microsoft AEC Challenge (real far/near/double-talk, AECMOS),
+  https://github.com/microsoft/AEC-Challenge
+- Memory: no Danish benchmarks; generate LoCoMo-style Danish scripts with Gemma from a persona
+  and dated timeline (planted updates and commitments), probes derived from the timeline;
+  translate some LongMemEval knowledge-update questions as an external check.
+- Turn-taking test designs to copy: Full-Duplex-Bench v1/v1.5/v2.
+- Harness design to copy: Pipecat Evals (local simulated callers, latency budgets, barge-in).
+- `grace-sim` tiers: injection (every commit), acoustic replay via a second speaker in the room
+  (nightly), simulated user = Gemma persona + Røst TTS (nightly), judged against the timeline.

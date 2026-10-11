@@ -29,6 +29,10 @@
   input fixes (linear AEC output for STT, VAD-trim, fp16 beam 5 temp 0, ekko cross-check),
   (3) memory rebuilt as episode log = truth, facts = derived cache, commitments table, profile
   rendered by code, (4) Smart Turn Danish fine-tune, (5) Røst v3 Chatterbox Danish TTS bake-off.
+- **Decided 2026-10-11:** v0.3 paused for v0.2.5 Foundations (ROADMAP). Rule: Mikkel is not
+  the test set (CLAUDE.md). Fast fact gate = Gemma logprob classification first, not a new model.
+- Needs Mikkel: accept CoRal v3 terms on HF (earlier 403); a second speaker device for the
+  acoustic replay tier.
 - System prompt personality was written from live feedback, not v1's `config/personality.json`
   (witty + warm, sharp friend, kind pushback). Merge both.
 - AEC option A (Windows comms AEC with render-endpoint reference) may not be exposed by this

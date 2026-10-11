@@ -38,6 +38,21 @@ Talk to Grace in Danish through the speakers and interrupt her.
 - [x] Background learning (add/update/invalidate, JSON-schema constrained) on LLM slot 2
 - [ ] Live test: Grace remembers across two sessions
 
+## v0.2.5 — Foundations (v0.3 paused until this is done)
+Research: [docs/research/2026-10-11-foundations.md](research/2026-10-11-foundations.md).
+Rule: no tuning or testing on Mikkel; public corpora, synthetic data and automated harnesses.
+- [ ] `grace-sim` injection tier: WAVs + loopback reference fed into the frontend faster than
+      real time; RIR/noise/echo mixing; WER, end-of-turn F1, false triggers, latency
+- [ ] STT eval sets: CoRal v3 conversation test, Common Voice da, FLEURS da, non-speech (MUSAN)
+- [ ] STT input fixes measured on those sets (linear AEC output, VAD trim, decoding settings,
+      ekko cross-check)
+- [ ] Memory benchmark: synthetic Danish multi-session scripts (persona + dated timeline with
+      updates and commitments), deterministic DB assertions + probe questions
+- [ ] Memory redesign: episode log = truth, facts = derived cache, commitments table, per-turn gate
+- [ ] Smart Turn Danish fine-tune (v3.2 data + Danish synthetic + CoRal cuts)
+- [ ] Danish TTS bake-off: Røst v3 Chatterbox 350M/500M
+- [ ] Acoustic replay tier (second speaker in the room) and simulated-user tier (nightly)
+
 ## v0.3 — First tools
 - [ ] Tool manifest + JSON-RPC boundary with hot reload ([0010](adr/0010-tool-boundary.md))
 - [ ] Web search (local SearXNG first)

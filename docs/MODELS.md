@@ -15,7 +15,7 @@ Landscape researched 2026-10-10.
 | LLM | **Gemma 4 12B** (decided 2026-10-10; Tau2 69 vs E4B's 42) | E4B as fast router, Qwen3.5-9B (Tau2 79, Danish unproven) | v0.3 bake-off on our tool traces |
 | LLM runtime | llama.cpp `llama-server` (child process) | mistral.rs embedded (Rust, needs own CUDA build on Windows) | — |
 | TTS (reply voice) | **English** for now ([0011](adr/0011-reply-language.md)): Pocket TTS (CPU, streaming) vs Kokoro (CUDA) | Danish voices below | Blind listening test pending |
-| Embedder | harrier-oss-v1-270m (MIT, MMTEB v2 66.5) | EmbeddingGemma 2 (Apache, 61.4, multimodal) | v0.2 bake-off |
+| Embedder | **harrier-oss-v1-270m** (MIT, CPU, 51 ms/query) | harrier-0.6b (better top-3, 2× slower), EmbeddingGemma 2 | Measured, see below |
 | Reranker | bge-reranker-v2-m3 | Qwen3-Reranker | v0.2 |
 | Vector store | SQLite + FTS5 + sqlite-vec | Tantivy for Danish BM25, LanceDB | Decided ([0007](adr/0007-memory-model.md)) |
 | AEC | **Own WebRTC AEC3** (pure-Rust `aec3`) with loopback reference | Windows comms AEC: supported by the driver but only **~4 dB** on the Bluetooth Z337 | Calibration + tuning next (aec-lab) |
@@ -133,5 +133,22 @@ Test: 60 FLEURS Danish clips, each complete and cut off at a random 40–70 % po
 real use; the published Danish figure is 92.8 %. The silence timeout in `TurnMachine` catches
 "complete" turns the model misses (cost: up to 1.6 s extra wait). Premature "complete" verdicts
 on cut-offs (25/60) are the risk: Grace answering too early. Measure on Mikkel's real speech.
+
+## Embedder — Danish question → English fact, 2026-10-11
+
+`bench/embed_recall.py` on `fixtures/memory/recall.jsonl`: 40 English facts of the kind Grace
+stores plus 20 distractors; 40 Danish spoken-style questions and 3 English ones, one target each.
+CPU, 4 threads.
+
+| Model | Dim | Recall@1 | Recall@3 | MRR | ms/query |
+|---|---|---|---|---|---|
+| **harrier-oss-v1-270m** | 640 | **0.81** | 0.88 | 0.86 | 51 |
+| harrier-oss-v1-0.6b | 1024 | 0.84 | **0.93** | **0.89** | 113 |
+| EmbeddingGemma 2 | 768 | 0.77 | 0.81 | 0.80 | 51 |
+| multilingual-e5-small | 384 | 0.74 | 0.86 | 0.81 | 8 |
+
+Pick harrier-270m: nearly the 0.6b's accuracy at half the latency (it sits on the voice path).
+Typical misses are indirect phrasings ("hvem er du opkaldt efter" → "named after Grace Hopper");
+hybrid keyword search and a reranker are the next levers.
 
 Quality is judged by ear: `grace-bench listen bench-results/tts` (Danish) and `grace-bench listen bench-results/en/tts` (English) build blind A/B pages.

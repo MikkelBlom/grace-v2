@@ -20,5 +20,6 @@
 | Engine `grace` | Implemented, untested live | Dual-path capture, AEC3 + delay tracking, VAD gate, Smart Turn, conductor, sentence-streamed replies, barge-in, traces | 2026-10-11 | all crates | Mikkel's first live run |
 | Launcher | Implemented | `scripts/grace.ps1` (+ `-SelfTest`) | 2026-10-11 | — | — |
 | Harness split | Planned | Conversation logic in its own process (now inside the engine's conductor) | — | engine | — |
-| Memory | Planned (v0.2) | ADR 0007 | — | harness | — |
+| Memory | Implemented, untested live | `grace-memory` + engine `memory.rs`: session block, per-turn recall, background learning, summaries; `grace --memory-lab` | 2026-10-11 | embed server | Mikkel's two-session test |
+| Embed server | Implemented | `services/embed_server.py` (harrier-270m, CPU, :7812) | 2026-10-11 | bench/.venv-embed | — |
 | Tools | Planned (v0.3) | ADR 0010: web search, open program, file search | — | harness | — |

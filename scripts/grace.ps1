@@ -1,5 +1,5 @@
-# Starts Grace: llama-server and the speech server (only if not already running), then the engine.
-# The two servers hold the big models and stay up between engine restarts.
+# Starts Grace: llama-server, the speech server and the embed server (only those not already
+# running), then the engine. The servers hold the models and stay up between engine restarts.
 #
 #   ./scripts/grace.ps1            # run Grace
 #   ./scripts/grace.ps1 -SelfTest  # silent startup check
@@ -39,8 +39,14 @@ if (-not (Test-Port 7810)) {
     Start-Process -WindowStyle Hidden -FilePath bench\.venv\Scripts\python.exe -ArgumentList 'services\speech_server.py' `
         -RedirectStandardError logs\speech-server.log -RedirectStandardOutput logs\speech-server.out.log
 }
+if (-not (Test-Port 7812)) {
+    Write-Host 'starting embed server (harrier-270m, memory search) ...'
+    Start-Process -WindowStyle Hidden -FilePath bench\.venv-embed\Scripts\python.exe -ArgumentList 'services\embed_server.py' `
+        -RedirectStandardError logs\embed-server.log -RedirectStandardOutput logs\embed-server.out.log
+}
 Wait-Port 8080 'llama-server' 120
 Wait-Port 7811 'speech server' 120
+Wait-Port 7812 'embed server' 120
 # llama-server opens its port before the model is loaded; wait for /health.
 while ($true) { try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/health).StatusCode -eq 200) { break } } catch {} ; Start-Sleep -Milliseconds 500 }
 

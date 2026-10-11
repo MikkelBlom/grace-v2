@@ -42,6 +42,7 @@ pub struct Services {
     pub shared: Arc<Mutex<Shared>>,
     pub render: std::sync::mpsc::Sender<RenderCmd>,
     pub system_prompt: PathBuf,
+    pub memory: Arc<crate::memory::MemoryService>,
 }
 
 /// Results of work the conductor spawned, fed back into the machine.
@@ -185,6 +186,10 @@ pub async fn run(
                 }
                 Command::Respond { turn, text } => {
                     println!("you:   {text}");
+                    let user_turn = svc.memory.add_turn("user", &text).unwrap_or_else(|e| {
+                        warn!(error = %e, "memory: storing user turn failed");
+                        0
+                    });
                     history.push(("user", text));
                     let cancel = Arc::new(AtomicBool::new(false));
                     let wake = Arc::new(Notify::new());
@@ -197,6 +202,7 @@ pub async fn run(
                         done_tx.clone(),
                         turn,
                         history.clone(),
+                        user_turn,
                         span,
                         cancel.clone(),
                         wake.clone(),
@@ -342,23 +348,53 @@ fn system_prompt(path: &PathBuf) -> String {
 }
 
 /// Streams the LLM reply into TTS and the speakers, one sentence at a time.
+#[allow(clippy::too_many_arguments)] // a spawned task's inputs; a struct would only rename them
 async fn speak_reply(
     svc: Arc<Services>,
     done: mpsc::UnboundedSender<Done>,
     turn: u64,
     history: Vec<(&'static str, String)>,
+    user_turn: i64,
     span: Span,
     cancel: Arc<AtomicBool>,
     wake: Arc<Notify>,
 ) {
-    let mut messages =
-        vec![json!({ "role": "system", "content": system_prompt(&svc.system_prompt) })];
+    // The system prompt (live file + this session's memory block) is fixed for the session, so
+    // llama-server's prompt cache stays valid across turns.
+    let system = format!(
+        "{}
+
+{}",
+        system_prompt(&svc.system_prompt),
+        svc.memory.session_block()
+    );
+    let mut messages = vec![json!({ "role": "system", "content": system })];
     // Full history (bounded by `prune_history`): a stable prefix keeps llama-server's cache valid.
+    let (last, earlier) = history
+        .split_last()
+        .expect("history ends with the user's turn");
     messages.extend(
-        history
+        earlier
             .iter()
             .map(|(r, t)| json!({ "role": r, "content": t })),
     );
+    // Recall goes on the current user message only: the cached prefix before it is untouched.
+    let recall_span =
+        info_span!(parent: &span, "stage", stage = "memory.recall", model = "harrier-270m");
+    let recalled = match svc.memory.recall(&last.1).await {
+        Ok(facts) => facts,
+        Err(e) => {
+            warn!(parent: &span, error = %e, "memory recall failed");
+            Vec::new()
+        }
+    };
+    drop(recall_span);
+    if !recalled.is_empty() {
+        let texts: Vec<&str> = recalled.iter().map(|f| f.text.as_str()).collect();
+        info!(parent: &span, recalled = ?texts, "memory recalled");
+    }
+    messages
+        .push(json!({ "role": "user", "content": crate::memory::with_recall(&last.1, &recalled) }));
     let mut req = ChatRequest::new(messages);
     req.max_tokens = 300;
 
@@ -462,6 +498,17 @@ async fn speak_reply(
         println!("grace: {full}");
     }
     let (spoken, any_audio) = tts_task.await.unwrap_or_default();
+    if !spoken.is_empty() {
+        if let Err(e) = svc.memory.add_turn("assistant", &spoken) {
+            warn!(parent: &span, error = %e, "memory: storing reply failed");
+        }
+        // Learning runs in the background on the LLM's second slot, never on the voice path.
+        tokio::spawn(
+            svc.memory
+                .clone()
+                .learn(user_turn, last.1.clone(), spoken.clone()),
+        );
+    }
     let _ = done.send(Done::Spoken { text: spoken });
     if !any_audio {
         let _ = done.send(Done::Silent { turn });

@@ -37,3 +37,16 @@ Storage, all in-process:
 - Every write must name its source, which is also the defence against memory poisoning from
   web pages or tool output.
 - Changing the embedder means re-embedding; store the embedder id per vector table.
+
+## Update 2026-10-11 (implemented)
+- `grace-memory`: SQLite (WAL) with sessions, turns, facts (kind, confidence, source turn,
+  valid_from/valid_to, recorded_at/invalidated_at, superseded_by), FTS5 + sqlite-vec (cosine),
+  RRF. Refuses to open with a different embedder.
+- Embedder: harrier-oss-v1-270m on CPU via `services/embed_server.py` (~36 ms per query).
+- The memory block (current facts + last 3 session summaries) is written into the system prompt
+  once per session, so the LLM prompt cache stays valid; per-turn recall (cosine distance ≤ 0.55,
+  not already in the block) is appended to that turn's user message only.
+- Learning runs after each spoken reply on llama-server's second slot with a JSON-schema
+  constrained response; the model may only update or invalidate facts it was shown.
+- Session summaries are written at the next start for sessions that have none (robust to Grace
+  being stopped abruptly).

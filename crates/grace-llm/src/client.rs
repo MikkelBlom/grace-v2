@@ -91,6 +91,35 @@ impl LlmClient {
         )
     }
 
+    /// One non-streamed completion whose content must match `schema` (grammar-constrained by
+    /// llama-server), parsed as JSON. For background work such as memory extraction.
+    pub async fn complete_json(&self, req: &ChatRequest, schema: &Value) -> anyhow::Result<Value> {
+        let mut body = req.body();
+        body["stream"] = json!(false);
+        body["response_format"] = json!({
+            "type": "json_schema",
+            "json_schema": { "name": "result", "schema": schema, "strict": true },
+        });
+        let resp = self
+            .http
+            .post(format!("{}/v1/chat/completions", self.base))
+            .json(&body)
+            .send()
+            .await
+            .context("sending completion request")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            bail!("llama-server returned {status}: {text}");
+        }
+        let v: Value = resp.json().await?;
+        let content = v["choices"][0]["message"]["content"]
+            .as_str()
+            .context("completion has no content")?;
+        serde_json::from_str(content)
+            .with_context(|| format!("completion is not valid JSON: {content}"))
+    }
+
     pub async fn stream(&self, req: &ChatRequest) -> anyhow::Result<DeltaStream> {
         let resp = self
             .http

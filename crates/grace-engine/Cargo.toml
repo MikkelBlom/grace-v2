@@ -15,6 +15,7 @@ futures-util = "0.3.34"
 grace-audio = { version = "0.0.1", path = "../grace-audio" }
 grace-core = { version = "0.0.1", path = "../grace-core" }
 grace-llm = { version = "0.0.1", path = "../grace-llm" }
+grace-memory = { version = "0.0.1", path = "../grace-memory" }
 grace-trace = { version = "0.0.1", path = "../grace-trace" }
 grace-vad = { version = "0.0.1", path = "../grace-vad" }
 rustfft = "6.4.1"

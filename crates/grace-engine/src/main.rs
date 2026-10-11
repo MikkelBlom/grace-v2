@@ -8,6 +8,7 @@ mod clock;
 mod conductor;
 mod delay;
 mod frontend;
+mod memory;
 mod speech;
 mod timed;
 
@@ -36,7 +37,64 @@ use crate::{
 const LLM_URL: &str = "http://127.0.0.1:8080";
 const STT_ADDR: &str = "127.0.0.1:7810";
 const TTS_ADDR: &str = "127.0.0.1:7811";
+const EMBED_ADDR: &str = "127.0.0.1:7812";
 const LEAD_MS: f64 = 30.0;
+
+/// Runs scripted exchanges through the real learning path into a scratch memory and prints
+/// what Grace kept: a quick check of the extraction prompt without talking.
+async fn memory_lab(llm: LlmClient) -> anyhow::Result<()> {
+    let path = Path::new("data/memory-lab.db");
+    for ext in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
+    }
+    let mem = memory::MemoryService::open(path, EMBED_ADDR, llm).await?;
+    let exchanges = [
+        (
+            "Hej Grace, hvordan går det?",
+            "Hi Mikkel, I'm good. How about you?",
+        ),
+        (
+            "Jeg har en eksamen i databaser den fjortende december",
+            "Good luck with the database exam on the 14th of December.",
+        ),
+        (
+            "Min søster hedder Sofie og hun bor i Aarhus",
+            "Nice, Sofie in Aarhus. Noted.",
+        ),
+        (
+            "Jeg kan bedst lide når du svarer kort",
+            "Understood, I'll keep it short.",
+        ),
+        (
+            "Min søster er faktisk flyttet til København",
+            "Oh, so Sofie lives in Copenhagen now.",
+        ),
+        (
+            "Eksamenen er blevet aflyst",
+            "Sorry to hear the exam was cancelled.",
+        ),
+        ("Hvad er klokken?", "It's around three."),
+    ];
+    for (user, reply) in exchanges {
+        let turn = mem.add_turn("user", user)?;
+        mem.add_turn("assistant", reply)?;
+        let started = Instant::now();
+        mem.clone()
+            .learn(turn, user.to_owned(), reply.to_owned())
+            .await;
+        println!(
+            "{:>5.0} ms  {user}",
+            started.elapsed().as_secs_f64() * 1000.0
+        );
+        for f in mem.facts()? {
+            println!(
+                "          [{}] {} ({:?}, {:.1})",
+                f.id, f.text, f.kind, f.confidence
+            );
+        }
+    }
+    Ok(())
+}
 
 /// Refuses to start a second engine: two would fight over the mic and both answer.
 fn single_instance() -> anyhow::Result<std::fs::File> {
@@ -74,6 +132,11 @@ async fn main() -> anyhow::Result<()> {
     );
     let stt = Arc::new(speech::Stt::connect(STT_ADDR).await?);
     let tts = Arc::new(speech::Tts::connect(TTS_ADDR).await?);
+    if std::env::args().any(|a| a == "--memory-lab") {
+        return memory_lab(llm).await;
+    }
+    let memory =
+        memory::MemoryService::open(Path::new("data/memory.db"), EMBED_ADDR, llm.clone()).await?;
     let smart_turn = Arc::new(Mutex::new(SmartTurn::new(Path::new(
         ".runtime/models/smart-turn-v3.2-fp32.onnx",
     ))?));
@@ -238,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
         shared,
         render: render_tx,
         system_prompt: PathBuf::from("config/prompts/system.md"),
+        memory,
     };
     // Threads that die early (a device unplugged, a model failing) end the engine visibly.
     let watchdog = {

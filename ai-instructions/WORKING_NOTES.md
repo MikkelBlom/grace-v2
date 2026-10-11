@@ -112,3 +112,9 @@
   done after its last audible sample (Pocket TTS pads ~0.5 s of silence, so Mikkel's next words
   landed in the padding and showed as "(interrupted)"); launcher port check 200 ms instead of
   Test-NetConnection's ~10 s.
+- Memory (v0.2, 2026-10-11): `grace --memory-lab` replays scripted Danish exchanges through the
+  real learning path into data/memory-lab.db. With the tightened prompt it stores the exam,
+  sister and preference, supersedes the sister's city, invalidates the cancelled exam, and stores
+  nothing for small talk. Learning takes 0.5–2 s per exchange in the background.
+- bench/.venv-embed has transformers 5.19, sentence-transformers 6.1, torchvision 0.26 (cu128,
+  installed --no-deps) and huggingface_hub 2.x; keep it separate from bench/.venv (hub < 1.0).

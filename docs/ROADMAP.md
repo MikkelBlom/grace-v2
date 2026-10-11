@@ -31,11 +31,12 @@ Talk to Grace in Danish through the speakers and interrupt her.
 - [ ] Speaker calibration on request (#32)
 
 ## v0.2 — Memory that persists
-- [ ] SQLite schema: facts (bitemporal, provenance, confidence), episodes
-- [ ] Embedder bake-off (harrier-oss-v1-270m vs EmbeddingGemma 2) on Danish recall
-- [ ] FTS5 + sqlite-vec hybrid retrieval with RRF
-- [ ] Session summary written at end of conversation, recalled at the next start
-- [ ] Background fact extraction (ADD/UPDATE/INVALIDATE/NOOP), off the voice path
+- [x] SQLite schema: facts (bitemporal, provenance, confidence), sessions + turns (`grace-memory`)
+- [x] Embedder bake-off: harrier-oss-v1-270m wins (Danish question → English fact, R@1 0.81)
+- [x] FTS5 + sqlite-vec hybrid retrieval with RRF; recall attached to the user's turn
+- [x] Session summaries (written at the next start for unsummarised sessions), loaded into the prompt
+- [x] Background learning (add/update/invalidate, JSON-schema constrained) on LLM slot 2
+- [ ] Live test: Grace remembers across two sessions
 
 ## v0.3 — First tools
 - [ ] Tool manifest + JSON-RPC boundary with hot reload ([0010](adr/0010-tool-boundary.md))

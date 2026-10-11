@@ -1,0 +1,103 @@
+{"type": "fact", "id": "f01", "text": "Mikkel runs a Coding Pirates team for kids on Wednesday afternoons."}
+{"type": "fact", "id": "f02", "text": "Mikkel's speakers are Logitech Z337, connected over Bluetooth."}
+{"type": "fact", "id": "f03", "text": "Mikkel usually wears JBL Tune 777NC headphones during calls."}
+{"type": "fact", "id": "f04", "text": "Mikkel prefers short answers unless he asks for detail."}
+{"type": "fact", "id": "f05", "text": "Grace is named after the computer scientist Grace Hopper."}
+{"type": "fact", "id": "f06", "text": "Grace v2 is written in Rust; Grace v1 was written in TypeScript."}
+{"type": "fact", "id": "f07", "text": "Mikkel's laptop has an RTX 5090 Laptop GPU with 24 GB of video memory."}
+{"type": "fact", "id": "f08", "text": "Mikkel drinks his coffee black, no sugar."}
+{"type": "fact", "id": "f09", "text": "Mikkel's sister is called Sofie and lives in Aarhus."}
+{"type": "fact", "id": "f10", "text": "Mikkel wants to build an app for his Coding Pirates kids to share their game projects."}
+{"type": "fact", "id": "f11", "text": "Mikkel is studying software engineering."}
+{"type": "fact", "id": "f12", "text": "Mikkel finds it annoying when Grace starts talking before he has finished his sentence."}
+{"type": "fact", "id": "f13", "text": "Mikkel's favourite programming language right now is Rust."}
+{"type": "fact", "id": "f14", "text": "Mikkel has an exam in databases on the 14th of December."}
+{"type": "fact", "id": "f15", "text": "Mikkel runs Docker Desktop and WSL for development, which can use a lot of memory."}
+{"type": "fact", "id": "f16", "text": "Mikkel's main development folder is Desktop\\Projects."}
+{"type": "fact", "id": "f17", "text": "Mikkel likes to go running along the harbour in the mornings."}
+{"type": "fact", "id": "f18", "text": "Mikkel is allergic to cats."}
+{"type": "fact", "id": "f19", "text": "Grace's voice is the Pocket TTS voice called azelma."}
+{"type": "fact", "id": "f20", "text": "Mikkel wants Grace to remember things between conversations."}
+{"type": "fact", "id": "f21", "text": "Mikkel's girlfriend's birthday is on the 3rd of March."}
+{"type": "fact", "id": "f22", "text": "Mikkel uses Visual Studio Code and Rider as editors."}
+{"type": "fact", "id": "f23", "text": "Mikkel volunteers as a mentor at Coding Pirates in his spare time."}
+{"type": "fact", "id": "f24", "text": "Mikkel prefers dark mode in all his tools."}
+{"type": "fact", "id": "f25", "text": "Mikkel's bike was stolen last month and he wants to buy a new one."}
+{"type": "fact", "id": "f26", "text": "Mikkel has a dentist appointment next Tuesday at 9."}
+{"type": "fact", "id": "f27", "text": "Mikkel listens to lo-fi music while programming."}
+{"type": "fact", "id": "f28", "text": "Mikkel's grandmother lives in Skagen."}
+{"type": "fact", "id": "f29", "text": "Mikkel thinks Grace's old voice sounded too male."}
+{"type": "fact", "id": "f30", "text": "Mikkel wants Grace to answer in English but understands Danish fine."}
+{"type": "fact", "id": "f31", "text": "Mikkel is learning to cook Thai food."}
+{"type": "fact", "id": "f32", "text": "Mikkel's monitor is an MSI MAG272QP."}
+{"type": "fact", "id": "f33", "text": "Mikkel plays football on Thursday evenings with friends."}
+{"type": "fact", "id": "f34", "text": "Mikkel would like Grace to be able to open programs for him."}
+{"type": "fact", "id": "f35", "text": "Mikkel's favourite film is Interstellar."}
+{"type": "fact", "id": "f36", "text": "Mikkel's flat is on the third floor and has no elevator."}
+{"type": "fact", "id": "f37", "text": "Mikkel prefers Danish public broadcasting news over social media for news."}
+{"type": "fact", "id": "f38", "text": "Mikkel's portfolio website is still unfinished."}
+{"type": "fact", "id": "f39", "text": "Mikkel gets up at 6:30 on weekdays."}
+{"type": "fact", "id": "f40", "text": "Mikkel built Grace v1 earlier this year, but it never became usable day to day."}
+{"type": "fact", "id": "d01", "text": "Mikkel's brother plays handball in Odense."}
+{"type": "fact", "id": "d02", "text": "Grace runs Gemma 4 12B as her language model."}
+{"type": "fact", "id": "d03", "text": "The Coding Pirates club has its summer camp in July."}
+{"type": "fact", "id": "d04", "text": "Mikkel bought a new keyboard with brown switches."}
+{"type": "fact", "id": "d05", "text": "Mikkel's laptop is an ASUS ROG Zephyrus G16."}
+{"type": "fact", "id": "d06", "text": "Mikkel drinks green tea in the evenings."}
+{"type": "fact", "id": "d07", "text": "Mikkel's friend Jonas works as a nurse."}
+{"type": "fact", "id": "d08", "text": "Mikkel prefers trains over buses."}
+{"type": "fact", "id": "d09", "text": "Mikkel's old phone was a Samsung S21."}
+{"type": "fact", "id": "d10", "text": "Grace uses Silero to detect when someone is speaking."}
+{"type": "fact", "id": "d11", "text": "Mikkel has a meeting with his supervisor on Fridays."}
+{"type": "fact", "id": "d12", "text": "Mikkel enjoys board games, especially Catan."}
+{"type": "fact", "id": "d13", "text": "Mikkel's cousin lives in Copenhagen."}
+{"type": "fact", "id": "d14", "text": "Mikkel watches Formula 1 races on Sundays."}
+{"type": "fact", "id": "d15", "text": "Mikkel keeps his notes in Obsidian."}
+{"type": "fact", "id": "d16", "text": "Mikkel's favourite food is lasagne."}
+{"type": "fact", "id": "d17", "text": "Mikkel takes the bus to university when it rains."}
+{"type": "fact", "id": "d18", "text": "Mikkel's running shoes are from Asics."}
+{"type": "fact", "id": "d19", "text": "Mikkel once visited Japan."}
+{"type": "fact", "id": "d20", "text": "Mikkel plans to repaint his bedroom."}
+{"type": "query", "target": "f01", "text": "hvornår har jeg mit coding pirates hold", "lang": "da"}
+{"type": "query", "target": "f02", "text": "hvilke højttalere bruger jeg", "lang": "da"}
+{"type": "query", "target": "f03", "text": "hvad hedder mine høretelefoner", "lang": "da"}
+{"type": "query", "target": "f04", "text": "hvordan kan jeg bedst lide at du svarer", "lang": "da"}
+{"type": "query", "target": "f05", "text": "hvem er du opkaldt efter", "lang": "da"}
+{"type": "query", "target": "f06", "text": "hvilket sprog var den første version af dig skrevet i", "lang": "da"}
+{"type": "query", "target": "f07", "text": "hvor meget grafikhukommelse har min computer", "lang": "da"}
+{"type": "query", "target": "f08", "text": "hvordan drikker jeg min kaffe", "lang": "da"}
+{"type": "query", "target": "f09", "text": "hvor bor min søster", "lang": "da"}
+{"type": "query", "target": "f10", "text": "hvad var det for en app jeg ville lave til børnene", "lang": "da"}
+{"type": "query", "target": "f11", "text": "hvad læser jeg", "lang": "da"}
+{"type": "query", "target": "f12", "text": "hvad irriterer mig når vi snakker sammen", "lang": "da"}
+{"type": "query", "target": "f13", "text": "hvilket programmeringssprog er jeg mest glad for", "lang": "da"}
+{"type": "query", "target": "f14", "text": "hvornår er min database eksamen", "lang": "da"}
+{"type": "query", "target": "f15", "text": "hvad var det der brugte al min ram", "lang": "da"}
+{"type": "query", "target": "f16", "text": "hvor ligger mine projekter", "lang": "da"}
+{"type": "query", "target": "f17", "text": "hvor plejer jeg at løbe", "lang": "da"}
+{"type": "query", "target": "f18", "text": "hvilket dyr er jeg allergisk overfor", "lang": "da"}
+{"type": "query", "target": "f19", "text": "hvilken stemme bruger du", "lang": "da"}
+{"type": "query", "target": "f20", "text": "hvad ville jeg gerne have at du kunne huske", "lang": "da"}
+{"type": "query", "target": "f21", "text": "hvornår har min kæreste fødselsdag", "lang": "da"}
+{"type": "query", "target": "f22", "text": "hvilke editorer bruger jeg til at kode", "lang": "da"}
+{"type": "query", "target": "f23", "text": "hvad laver jeg frivilligt", "lang": "da"}
+{"type": "query", "target": "f24", "text": "foretrækker jeg lyst eller mørkt tema", "lang": "da"}
+{"type": "query", "target": "f25", "text": "hvad skete der med min cykel", "lang": "da"}
+{"type": "query", "target": "f26", "text": "hvornår skal jeg til tandlæge", "lang": "da"}
+{"type": "query", "target": "f27", "text": "hvad hører jeg for musik når jeg koder", "lang": "da"}
+{"type": "query", "target": "f28", "text": "hvor bor min mormor", "lang": "da"}
+{"type": "query", "target": "f29", "text": "hvad syntes jeg om din gamle stemme", "lang": "da"}
+{"type": "query", "target": "f30", "text": "hvilket sprog skal du svare mig på", "lang": "da"}
+{"type": "query", "target": "f31", "text": "hvilket køkken er jeg ved at lære at lave mad fra", "lang": "da"}
+{"type": "query", "target": "f32", "text": "hvilken skærm har jeg", "lang": "da"}
+{"type": "query", "target": "f33", "text": "hvornår spiller jeg fodbold", "lang": "da"}
+{"type": "query", "target": "f34", "text": "hvad ville jeg gerne have at du kunne gøre på computeren", "lang": "da"}
+{"type": "query", "target": "f35", "text": "hvad er min yndlingsfilm", "lang": "da"}
+{"type": "query", "target": "f36", "text": "hvilken etage bor jeg på", "lang": "da"}
+{"type": "query", "target": "f37", "text": "hvor får jeg mine nyheder fra", "lang": "da"}
+{"type": "query", "target": "f38", "text": "hvordan går det med min portfolio hjemmeside", "lang": "da"}
+{"type": "query", "target": "f39", "text": "hvornår står jeg op på hverdage", "lang": "da"}
+{"type": "query", "target": "f40", "text": "hvorfor startede jeg forfra med dig", "lang": "da"}
+{"type": "query", "target": "f05", "text": "why are you called Grace", "lang": "en"}
+{"type": "query", "target": "f13", "text": "what's my favourite programming language right now", "lang": "en"}
+{"type": "query", "target": "f26", "text": "when is my dentist appointment", "lang": "en"}

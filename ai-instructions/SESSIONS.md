@@ -34,3 +34,16 @@ disabled prefix reuse until `--swa-full`. sherpa-onnx CUDA needs torch/lib on PA
 
 **Next steps:** Mikkel runs `aec_test --play` and the English listening test. Then VAD v6 +
 Smart Turn adapters, engine process with the turn machine, first live loop.
+
+## 2026-10-11 — Claude Code (Opus 5.5): echo cancellation, VAD, Smart Turn, the engine
+**Summary:** Measured that Windows AEC fails on the Bluetooth Z337 (~4 dB); built speaker
+calibration (110 ms delay), proved our pure-Rust AEC3 (21–28 dB synthetic), found BT delay
+varies per session and drifts (110/113→137/165 ms). Silero VAD v6 + gate: 0.0 s false speech on
+Grace's echo after adapted AEC3 + talking boost. Double-talk with Mikkel's real voice led to
+ADR 0012 (AEC3 path for *when*, Windows-processed path for *what*; Danish STT ignores English
+echo). Smart Turn v3.2 fp32 (int8 unstable). Built services/speech_server.py and the `grace`
+engine; silent self-test passes, startup 0.1 s.
+**Issues encountered:** a sign error in aec-lab's reference shift; WASAPI loopback silence gaps;
+Windows Audio service stopped once (system issue, WSL memory pressure); huggingface_hub upgrade
+broke transformers in bench venv (pinned).
+**Next steps:** first live conversation (Mikkel), read its traces, tune turn-taking and latency.

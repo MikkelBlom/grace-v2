@@ -58,6 +58,8 @@ enum Done {
         turn: u64,
         epoch: u32,
         text: String,
+        /// Whisper was sure enough of the words to learn from them (avg_logprob ≥ -0.5).
+        confident: bool,
     },
     /// The reply produced no audio (empty or failed); nothing will drain.
     Silent {
@@ -95,6 +97,8 @@ pub async fn run(
     let mut turns: HashMap<u64, Turn> = HashMap::new();
     let mut history: Vec<(&'static str, String)> = Vec::new();
     let mut reply: Option<Reply> = None;
+    // Turns whose transcript Whisper was unsure of: answered, but not learned from.
+    let mut unsure: std::collections::HashSet<u64> = Default::default();
     let mut last_speech_start = t0;
     let mut tick = tokio::time::interval(Duration::from_millis(30));
     let rel = |t: f64| Duration::from_secs_f64((t - t0).max(0.0));
@@ -129,8 +133,9 @@ pub async fn run(
                     let current = turns.get(&turn).is_some_and(|t| t.epoch == epoch);
                     (current.then_some(Input::TurnEndScore { turn, probability }), clock::now())
                 }
-                Done::Transcript { turn, epoch, text } => {
+                Done::Transcript { turn, epoch, text, confident } => {
                     let current = turns.get(&turn).is_some_and(|t| t.epoch == epoch);
+                    if current && !confident { unsure.insert(turn); } else if current { unsure.remove(&turn); }
                     (current.then_some(Input::Transcript { turn, text }), clock::now())
                 }
                 Done::Silent { turn } => (Some(Input::ReplyFinished { turn }), clock::now()),
@@ -193,6 +198,14 @@ pub async fn run(
                         0
                     });
                     history.push(("user", text));
+                    // Live run 3 stored "Mikkel's files are labeled OGEEEEEEE" from a spelled-out
+                    // word Whisper scored -0.69: memory only learns from confident transcripts.
+                    let learn_from = if unsure.remove(&turn) {
+                        info!("memory: transcript too uncertain to learn from");
+                        None
+                    } else {
+                        Some(user_turn)
+                    };
                     let cancel = Arc::new(AtomicBool::new(false));
                     let wake = Arc::new(Notify::new());
                     let span = turns
@@ -204,7 +217,7 @@ pub async fn run(
                         done_tx.clone(),
                         turn,
                         history.clone(),
-                        user_turn,
+                        learn_from,
                         span,
                         cancel.clone(),
                         wake.clone(),
@@ -223,6 +236,20 @@ pub async fn run(
                 Command::UnduckReply => {
                     let _ = svc.render.send(RenderCmd::Duck(false));
                 }
+                Command::PauseReply(id) => {
+                    let _ = svc.render.send(RenderCmd::Pause(true));
+                    let _ = svc.render.send(RenderCmd::Duck(false));
+                    if let Some(t) = turns.get(&id) {
+                        info!(parent: &t.span, "reply paused");
+                    }
+                }
+                Command::ResumeReply(id) => {
+                    let _ = svc.render.send(RenderCmd::Pause(false));
+                    if let Some(t) = turns.get(&id) {
+                        info!(parent: &t.span, "reply resumed: interruption had no words");
+                    }
+                    println!("       (carries on)");
+                }
                 Command::CancelReply(id) => {
                     let _ = svc.render.send(RenderCmd::Cancel);
                     let _ = svc.render.send(RenderCmd::Duck(false));
@@ -240,6 +267,9 @@ pub async fn run(
     }
     Ok(())
 }
+
+/// Below this mean token log-probability a transcript is answered but not learned from.
+const LEARN_LOGPROB: f64 = -0.5;
 
 /// Smart Turn and STT in parallel on the paused turn (speculative transcription).
 fn spawn_pause_work(
@@ -281,8 +311,7 @@ fn spawn_pause_work(
     }
     let (svc2, done2, span2) = (svc.clone(), done.clone(), span.clone());
     tokio::task::spawn_blocking(move || {
-        let stage =
-            info_span!(parent: &span2, "stage", stage = "turn.detect", model = "smart-turn-v3.2-da1");
+        let stage = info_span!(parent: &span2, "stage", stage = "turn.detect", model = "smart-turn-v3.2-da1");
         let p = svc2
             .smart_turn
             .lock()
@@ -313,7 +342,13 @@ fn spawn_pause_work(
                     no_speech_prob = t.no_speech_prob, hallucinated, "transcript");
                 // A dropped transcript ends the turn as "no words" (DropTurn), nothing is answered.
                 let text = if hallucinated { String::new() } else { t.text };
-                let _ = done.send(Done::Transcript { turn, epoch, text });
+                let confident = t.avg_logprob >= LEARN_LOGPROB;
+                let _ = done.send(Done::Transcript {
+                    turn,
+                    epoch,
+                    text,
+                    confident,
+                });
             }
             Err(e) => {
                 warn!(parent: &span, error = %e, "stt failed");
@@ -321,6 +356,7 @@ fn spawn_pause_work(
                     turn,
                     epoch,
                     text: String::new(),
+                    confident: false,
                 });
             }
         }
@@ -370,7 +406,7 @@ async fn speak_reply(
     done: mpsc::UnboundedSender<Done>,
     turn: u64,
     history: Vec<(&'static str, String)>,
-    user_turn: i64,
+    learn_from: Option<i64>,
     span: Span,
     cancel: Arc<AtomicBool>,
     wake: Arc<Notify>,
@@ -527,11 +563,13 @@ async fn speak_reply(
     } else {
         spoken.clone()
     };
-    tokio::spawn(
-        svc.memory
-            .clone()
-            .learn(user_turn, last.1.clone(), reply_for_memory),
-    );
+    if let Some(user_turn) = learn_from {
+        tokio::spawn(
+            svc.memory
+                .clone()
+                .learn(user_turn, last.1.clone(), reply_for_memory),
+        );
+    }
     let _ = done.send(Done::Spoken { text: spoken });
     if !any_audio {
         let _ = done.send(Done::Silent { turn });

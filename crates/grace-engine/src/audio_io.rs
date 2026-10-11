@@ -134,6 +134,8 @@ pub enum RenderCmd {
         turn: u64,
     },
     Duck(bool),
+    /// Hold playback (silence) without dropping the queue; `false` carries on.
+    Pause(bool),
     /// Stop now: fade out over ~20 ms and drop everything queued.
     Cancel,
 }
@@ -160,6 +162,7 @@ struct Playback {
     audible_left: usize,
     last_busy: f64,
     drain_at: Option<f64>,
+    paused: bool,
 }
 
 pub fn spawn_render(
@@ -187,6 +190,7 @@ pub fn spawn_render(
                 audible_left: 0,
                 last_busy: 0.0,
                 drain_at: None,
+                paused: false,
             };
             let mut opened_before = false;
             self_healing("render".into(), stop.clone(), || {
@@ -244,12 +248,24 @@ impl Playback {
                 }
             }
             RenderCmd::Duck(on) => self.target = if on { 0.3 } else { 1.0 },
-            RenderCmd::Cancel => self.fade_out = (RATE / 50) as usize,
+            RenderCmd::Pause(on) => {
+                self.paused = on;
+                if !on {
+                    self.gain = 0.0; // fade back in rather than click
+                }
+            }
+            RenderCmd::Cancel => {
+                self.paused = false;
+                self.fade_out = (RATE / 50) as usize;
+            }
         }
     }
 
     fn next_sample(&mut self, events: &tokio::sync::mpsc::UnboundedSender<RenderEvent>) -> f32 {
         self.gain += (self.target - self.gain) * 0.002; // ~10 ms smoothing at 48 kHz
+        if self.paused {
+            return 0.0;
+        }
         match self.queue.pop_front() {
             Some((turn, s)) => {
                 self.audible_left = self.audible_left.saturating_sub(1);
@@ -283,7 +299,8 @@ impl Playback {
         talking: &AtomicBool,
     ) {
         let now = crate::clock::now();
-        let busy = self.audible_left > 0;
+        // A paused reply is silent: Grace isn't talking while she lets someone else speak.
+        let busy = self.audible_left > 0 && !self.paused;
         // Her voice is still in the room for the device buffer + speaker delay (Bluetooth
         // ~150 ms) after the last sample leaves the queue.
         if busy {
@@ -292,7 +309,7 @@ impl Playback {
         talking.store(busy || now - self.last_busy < 0.5, Ordering::Relaxed);
         // The device buffer is kept full of silence, so "drained" means: the reply is complete,
         // its last audible sample was written, and the device buffer ahead of it has played.
-        if busy || !self.ended {
+        if busy || self.paused || !self.ended {
             self.drain_at = None;
         } else if let Some(turn) = self.current
             && self.started

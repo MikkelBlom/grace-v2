@@ -137,6 +137,21 @@ another job holding the GPU at 95 % gave 538 ms and gaps in 27/30 sentences: con
 model, is the open risk, so TTS and LLM decode must be scheduled/measured together in a live test.
 Listening clips: `bench-results/tts-da/listen/roest-{350m,500m}-{mic,nic}_*.wav`.
 
+### Female voices for Røst (Mikkel: female only, young and warm), 2026-10-11
+
+Røst rule 4b needs the speaker's prior informed consent, so prompt sources were checked:
+- **Pocket TTS "azelma" / "eve"**: VCTK speakers p303 / p361 (CC BY 4.0). Recorded for a
+  voice-cloning *research* corpus. No published consent to synthesis of their voices: **not used**.
+- Expresso, EARS (other Pocket/Kyutai voices): CC BY-NC, no consent statement: not used.
+- **Kyutai voice donations** (`kyutai/tts-voices/voice-donations`, 228 voices, CC0): donors ticked
+  consent boxes accepting that TTS models may generate speech in their voice (Terms of Use v1). They are
+  usable, but have no gender labels, and pitch is not enough to rule out male voices. Fetched by
+  `bench/synth/kyutai_voices.py`, not rendered yet.
+- **A volunteer friend of Mikkel's** (private recording, consent given to Mikkel, local use only).
+  Two ~10 s prompts were cut from it. 500m fast path, quiet GPU: first audio p50 158 ms / p95 167 ms
+  (10 sentences). CER on the 5 listening sentences: prompt B 0.3 %, prompt A 5.3 %.
+  Clips are in `bench-results/tts-da/listen-female/` (never commit).
+
 ## Synthetic Danish speech — `bench/synth/tts_da.py`, 2026-10-11
 
 For other tracks' training/test data: `synthesize(text, voice_id) -> (float32, 16000)` and a CLI
@@ -331,3 +346,23 @@ Baseline reproduces Daily's published v3.2 numbers. CoRal labels are heuristic (
 model is derived from CoRal (OpenRAIL-D): if ever shared, its licence and use restrictions go
 with it. Not yet done: synthetic Danish fillers (TTS too slow on the busy machine), threshold
 and silence-timeout retuning, live check.
+
+## Code-switching — 40 Danish sentences with English tech words, 24 synthetic NST voices, 2026-10-11
+
+`fixtures/stt/codeswitch.da.jsonl` voiced by `bench/synth/tts_da.py` (MIT Chatterbox). edda-v0.2
+int8: no hint 24.1 % WER, vocabulary `initial_prompt` 24.3 %, `hotwords` 24.6 %: edda ignores
+vocabulary hints (and the prompt changes nothing on CoRal near 21.9 → 21.8 %, double-talk
+32.1 → 31.8 %). Typical errors: itslearning → "islaring", tools → "Thols", push → "pudse",
+Docta → "doktor". Real fix: LoRA fine-tune on synthetic code-switched speech (FUTURE_IDEAS).
+
+## Smart Turn threshold — da1 on CoRal validation (993 clips), 2026-10-11
+
+| threshold | finished turns noticed | unfinished cut off |
+|---|---|---|
+| v3.2 @ 0.5 (old) | 63.7 % | 40.0 % |
+| da1 @ 0.5 | 75.6 % | 23.6 % |
+| **da1 @ 0.3 (live)** | **83.7 %** | 31.2 % |
+| da1 @ 0.1 | 91.6 % | 47.2 % |
+
+Live run 3 with da1 @ 0.5 waited 1.6-3 s on complete questions (scores 0.06-0.41). Unfinished
+threshold lowered 0.1 → 0.05 (fewer 3 s waits: 8 → 5 % of finished turns).

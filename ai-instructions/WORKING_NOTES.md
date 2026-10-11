@@ -51,6 +51,12 @@
   away is 5-10 dB quieter at the mic than Grace's echo from speakers 0.3-0.8 m away; AEC3's
   ERLE isn't enough to separate them. Options: lower playback level / speaker placement,
   ducking on any linear-VAD hint, or a neural residual-echo suppressor (trainable; see FUTURE_IDEAS).
+- **Live run 3 (2026-10-11, 3D printer running):** speech end → first audio 2-4 s, caused by
+  Smart Turn da1 @ 0.5 scoring complete questions 0.06-0.41 (waits), not by models (STT ~370 ms,
+  TTFT ~145 ms; Pocket TTS first audio 500-800 ms while other jobs ran). A 300 ms noise during
+  Grace's reply cancelled it and the "turn" had no words, so she went silent (now: pause, then
+  cancel only on words, else resume). Spelled letters became "O G E E E" and were stored as a
+  fact (now: turns with avg_logprob < -0.5 are not learned from; fact 28 invalidated by hand).
 - **Memory bench** (`grace-memory-bench`): scenario 01 passes on v0.2 code but the extractor
   invented a "14 December" deadline for the hand-in (matchers can't see compound/invented
   details; rubric/LLM-judge needed for that class).

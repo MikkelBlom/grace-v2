@@ -6,8 +6,10 @@
 //! Two latency tricks live here because they are decisions about *when*, not *how*:
 //! - **Speculative transcription.** STT starts the moment speech stops, in parallel with the
 //!   turn-end model. If the user keeps talking, the speculative result is discarded.
-//! - **Ducking before cancelling.** Speech during Grace's reply first ducks her output; only
-//!   speech that lasts `min_barge_in` cancels the reply. A cough doesn't cut her off.
+//! - **Ducking, then pausing, then cancelling.** Speech during Grace's reply first ducks her
+//!   output; speech that lasts `min_barge_in` pauses the reply and starts a user turn. Only when
+//!   that turn has words is the paused reply cancelled; if it had none (a printer, a cough, "hm")
+//!   the reply resumes where it stopped. Live run 3 lost a reply to 3D-printer noise.
 //!
 //! Echo cancellation upstream is what makes "speech while Grace talks" mean the user.
 
@@ -33,9 +35,11 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            turn_end_threshold: 0.5,
+            // Smart Turn da1 on CoRal validation speakers: at 0.3 it notices 84 % of finished
+            // turns and cuts off 31 % of unfinished ones; v3.2 at 0.5 managed 64 % / 40 %.
+            turn_end_threshold: 0.3,
             max_trailing_silence: Duration::from_millis(1600),
-            unfinished_threshold: 0.1,
+            unfinished_threshold: 0.05,
             max_trailing_silence_unfinished: Duration::from_millis(3000),
             min_barge_in: Duration::from_millis(350),
         }
@@ -81,6 +85,11 @@ pub enum Command {
     DropTurn(TurnId),
     DuckReply,
     UnduckReply,
+    /// Someone is talking over the reply: stop playing it, but keep it until we know whether
+    /// that was words.
+    PauseReply(TurnId),
+    /// The interruption had no words: carry on with the paused reply.
+    ResumeReply(TurnId),
     /// The user interrupted: stop generating and speaking this reply now.
     CancelReply(TurnId),
 }
@@ -133,6 +142,8 @@ pub struct TurnMachine {
     cfg: Config,
     phase: Phase,
     next_turn: TurnId,
+    /// A reply paused by an interruption, waiting for that interruption's transcript.
+    held: Option<TurnId>,
 }
 
 impl TurnMachine {
@@ -141,6 +152,7 @@ impl TurnMachine {
             cfg,
             phase: Phase::Listening,
             next_turn: 1,
+            held: None,
         }
     }
 
@@ -261,7 +273,8 @@ impl TurnMachine {
                 },
                 Input::Tick,
             ) if now.saturating_sub(since) >= self.cfg.min_barge_in => {
-                out.push(Command::CancelReply(turn));
+                out.push(Command::PauseReply(turn));
+                self.held = Some(turn);
                 self.begin_turn(&mut out)
             }
 
@@ -307,9 +320,22 @@ impl TurnMachine {
         match (committed, transcript) {
             (true, Some(text)) if text.trim().is_empty() => {
                 out.push(Command::DropTurn(turn));
-                Phase::Listening
+                match self.held.take() {
+                    // A false interruption: Grace carries on.
+                    Some(held) => {
+                        out.push(Command::ResumeReply(held));
+                        Phase::Replying {
+                            turn: held,
+                            overlap_since: None,
+                        }
+                    }
+                    None => Phase::Listening,
+                }
             }
             (true, Some(text)) => {
+                if let Some(held) = self.held.take() {
+                    out.push(Command::CancelReply(held));
+                }
                 out.push(Command::Respond { turn, text });
                 Phase::Replying {
                     turn,
@@ -507,17 +533,66 @@ mod tests {
     }
 
     #[test]
-    fn sustained_overlap_cancels_and_starts_new_turn() {
+    fn sustained_overlap_pauses_and_starts_new_turn() {
         let mut m = machine();
         replying(&mut m);
         m.step(Input::SpeechStarted, ms(2000));
         assert_eq!(
             m.step(Input::Tick, ms(2400)),
-            vec![Command::CancelReply(1), Command::BeginTurn(2)]
+            vec![Command::PauseReply(1), Command::BeginTurn(2)]
         );
-        // The cancelled reply reporting completion afterwards must not disturb turn 2.
+        // The paused reply reporting completion afterwards must not disturb turn 2.
         assert_eq!(m.step(Input::ReplyFinished { turn: 1 }, ms(2450)), vec![]);
         assert_eq!(m.phase(), &Phase::UserSpeaking { turn: 2 });
+    }
+
+    /// Interrupts reply 1 and finishes the interrupting turn 2 with `text`.
+    fn interrupt_with(m: &mut TurnMachine, text: &str) -> Vec<Command> {
+        replying(m);
+        m.step(Input::SpeechStarted, ms(2000));
+        m.step(Input::Tick, ms(2400));
+        m.step(Input::SpeechStopped, ms(2600));
+        m.step(
+            Input::TurnEndScore {
+                turn: 2,
+                probability: 0.9,
+            },
+            ms(2650),
+        );
+        m.step(
+            Input::Transcript {
+                turn: 2,
+                text: text.into(),
+            },
+            ms(2700),
+        )
+    }
+
+    #[test]
+    fn interruption_with_words_cancels_the_paused_reply() {
+        let mut m = machine();
+        let out = interrupt_with(&mut m, "vent lige");
+        assert_eq!(
+            out,
+            vec![
+                Command::CancelReply(1),
+                Command::Respond {
+                    turn: 2,
+                    text: "vent lige".into()
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn interruption_without_words_resumes_the_reply() {
+        // Live run 3: 3D-printer noise cut Grace off and she never answered.
+        let mut m = machine();
+        let out = interrupt_with(&mut m, "");
+        assert_eq!(out, vec![Command::DropTurn(2), Command::ResumeReply(1)]);
+        assert!(matches!(m.phase(), Phase::Replying { turn: 1, .. }));
+        assert_eq!(m.step(Input::ReplyFinished { turn: 1 }, ms(5000)), vec![]);
+        assert_eq!(m.phase(), &Phase::Listening);
     }
 
     #[test]

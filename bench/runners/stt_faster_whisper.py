@@ -40,6 +40,8 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--language", default="da")
     ap.add_argument("--beams", type=int, default=1)
+    ap.add_argument("--prompt", default=None, help="initial_prompt: vocabulary / previous turn")
+    ap.add_argument("--hotwords", default=None, help="faster-whisper hotwords")
     ap.add_argument("--no-fallback", action="store_true",
                     help="decode at temperature 0 only (faster-whisper otherwise retries hotter)")
     args = ap.parse_args()
@@ -54,6 +56,10 @@ def main():
         audio, _ = sf.read(req["audio"], dtype="float32")
         elapsed = timer()
         extra = {"temperature": 0.0} if args.no_fallback else {}
+        if args.prompt:
+            extra["initial_prompt"] = args.prompt
+        if args.hotwords:
+            extra["hotwords"] = args.hotwords
         segments, _ = model.transcribe(
             audio, language=args.language, beam_size=args.beams, vad_filter=False,
             without_timestamps=True, condition_on_previous_text=False, **extra,

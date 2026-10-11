@@ -19,6 +19,14 @@ Pilot (40 scenes per set, edda int8, cuts at the true speech edges):
 | person 1.5-3 m away | 43.8 % | 46.0 % | 48.8 % |
 | person talks over Grace | 41.3 % | 40.3 % | 47.4 % |
 
+Full sets (150 utterances each, real DEMAND room noise, 2026-10-11):
+
+| WER | raw mic | AEC3 linear | AEC3 full chain |
+|---|---|---|---|
+| near (0.4-0.8 m) | 20.8 % | 21.9 % | 22.2 % |
+| far (1.5-3 m) | 26.5 % | 27.2 % | 28.0 % |
+| person talks over Grace | 36.6 % | 32.1 % | 43.5 % |
+
 ## Decision
 STT transcribes AEC3's linear-filter output (16 kHz, before residual-echo and noise
 suppression). VAD and Smart Turn keep the full chain. Turn audio saves all three signals.
@@ -28,6 +36,7 @@ Speech-pipeline changes are measured with `grace-sim` + `grace-bench stt` on pub
 - 5-7 WER points better than the full chain in the pilot, at no latency cost.
 - Raw mic is as good when Grace is silent, but carries her echo when she isn't; linear is the
   one signal that is good in both.
-- To revisit with the full scene sets (real DEMAND/ESC-50 noise instead of the pilot's
-  synthetic noise) and with decoding settings (fp16 beam 5 looked 2-3 points better on noisy
-  scenes, within noise at n = 40).
+- Confirmed on the full sets: linear is ~1 point behind raw when Grace is silent and 4.5 points
+  ahead of raw (11 ahead of the full chain) when she talks.
+- Decoding: fp16 beam 5 at temperature 0 is 0.3-2 points better (near 21.4, far 26.9, double-talk
+  30.1 %); adopt only after its latency is measured on an idle GPU.

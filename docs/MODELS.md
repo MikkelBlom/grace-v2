@@ -207,3 +207,15 @@ plus facts): 216/246 vs 217 (within noise); interrupted 24 → 28 of 30.
 Memory run e (end-of-session reconciliation pass on top of d): 214/246 — no gain; probes 55 → 50
 and self_echo 28 → 23 (the pass sees Grace's lines in the transcript). Kept off; code stays
 behind `grace-memory-bench --reconcile`. Run-to-run noise between c and d: ±1-4 per category.
+
+## STT in simulated rooms — full sets, 150 utterances each, DEMAND room noise, 2026-10-11
+
+| WER, oracle cuts | raw / prod | linear / prod | full chain / prod | linear / fp16 beam 5 | linear / ekko |
+|---|---|---|---|---|---|
+| near 0.4-0.8 m, SNR 25-35 | 20.8 | 21.9 | 22.2 | 21.4 | 28.2 |
+| far 1.5-3 m, SNR 10-20 | 26.5 | 27.2 | 28.0 | 26.9 | 38.9 |
+| double-talk 0.8-2 m | 36.6 | 32.1 | 43.5 | 30.1 | 44.5 |
+
+Real speech wrongly dropped as hallucination: ekko check 1 / 2 / 8 of 150; old avg_logprob
+filter 7 / 16 / 21. grace-sim detection: near 149/150, far 143/150, double-talk 129/150
+(onset 1.4 s); media playback 0 triggers in 60 scenes, Grace's echo 1 in 60.

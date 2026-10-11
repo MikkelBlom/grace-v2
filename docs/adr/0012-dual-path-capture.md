@@ -1,6 +1,6 @@
 # 0012 — Two capture paths: one decides *when*, one hears *what*
 
-- **Status:** Accepted
+- **Status:** Superseded by [0013](0013-single-capture-path.md) for STT
 - **Date:** 2026-10-11
 
 ## Context

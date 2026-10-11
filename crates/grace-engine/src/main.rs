@@ -155,7 +155,6 @@ async fn main() -> anyhow::Result<()> {
     let (render_ev_tx, render_ev_rx) = tokio::sync::mpsc::unbounded_channel();
     let shared = Arc::new(Mutex::new(Shared {
         aec16: TimedRing::new(16_000, 30.0),
-        comms16: TimedRing::new(16_000, 30.0),
         speakers16: TimedRing::new(16_000, 30.0),
     }));
 
@@ -171,15 +170,6 @@ async fn main() -> anyhow::Result<()> {
             Source::Mic,
             mic.clone(),
             CaptureMode::Raw,
-            chunk_tx.clone(),
-            stop.clone(),
-        ),
-        audio_io::spawn_capture(
-            Source::Comms,
-            mic.clone(),
-            CaptureMode::Communications {
-                aec_reference: Some(speakers.clone()),
-            },
             chunk_tx.clone(),
             stop.clone(),
         ),
@@ -268,22 +258,17 @@ async fn main() -> anyhow::Result<()> {
         while let Ok(Some(ev)) = tokio::time::timeout_at(deadline, front_rx.recv()).await {
             events.push(format!("{ev:?}"));
         }
-        let (aec, comms) = {
+        let behind = {
             let s = shared.lock().expect("shared poisoned");
-            (s.aec16.end(), s.comms16.end())
+            clock::now() - s.aec16.end()
         };
-        let now = clock::now();
-        println!(
-            "selftest: echo-cancelled mic {:.2} s behind now, comms mic {:.2} s behind now",
-            now - aec,
-            now - comms
-        );
+        println!("selftest: echo-cancelled mic {behind:.2} s behind now");
         println!("selftest: {} frontend events: {:?}", events.len(), events);
-        let ok = (now - aec) < 0.5 && (now - comms) < 0.5;
+        let ok = behind < 0.5;
         println!(
             "selftest: {}",
             if ok {
-                "PASS (audio flowing on both paths)"
+                "PASS (echo-cancelled audio flowing)"
             } else {
                 "FAIL (a capture path is not delivering)"
             }
@@ -303,18 +288,25 @@ async fn main() -> anyhow::Result<()> {
         system_prompt: PathBuf::from("config/prompts/system.md"),
         memory,
     };
-    // Threads that die early (a device unplugged, a model failing) end the engine visibly.
+    // Watch every thread at once: any thread ending while Grace runs is reported immediately
+    // and stops the engine (audio threads heal device errors themselves, so this means a bug).
     let watchdog = {
         let stop = stop.clone();
-        tokio::task::spawn_blocking(move || {
-            for t in threads {
-                let name = t.thread().name().unwrap_or("?").to_owned();
-                match t.join() {
-                    Ok(Ok(())) => {}
-                    Ok(Err(e)) => eprintln!("{name} stopped: {e:#}"),
-                    Err(_) => eprintln!("{name} panicked"),
+        tokio::spawn(async move {
+            let mut threads = threads;
+            while !stop.load(Ordering::Relaxed) {
+                if let Some(i) = threads.iter().position(|t| t.is_finished()) {
+                    let t = threads.swap_remove(i);
+                    let name = t.thread().name().unwrap_or("?").to_owned();
+                    if t.join().is_err() {
+                        eprintln!("{name} panicked; stopping");
+                    } else {
+                        eprintln!("{name} ended unexpectedly; stopping");
+                    }
+                    tracing::error!(thread = %name, "audio thread ended; stopping engine");
+                    stop.store(true, Ordering::Relaxed);
                 }
-                stop.store(true, Ordering::Relaxed);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             }
         })
     };

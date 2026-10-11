@@ -118,3 +118,12 @@
   nothing for small talk. Learning takes 0.5–2 s per exchange in the background.
 - bench/.venv-embed has transformers 5.19, sentence-transformers 6.1, torchvision 0.26 (cu128,
   installed --no-deps) and huggingface_hub 2.x; keep it separate from bench/.venv (hub < 1.0).
+- **Windows Audio service hangs** (2026-10-11 03:28 and 04:51, same bucket 1925226297557747192,
+  AppHangB1 in svchost): both during sessions with a communications-mode stream + echo reference
+  on a Bluetooth device. ADR 0013 removed that stream from the engine. If it ever recurs without
+  it, look elsewhere (Bluetooth driver, Realtek APO). Recovery: admin `Start-Service Audiosrv`.
+- Memory session 2026-10-11 (traces/engine-1791686801317.jsonl): the 9 "to" transcripts all came
+  from the comms path; the engine went deaf at 149 s when the audio service hung, and the old
+  watchdog (sequential joins) never reported the dead capture thread. Now: self-healing audio
+  threads, concurrent watchdog, EndOfTurn so a reply isn't "drained" while TTS is still behind.
+  Memory itself worked in that run: sister Aarhus → København corrected and recalled.

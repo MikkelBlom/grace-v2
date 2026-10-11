@@ -17,6 +17,7 @@ edit history.
 | [0009](0009-models-by-bake-off.md) | Choose models by bake-off on this machine | Accepted |
 | [0010](0010-tool-boundary.md) | Tools live behind a process boundary | Accepted |
 | [0011](0011-reply-language.md) | Danish in, English out is acceptable | Accepted |
-| [0012](0012-dual-path-capture.md) | Two capture paths: AEC3 for *when*, Windows processing for *what* | Accepted |
+| [0012](0012-dual-path-capture.md) | Two capture paths: AEC3 for *when*, Windows processing for *what* | Superseded by 0013 (STT part) |
+| [0013](0013-single-capture-path.md) | One capture path: STT reads the echo-cancelled signal | Accepted |
 
 Template: [0000-template.md](0000-template.md).

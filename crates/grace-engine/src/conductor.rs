@@ -249,28 +249,16 @@ fn spawn_pause_work(
     stop: f64,
     span: Span,
 ) {
-    // ADR 0012, refined after the first live run: the Windows-processed path keeps the cleanest
-    // voice but also keeps whatever the speakers play (Grace's echo became Danish nonsense once,
-    // YouTube leaked into transcripts). So transcribe it only when the speakers were quiet during
-    // the turn; otherwise use our echo-cancelled path.
+    // ADR 0013: Smart Turn and STT both read our echo-cancelled signal. (The Windows-processed
+    // path of ADR 0012 returned near-silence with a Bluetooth headset, and its stream is the
+    // prime suspect for two Windows Audio service hangs.)
     let (aec, stt_audio, source) = {
         let shared = svc.shared.lock().expect("shared poisoned");
-        let aec = shared.aec16.read_span(start - 0.5, stop + 0.2);
-        let played = shared.speakers16.read_span(start - 0.5, stop + 0.2);
-        let rms = (played.iter().map(|v| v * v).sum::<f32>() / played.len().max(1) as f32).sqrt();
-        if rms > 0.002 {
-            (
-                aec.clone(),
-                shared.aec16.read_span(start - 0.3, stop + 0.15),
-                "aec",
-            )
-        } else {
-            (
-                aec,
-                shared.comms16.read_span(start - 0.3, stop + 0.15),
-                "comms",
-            )
-        }
+        (
+            shared.aec16.read_span(start - 0.5, stop + 0.2),
+            shared.aec16.read_span(start - 0.3, stop + 0.15),
+            "aec",
+        )
     };
     let (svc2, done2, span2) = (svc.clone(), done.clone(), span.clone());
     tokio::task::spawn_blocking(move || {
@@ -498,6 +486,8 @@ async fn speak_reply(
         println!("grace: {full}");
     }
     let (spoken, any_audio) = tts_task.await.unwrap_or_default();
+    // All of this reply's audio is queued: once it has played, the reply is over.
+    let _ = svc.render.send(RenderCmd::EndOfTurn { turn });
     if !spoken.is_empty() {
         if let Err(e) = svc.memory.add_turn("assistant", &spoken) {
             warn!(parent: &span, error = %e, "memory: storing reply failed");

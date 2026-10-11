@@ -3,7 +3,7 @@
 //! - Raw mic frames (10 ms at 48 kHz) are echo-cancelled against the loopback recorded at the
 //!   same clock time, shifted by the tracked speaker delay minus a small lead (ADR 0006).
 //! - The cancelled signal feeds VAD and is kept (16 kHz) for Smart Turn.
-//! - The Windows-processed mic is kept (16 kHz) for STT (ADR 0012).
+//! - STT also reads the echo-cancelled signal (ADR 0013).
 //! - Every 2 s, while something is playing, the delay is re-estimated by GCC-PHAT.
 
 use std::{
@@ -33,8 +33,6 @@ const VAD_SECS: f64 = VAD_FRAME as f64 / 16_000.0;
 pub struct Shared {
     /// Echo-cancelled mic, 16 kHz.
     pub aec16: TimedRing,
-    /// Windows-processed mic, 16 kHz.
-    pub comms16: TimedRing,
     /// What the speakers played, 16 kHz (to know whether a turn overlapped playback).
     pub speakers16: TimedRing,
 }
@@ -60,10 +58,15 @@ pub fn spawn(
     events: tokio::sync::mpsc::UnboundedSender<FrontEvent>,
     talking: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
-) -> thread::JoinHandle<anyhow::Result<()>> {
+) -> thread::JoinHandle<()> {
     thread::Builder::new()
         .name("frontend".into())
-        .spawn(move || run(cfg, chunks, shared, events, talking, stop))
+        .spawn(move || {
+            if let Err(e) = run(cfg, chunks, shared, events, talking, stop) {
+                eprintln!("frontend: {e:#}");
+                tracing::error!(error = %format!("{e:#}"), "frontend failed");
+            }
+        })
         .expect("spawning frontend thread")
 }
 
@@ -88,8 +91,7 @@ fn run(
     let mut lp48 = TimedRing::new(RATE, 3.0);
     let mut lp16 = TimedRing::new(16_000, 6.0);
     let mut mic16 = TimedRing::new(16_000, 6.0);
-    let (mut dec_aec, mut dec_mic, mut dec_lp, mut dec_comms) = (
-        Decimate3::default(),
+    let (mut dec_aec, mut dec_mic, mut dec_lp) = (
         Decimate3::default(),
         Decimate3::default(),
         Decimate3::default(),
@@ -119,15 +121,6 @@ fn run(
                     .lock()
                     .expect("shared poisoned")
                     .speakers16
-                    .push(chunk.time, &tmp);
-            }
-            Source::Comms => {
-                tmp.clear();
-                dec_comms.push(&chunk.samples, &mut tmp);
-                shared
-                    .lock()
-                    .expect("shared poisoned")
-                    .comms16
                     .push(chunk.time, &tmp);
             }
             Source::Mic => {

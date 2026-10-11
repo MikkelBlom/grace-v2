@@ -43,6 +43,8 @@ pub struct Services {
     pub render: std::sync::mpsc::Sender<RenderCmd>,
     pub system_prompt: PathBuf,
     pub memory: Arc<crate::memory::MemoryService>,
+    /// Where each turn's STT input is saved for diagnosis (None = don't save).
+    pub turn_audio_dir: Option<PathBuf>,
 }
 
 /// Results of work the conductor spawned, fed back into the machine.
@@ -252,14 +254,30 @@ fn spawn_pause_work(
     // ADR 0013: Smart Turn and STT both read our echo-cancelled signal. (The Windows-processed
     // path of ADR 0012 returned near-silence with a Bluetooth headset, and its stream is the
     // prime suspect for two Windows Audio service hangs.)
-    let (aec, stt_audio, source) = {
+    let (aec, stt_audio, raw, source) = {
         let shared = svc.shared.lock().expect("shared poisoned");
         (
             shared.aec16.read_span(start - 0.5, stop + 0.2),
             shared.aec16.read_span(start - 0.3, stop + 0.15),
+            shared.raw16.read_span(start - 0.3, stop + 0.15),
             "aec",
         )
     };
+    // Keep what STT heard (and the raw mic) next to the trace: a misheard turn can be listened
+    // to and re-transcribed offline. Local only; traces/ is gitignored.
+    if let Some(dir) = &svc.turn_audio_dir {
+        let (a, r) = (stt_audio.clone(), raw);
+        let base = dir.join(format!("t{turn}-{epoch}"));
+        tokio::task::spawn_blocking(move || {
+            for (suffix, pcm) in [("aec", a), ("raw", r)] {
+                let _ = crate::speech::write_wav(
+                    &base.with_extension(format!("{suffix}.wav")),
+                    &pcm,
+                    16_000,
+                );
+            }
+        });
+    }
     let (svc2, done2, span2) = (svc.clone(), done.clone(), span.clone());
     tokio::task::spawn_blocking(move || {
         let stage =
@@ -288,8 +306,12 @@ fn spawn_pause_work(
         let result = svc.stt.transcribe(&stt_audio).await;
         drop(stage);
         match result {
-            Ok((text, ms)) => {
-                info!(parent: &span, text = %text, server_ms = ms, "transcript");
+            Ok(t) => {
+                let hallucinated = t.looks_hallucinated();
+                info!(parent: &span, text = %t.text, server_ms = t.ms, avg_logprob = t.avg_logprob,
+                    no_speech_prob = t.no_speech_prob, hallucinated, "transcript");
+                // A dropped transcript ends the turn as "no words" (DropTurn), nothing is answered.
+                let text = if hallucinated { String::new() } else { t.text };
                 let _ = done.send(Done::Transcript { turn, epoch, text });
             }
             Err(e) => {
@@ -488,17 +510,24 @@ async fn speak_reply(
     let (spoken, any_audio) = tts_task.await.unwrap_or_default();
     // All of this reply's audio is queued: once it has played, the reply is over.
     let _ = svc.render.send(RenderCmd::EndOfTurn { turn });
-    if !spoken.is_empty() {
-        if let Err(e) = svc.memory.add_turn("assistant", &spoken) {
-            warn!(parent: &span, error = %e, "memory: storing reply failed");
-        }
-        // Learning runs in the background on the LLM's second slot, never on the voice path.
-        tokio::spawn(
-            svc.memory
-                .clone()
-                .learn(user_turn, last.1.clone(), spoken.clone()),
-        );
+    if !spoken.is_empty()
+        && let Err(e) = svc.memory.add_turn("assistant", &spoken)
+    {
+        warn!(parent: &span, error = %e, "memory: storing reply failed");
     }
+    // Learn from what Mikkel said even when he interrupted the reply: in live run 3 the turns
+    // with the most facts were the interrupted ones, and they were never learned. Runs in the
+    // background on the LLM's second slot, never on the voice path.
+    let reply_for_memory = if spoken.is_empty() {
+        "(Grace was interrupted before she could answer.)".to_owned()
+    } else {
+        spoken.clone()
+    };
+    tokio::spawn(
+        svc.memory
+            .clone()
+            .learn(user_turn, last.1.clone(), reply_for_memory),
+    );
     let _ = done.send(Done::Spoken { text: spoken });
     if !any_audio {
         let _ = done.send(Done::Silent { turn });

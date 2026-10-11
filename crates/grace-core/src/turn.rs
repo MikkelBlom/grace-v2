@@ -85,6 +85,27 @@ pub enum Command {
     CancelReply(TurnId),
 }
 
+/// Words that, at the end of an utterance, mean the speaker is mid-sentence (Danish and English
+/// fillers and conjunctions). From the live runs: Mikkel pauses on "øh", "og", "men", "altså".
+const HANGING: &[&str] = &[
+    "øh", "øhm", "hmm", "æh", "og", "men", "eller", "altså", "fordi", "så", "at", "som", "hvis",
+    "når", "der", "den", "det", "til", "med", "på", "for", "om", "fx", "uh", "um", "and", "but",
+    "or", "because", "so", "the", "a", "to", "with", "if", "that",
+];
+
+/// True if `text` ends on a filler or a word that can't end a sentence.
+pub fn ends_unfinished(text: &str) -> bool {
+    let trimmed = text.trim_end();
+    // Sentence-final punctuation from the recogniser means it heard an ending.
+    if trimmed.ends_with(['.', '?', '!']) {
+        return false;
+    }
+    trimmed
+        .rsplit(|c: char| !c.is_alphanumeric())
+        .find(|w| !w.is_empty())
+        .is_some_and(|w| HANGING.contains(&w.to_lowercase().as_str()))
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Phase {
     Listening,
@@ -181,7 +202,16 @@ impl TurnMachine {
                     ..
                 },
                 Input::Transcript { turn: heard, text },
-            ) if heard == turn => self.settle(turn, since, committed, Some(text), wait, &mut out),
+            ) if heard == turn => {
+                // A sentence that ends on a filler or a conjunction is not finished, whatever the
+                // prosody model said ("... og øh", "... men"): wait the long timeout instead.
+                let (committed, wait) = if ends_unfinished(&text) {
+                    (false, wait.max(self.cfg.max_trailing_silence_unfinished))
+                } else {
+                    (committed, wait)
+                };
+                self.settle(turn, since, committed, Some(text), wait, &mut out)
+            }
 
             (
                 Phase::Paused {
@@ -378,7 +408,7 @@ mod tests {
         m.step(
             Input::Transcript {
                 turn: 1,
-                text: "jeg tænker på".into(),
+                text: "jeg tænker meget".into(),
             },
             ms(1150),
         );
@@ -387,7 +417,7 @@ mod tests {
             m.step(Input::Tick, ms(2600)),
             vec![Command::Respond {
                 turn: 1,
-                text: "jeg tænker på".into()
+                text: "jeg tænker meget".into()
             }]
         );
     }
@@ -550,5 +580,50 @@ mod tests {
                 text: "jeg tænker på at øh".into()
             }]
         );
+    }
+
+    #[test]
+    fn hanging_words_mean_unfinished() {
+        assert!(ends_unfinished("min søster hun bor i Caribien nu og øh"));
+        assert!(ends_unfinished("jeg tænker på at"));
+        assert!(ends_unfinished("det er fordi"));
+        assert!(!ends_unfinished("hvor bor min søster"));
+        assert!(!ends_unfinished("Det er det."));
+        assert!(!ends_unfinished("er det så?"));
+        assert!(!ends_unfinished(""));
+    }
+
+    #[test]
+    fn hanging_transcript_overrides_a_confident_turn_end() {
+        let mut m = machine();
+        m.step(Input::SpeechStarted, ms(0));
+        m.step(Input::SpeechStopped, ms(1000));
+        m.step(
+            Input::TurnEndScore {
+                turn: 1,
+                probability: 0.97,
+            },
+            ms(1050),
+        );
+        assert_eq!(
+            m.step(
+                Input::Transcript {
+                    turn: 1,
+                    text: "og så skal vi øh".into()
+                },
+                ms(1100)
+            ),
+            vec![],
+            "waits instead of replying"
+        );
+        assert_eq!(
+            m.step(Input::Tick, ms(2700)),
+            vec![],
+            "past the normal 1.6 s fallback"
+        );
+        assert!(matches!(
+            m.step(Input::Tick, ms(4100))[..],
+            [Command::Respond { turn: 1, .. }]
+        ));
     }
 }

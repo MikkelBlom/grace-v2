@@ -49,7 +49,12 @@ class Stt:
                 audio, language="da", beam_size=1, vad_filter=False,
                 without_timestamps=True, condition_on_previous_text=False,
             )
-            return " ".join(s.text.strip() for s in segs).strip()
+            segs = list(segs)
+            text = " ".join(s.text.strip() for s in segs).strip()
+            # Whisper's own doubt signals, so the engine can drop hallucinations on noise.
+            avg_logprob = min((s.avg_logprob for s in segs), default=0.0)
+            no_speech = max((s.no_speech_prob for s in segs), default=1.0)
+            return text, avg_logprob, no_speech
 
 
 class Tts:
@@ -94,8 +99,9 @@ class SttHandler(Handler):
             try:
                 audio = np.frombuffer(base64.b64decode(req["audio"]), dtype="<f4")
                 assert req.get("rate", 16000) == 16000, "STT expects 16 kHz"
-                text = self.server.stt.transcribe(audio)
-                self.send({"id": req["id"], "text": text, "ms": (time.perf_counter() - started) * 1000})
+                text, avg_logprob, no_speech = self.server.stt.transcribe(audio)
+                self.send({"id": req["id"], "text": text, "avg_logprob": avg_logprob,
+                           "no_speech_prob": no_speech, "ms": (time.perf_counter() - started) * 1000})
             except Exception as e:  # report, keep serving
                 self.send({"id": req.get("id"), "error": f"{type(e).__name__}: {e}"})
 

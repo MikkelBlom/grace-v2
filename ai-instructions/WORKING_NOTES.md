@@ -131,3 +131,14 @@
   fact 7 "Mikkel wants Grace to be quiet" (from a momentary "hold din kæft"), 10 (vague
   inference) and 9 (duplicate of 8). Learning now skips near-duplicates (cosine < 0.08) and the
   prompt says momentary commands are not preferences; memory-lab covers both.
+- Live memory runs 2–3 (2026-10-11): the learning step re-stored a closed fact because Grace said
+  it (an old session summary still mentioned the exam); a requested reminder was buried in the
+  fact list; facts in interrupted turns were never learned; Whisper hallucinated a fluent
+  sentence from a breath. Fixes: extraction treats Grace's reply as context only and ignores
+  garbled text; new fact kind `followup` shown first ("bring these up"); block lists "no longer
+  true" facts (closed in the last 30 days) and labels summaries as background; learning runs
+  even when the reply was interrupted; STT transcripts with avg_logprob < -0.55 are dropped
+  (FLEURS speech ≥ -0.29, noise ≤ -0.62); turn audio (aec + raw) saved to traces/audio/ for
+  diagnosing misheard turns; TurnMachine waits the long timeout when a transcript ends on a
+  hanging word (øh, og, men, altså …). Personality guidance moved into config/prompts/system.md.
+- Mikkel's local memory cleaned by hand again: closed 14, 16, 17, 22–26; fact 13 → followup.

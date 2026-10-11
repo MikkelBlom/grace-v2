@@ -51,11 +51,13 @@ impl Stt {
         })
     }
 
-    /// Transcribes 16 kHz mono audio. Returns (text, server-side ms).
-    pub async fn transcribe(&self, audio: &[f32]) -> anyhow::Result<(String, f64)> {
+    /// Transcribes 16 kHz mono audio.
+    pub async fn transcribe(&self, audio: &[f32]) -> anyhow::Result<Transcript> {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let mut conn = self.conn.lock().await;
-        let msg = json!({ "id": id, "rate": 16000, "audio": encode(audio) }).to_string() + "\n";
+        let msg = json!({ "id": id, "rate": 16000, "audio": encode(audio) }).to_string()
+            + "
+";
         conn.0.write_all(msg.as_bytes()).await?;
         let mut line = String::new();
         conn.1.read_line(&mut line).await?;
@@ -63,10 +65,31 @@ impl Stt {
         if let Some(e) = v.get("error").and_then(Value::as_str) {
             bail!("STT: {e}");
         }
-        Ok((
-            v["text"].as_str().unwrap_or("").to_owned(),
-            v["ms"].as_f64().unwrap_or(0.0),
-        ))
+        Ok(Transcript {
+            text: v["text"].as_str().unwrap_or("").to_owned(),
+            avg_logprob: v["avg_logprob"].as_f64().unwrap_or(0.0),
+            no_speech_prob: v["no_speech_prob"].as_f64().unwrap_or(0.0),
+            ms: v["ms"].as_f64().unwrap_or(0.0),
+        })
+    }
+}
+
+/// Below this mean token log-probability a transcript is treated as invented.
+const HALLUCINATION_LOGPROB: f64 = -0.55;
+
+pub struct Transcript {
+    pub text: String,
+    pub avg_logprob: f64,
+    pub no_speech_prob: f64,
+    pub ms: f64,
+}
+
+impl Transcript {
+    /// Whisper invents fluent sentences from noise ("Tvernes ændring er blevet fornøjet at vente
+    /// en anden opslag" from a breath). Calibrated 2026-10-11 on edda-v0.2: 30 FLEURS speech clips
+    /// score avg_logprob ≥ -0.29, 9 noise clips ≤ -0.62; no_speech_prob is ~0 for both, useless.
+    pub fn looks_hallucinated(&self) -> bool {
+        self.avg_logprob < HALLUCINATION_LOGPROB
     }
 }
 
@@ -145,6 +168,21 @@ impl Tts {
         let msg = json!({ "cancel": id }).to_string() + "\n";
         let _ = self.writer.lock().await.write_all(msg.as_bytes()).await;
     }
+}
+
+pub fn write_wav(path: &std::path::Path, pcm: &[f32], rate: u32) -> anyhow::Result<()> {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut w = hound::WavWriter::create(path, spec)?;
+    for &s in pcm {
+        w.write_sample((s.clamp(-1.0, 1.0) * 32767.0) as i16)?;
+    }
+    w.finalize()?;
+    Ok(())
 }
 
 /// Linear upsampling from the TTS rate to the speaker rate; fine for v0.1 (24→48 kHz is 2×).

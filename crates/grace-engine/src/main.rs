@@ -79,6 +79,19 @@ async fn memory_lab(llm: LlmClient) -> anyhow::Result<()> {
             "Min søster bor i København",
             "Yes, Sofie lives in Copenhagen.",
         ),
+        // Live-run failures: Grace repeating a stale fact, a reminder request, a hallucination.
+        (
+            "Hvad skal vi lave i dag",
+            "You have a database exam on December fourteenth, so let's study.",
+        ),
+        (
+            "Jeg skal aflevere en opgave den sekstende november, spørg mig senere om detaljerne for jeg glemmer det",
+            "Got it, I'll ask you about the details later.",
+        ),
+        (
+            "Tvernes ændring er blevet fornøjet at vente en anden opslag.",
+            "I'm not sure what you mean.",
+        ),
     ];
     for (user, reply) in exchanges {
         let turn = mem.add_turn("user", user)?;
@@ -161,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
     let shared = Arc::new(Mutex::new(Shared {
         aec16: TimedRing::new(16_000, 30.0),
         speakers16: TimedRing::new(16_000, 30.0),
+        raw16: TimedRing::new(16_000, 30.0),
     }));
 
     let threads = vec![
@@ -292,6 +306,18 @@ async fn main() -> anyhow::Result<()> {
         render: render_tx,
         system_prompt: PathBuf::from("config/prompts/system.md"),
         memory,
+        turn_audio_dir: {
+            let dir = PathBuf::from(format!(
+                "traces/audio/engine-{}",
+                trace
+                    .path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("session")
+                    .trim_start_matches("engine-")
+            ));
+            std::fs::create_dir_all(&dir).ok().map(|_| dir)
+        },
     };
     // Watch every thread at once: any thread ending while Grace runs is reported immediately
     // and stops the engine (audio threads heal device errors themselves, so this means a bug).

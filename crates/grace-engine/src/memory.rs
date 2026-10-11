@@ -101,7 +101,8 @@ impl MemoryService {
         let session = db.start_session(now_unix())?;
         let facts = db.current_facts(60)?;
         let summaries = db.recent_summaries(3)?;
-        let block = session_block(&facts, &summaries);
+        let closed = db.recently_closed(now_unix() - 30.0 * 86_400.0, 10)?;
+        let block = session_block(&facts, &closed, &summaries);
         let block_ids = facts.iter().map(|f| f.id).collect();
         info!(
             facts = facts.len(),
@@ -173,7 +174,8 @@ impl MemoryService {
         };
         let today = chrono::Local::now().format("%A %-d %B %Y");
         let prompt = format!(
-            "Today is {today}.\n\nLatest exchange:\nMikkel (spoken Danish, transcribed): {user}\nGrace: {reply}\n\n\
+            "Today is {today}.\n\nMikkel just said (spoken Danish, machine-transcribed):\n{user}\n\n\
+             Grace answered (context only: never store anything that appears only here):\n{reply}\n\n\
              Existing related memories:\n{related_text}"
         );
         let mut req = ChatRequest::new(vec![
@@ -191,6 +193,7 @@ impl MemoryService {
                 Some("preference") => FactKind::Preference,
                 Some("grace") => FactKind::Grace,
                 Some("environment") => FactKind::Environment,
+                Some("followup") => FactKind::Followup,
                 _ => FactKind::User,
             };
             let confidence = op["confidence"].as_f64().unwrap_or(0.7);
@@ -273,18 +276,33 @@ impl MemoryService {
     }
 }
 
-fn session_block(facts: &[Fact], summaries: &[(f64, String)]) -> String {
+fn session_block(facts: &[Fact], closed: &[Fact], summaries: &[(f64, String)]) -> String {
     if facts.is_empty() && summaries.is_empty() {
         return "You don't remember anything about Mikkel yet: this is your first conversation with memory.".into();
     }
-    let mut out = String::from(
-        "What you remember (from earlier conversations; it may be outdated, and he can correct you):\n",
-    );
-    for f in facts {
+    let mut out = String::new();
+    let (followups, known): (Vec<&Fact>, Vec<&Fact>) =
+        facts.iter().partition(|f| f.kind == FactKind::Followup);
+    if !followups.is_empty() {
+        // First, so they aren't lost in the list: live run 2 forgot a requested reminder.
+        out.push_str("Bring these up yourself when it fits (Mikkel asked you to):\n");
+        for f in &followups {
+            out.push_str(&format!("- {}\n", f.text));
+        }
+        out.push('\n');
+    }
+    out.push_str("What you know (current; he can correct you):\n");
+    for f in &known {
         out.push_str(&format!("- {}\n", f.text));
     }
+    if !closed.is_empty() {
+        out.push_str("\nNo longer true (never mention these as current):\n");
+        for f in closed {
+            out.push_str(&format!("- {}\n", f.text));
+        }
+    }
     if !summaries.is_empty() {
-        out.push_str("\nRecent conversations:\n");
+        out.push_str("\nEarlier conversations (background only; where they disagree with the lists above, the lists win):\n");
         for (at, s) in summaries {
             let day = chrono::DateTime::from_timestamp(*at as i64, 0)
                 .map(|d| d.with_timezone(&chrono::Local).format("%-d %B").to_string())
@@ -309,9 +327,11 @@ pub fn with_recall(user: &str, recalled: &[Fact]) -> String {
 
 const EXTRACT_SYSTEM: &str = "You maintain Grace's long-term memory about Mikkel, the person she talks to. From the latest exchange, decide what is worth remembering beyond today.
 Remember: facts about Mikkel and the people in his life, his projects, plans and dates, preferences, how he wants Grace to behave, and corrections of what Grace believed.
-Do not remember: small talk, greetings, questions he asked, things only Grace said, tests of the system, vague impressions, or anything already covered by an existing memory. Momentary commands are not preferences: 'be quiet', 'stop', 'say that again', 'hold din kæft' apply to that moment only; store a preference only when he states a lasting wish ('I always want short answers').
+Only Mikkel's own words are a source. Grace's answer is context: she may be repeating something outdated, so never store or re-add a fact because Grace said it.
+Speech recognition makes mistakes: if his words look garbled, nonsensical or like a misheard phrase (odd names, sentences that make no sense), store nothing from them.
+Do not remember: small talk, greetings, questions he asked, tests of the system, vague impressions or moods, or anything already covered by an existing memory. Momentary commands are not preferences: 'be quiet', 'stop', 'say that again', 'hold din kæft' apply to that moment only; store a preference only when he states a lasting wish ('I always want short answers').
 Write each memory in English, third person ('Mikkel ...'), short and self-contained. Turn relative dates ('next Tuesday') into absolute dates using today's date.
-Kinds: 'user' = about Mikkel's life, people, plans, projects and circumstances; 'preference' = how Mikkel wants Grace to talk or behave; 'grace' = about Grace herself (her name, origin, abilities); 'environment' = Mikkel's computer, devices and setup.
+Kinds: 'user' = about Mikkel's life, people, plans, projects and circumstances; 'preference' = how Mikkel wants Grace to talk or behave; 'grace' = about Grace herself (her name, origin, abilities); 'environment' = Mikkel's computer, devices and setup; 'followup' = something Grace should bring up or ask about later because Mikkel asked her to (e.g. 'ask Mikkel for the details of his 16 November assignment').
 Operations: 'add' (id 0) for a new memory. 'update' with an existing id when the exchange changes that memory (a new value, a corrected detail). 'invalidate' with an existing id when it is simply no longer true: something cancelled, finished, sold, ended. Example: existing [7] 'Mikkel has a dentist appointment on 14 October' and Mikkel says the appointment was cancelled -> invalidate 7 (do not add a 'was cancelled' memory). Never leave two memories that contradict each other.
 Confidence: 0.9 when Mikkel stated it plainly, 0.6 when it is inferred.
 Most exchanges contain nothing worth remembering: then return an empty list.";
@@ -332,7 +352,7 @@ fn extract_schema() -> Value {
                         "op": { "type": "string", "enum": ["add", "update", "invalidate"] },
                         "id": { "type": "integer" },
                         "text": { "type": "string" },
-                        "kind": { "type": "string", "enum": ["user", "preference", "grace", "environment"] },
+                        "kind": { "type": "string", "enum": ["user", "preference", "grace", "environment", "followup"] },
                         "confidence": { "type": "number" }
                     },
                     "required": ["op", "id", "text", "kind", "confidence"]
@@ -365,6 +385,6 @@ mod tests {
 
     #[test]
     fn empty_memory_says_so() {
-        assert!(session_block(&[], &[]).contains("first conversation"));
+        assert!(session_block(&[], &[], &[]).contains("first conversation"));
     }
 }

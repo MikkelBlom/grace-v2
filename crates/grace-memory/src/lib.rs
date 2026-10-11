@@ -34,6 +34,8 @@ pub enum FactKind {
     Grace,
     /// About the user's machine or environment that isn't observable live.
     Environment,
+    /// Something Grace should bring up or ask about later ("remind me", "ask me about it").
+    Followup,
 }
 
 impl FactKind {
@@ -43,6 +45,7 @@ impl FactKind {
             Self::Preference => "preference",
             Self::Grace => "grace",
             Self::Environment => "environment",
+            Self::Followup => "followup",
         }
     }
 
@@ -51,6 +54,7 @@ impl FactKind {
             "preference" => Self::Preference,
             "grace" => Self::Grace,
             "environment" => Self::Environment,
+            "followup" => Self::Followup,
             _ => Self::User,
         }
     }
@@ -343,6 +347,20 @@ impl Memory {
         Ok(rows)
     }
 
+    /// Facts closed since `since` (invalidated or superseded), newest first: what Grace must not
+    /// bring up as current even if an old conversation summary still mentions it.
+    pub fn recently_closed(&self, since: Time, limit: usize) -> anyhow::Result<Vec<Fact>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {} FROM facts WHERE invalidated_at IS NOT NULL AND invalidated_at >= ?1
+             ORDER BY invalidated_at DESC LIMIT ?2",
+            Self::FACT_COLS
+        ))?;
+        let rows = stmt
+            .query_map(params![since, limit as i64], Self::row_to_fact)?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
+
     pub fn fact(&self, id: i64) -> anyhow::Result<Option<Fact>> {
         Ok(self
             .conn
@@ -538,6 +556,60 @@ mod tests {
         assert!(
             m.supersede(old, "x", FactKind::User, 0.5, None, &emb(&[0]), 7.0)
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn recently_closed_lists_invalidated_and_superseded() {
+        let mut m = mem();
+        let a = m
+            .add_fact(
+                "Mikkel has an exam on 14 December.",
+                FactKind::User,
+                0.9,
+                None,
+                &emb(&[0]),
+                1.0,
+            )
+            .unwrap();
+        let b = m
+            .add_fact(
+                "Sofie lives in Aarhus.",
+                FactKind::User,
+                0.9,
+                None,
+                &emb(&[1]),
+                1.0,
+            )
+            .unwrap();
+        m.invalidate(a, 10.0).unwrap();
+        m.supersede(
+            b,
+            "Sofie lives in Copenhagen.",
+            FactKind::User,
+            0.9,
+            None,
+            &emb(&[1]),
+            11.0,
+        )
+        .unwrap();
+        let closed: Vec<String> = m
+            .recently_closed(5.0, 10)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.text)
+            .collect();
+        assert_eq!(
+            closed,
+            vec![
+                "Sofie lives in Aarhus.",
+                "Mikkel has an exam on 14 December."
+            ]
+        );
+        assert!(m.recently_closed(20.0, 10).unwrap().is_empty());
+        assert_eq!(
+            FactKind::parse(FactKind::Followup.as_str()),
+            FactKind::Followup
         );
     }
 

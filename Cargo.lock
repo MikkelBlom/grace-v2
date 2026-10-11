@@ -467,6 +467,7 @@ dependencies = [
  "grace-memory",
  "grace-trace",
  "grace-vad",
+ "hound",
  "rustfft",
  "serde",
  "serde_json",

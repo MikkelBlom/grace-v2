@@ -35,6 +35,8 @@ pub struct Shared {
     pub aec16: TimedRing,
     /// What the speakers played, 16 kHz (to know whether a turn overlapped playback).
     pub speakers16: TimedRing,
+    /// Raw mic, 16 kHz (saved per turn for diagnosis).
+    pub raw16: TimedRing,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -131,6 +133,11 @@ fn run(
                 tmp.clear();
                 dec_mic.push(&chunk.samples, &mut tmp);
                 mic16.push(chunk.time, &tmp);
+                shared
+                    .lock()
+                    .expect("shared poisoned")
+                    .raw16
+                    .push(chunk.time, &tmp);
                 while pending.len() >= FRAME {
                     let frame: Vec<f32> = pending.drain(..FRAME).collect();
                     let t = pending_time;

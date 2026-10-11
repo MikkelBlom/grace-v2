@@ -121,19 +121,27 @@ fn main() -> anyhow::Result<()> {
         .enable_gain_controller2(!flag("--no-agc"))
         .enable_noise_suppression(!flag("--no-ns"))
         .export_metrics(true)
+        .export_linear_output(true)
         .build()?;
     let frame = format.sample_count();
     // `--warm` runs the recording through once first and keeps only the second pass: the state
     // a continuously running Grace would be in, with the canceller already adapted to the room.
     let passes = if flag("--warm") { 2 } else { 1 };
     let mut out = Vec::with_capacity(mic.len());
+    let (mut linear, mut linear_frame) = (Vec::new(), 0usize);
     let mut buf = vec![0.0f32; frame];
     for pass in 0..passes {
         out.clear();
+        linear.clear();
         for (cap, ren) in mic.chunks_exact(frame).zip(render.chunks_exact(frame)) {
             pipeline.handle_render_frame(ren)?;
             if pipeline.process_capture_frame(cap, &mut buf)? {
                 out.extend_from_slice(&buf);
+            }
+            // The linear filter's output, before residual suppression: keeps near-end speech intact.
+            while let Some(chunk) = pipeline.try_pull_linear_output()? {
+                linear_frame = chunk.payload().samples().len();
+                linear.extend_from_slice(chunk.payload().samples());
             }
         }
         let _ = pass;
@@ -156,6 +164,18 @@ fn main() -> anyhow::Result<()> {
         bits_per_sample: 32,
         sample_format: hound::SampleFormat::Float,
     };
+    if !linear.is_empty() {
+        let linear_rate = (linear_frame * 100) as u32;
+        let mut w = hound::WavWriter::create(
+            dir.join("ours_linear.wav"),
+            hound::WavSpec { sample_rate: linear_rate, ..spec },
+        )?;
+        for s in &linear {
+            w.write_sample(*s)?;
+        }
+        w.finalize()?;
+        println!("wrote ours_linear.wav ({linear_rate} Hz)");
+    }
     let path = dir.join("ours.wav");
     let mut w = hound::WavWriter::create(&path, spec)?;
     for s in &out {

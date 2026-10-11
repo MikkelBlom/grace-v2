@@ -73,3 +73,7 @@
 - YouTube + Grace through the Z337: VAD false speech raw 18.8 s, Windows AEC 19.0 s, ours with
   the session's true delay 0.4 s (one blip). TurnMachine's min_barge_in (350 ms) and empty-
   transcript drop would absorb it, but aim for 0.
+- Double-talk run 1791682421 (Mikkel reading 5 lines over Grace): VAD on our AEC3 finds his lines
+  (~0.5-1 s after each was shown); STT WER raw 18 %, Windows comms 9 %, ours 32-35 %, AEC3 linear
+  68 %; Grace's English never appears in the Danish-forced transcript. → ADR 0012 dual path.
+  Echo delay this session: ~158 ms (one outlier window at 398 ms during double-talk).

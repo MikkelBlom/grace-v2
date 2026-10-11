@@ -469,7 +469,7 @@ fn with_retry<T>(ep: &Endpoint, mut open: impl FnMut() -> anyhow::Result<T>) -> 
     let hint = match code {
         Some(c) if c == AUDCLNT_E_DEVICE_IN_USE => "another app holds it in exclusive mode",
         _ => {
-            "it may be off, asleep, or crowded out by another Bluetooth audio device (e.g. earbuds);               turn it on, disconnect other Bluetooth audio, and try again"
+            "it may be off, asleep, or crowded out by another Bluetooth audio device (e.g. earbuds); turn it on, disconnect other Bluetooth audio, and try again"
         }
     };
     Err(e.context(format!("could not open \"{}\": {hint}", ep.name)))

@@ -282,7 +282,7 @@ fn spawn_pause_work(
     let (svc2, done2, span2) = (svc.clone(), done.clone(), span.clone());
     tokio::task::spawn_blocking(move || {
         let stage =
-            info_span!(parent: &span2, "stage", stage = "turn.detect", model = "smart-turn-v3.2");
+            info_span!(parent: &span2, "stage", stage = "turn.detect", model = "smart-turn-v3.2-da1");
         let p = svc2
             .smart_turn
             .lock()

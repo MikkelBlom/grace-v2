@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
         .map_or_else(|| PathBuf::from("data/memory.db"), PathBuf::from);
     let memory = memory::MemoryService::open(&memory_path, EMBED_ADDR, llm.clone()).await?;
     let smart_turn = Arc::new(Mutex::new(SmartTurn::new(Path::new(
-        ".runtime/models/smart-turn-v3.2-fp32.onnx",
+        ".runtime/models/smart-turn-v3.2-da1.onnx",
     ))?));
 
     wasapi::com_init()?;

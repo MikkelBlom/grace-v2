@@ -310,3 +310,24 @@ behind `grace-memory-bench --reconcile`. Run-to-run noise between c and d: ±1-4
 Real speech wrongly dropped as hallucination: ekko check 1 / 2 / 8 of 150; old avg_logprob
 filter 7 / 16 / 21. grace-sim detection: near 149/150, far 143/150, double-talk 129/150
 (onset 1.4 s); media playback 0 triggers in 60 scenes, Grace's echo 1 in 60.
+
+## End of turn — Smart Turn v3.2 fine-tuned on Danish ("da1"), 2026-10-11
+
+Full fine-tune on CoRal v3 train (76.5k clips: complete = segment followed by the other
+speaker; incomplete = cut at a word gap via wav2vec2 alignment, or a mid-turn pause on øh/og)
+plus a third of the v3.2 multilingual train set, then 70 % blended with the original weights
+(blend chosen on CoRal validation speakers and a held-out v3.2 slice). Same ONNX contract;
+Rust output matches Python (max diff 5e-5); 35 ms vs 33 ms on CPU. Scripts: bench/smart_turn/.
+
+| Test | v3.2 | **da1 (live)** | unblended |
+|---|---|---|---|
+| CoRal conversation test, 3,681 clips, 24 unseen speakers: accuracy | 60.4 % | **74.7 %** | 77.0 % |
+| — false "turn ended" (share of unfinished clips called complete) | 39.2 % | **22.4 %** | 19.8 % |
+| Harsh FLEURS cut test (120): accuracy / false "turn ended" | 70.0 / 41.7 % | **84.2 / 16.7 %** | 85.0 / 16.7 % |
+| v3.2 test, Danish (779, synthetic): accuracy | 93.58 % | 93.32 % | 92.81 % |
+| v3.2 test, all 23 languages (31,527): accuracy | 93.71 % | 93.65 % | 93.18 % |
+
+Baseline reproduces Daily's published v3.2 numbers. CoRal labels are heuristic (noisy). The
+model is derived from CoRal (OpenRAIL-D): if ever shared, its licence and use restrictions go
+with it. Not yet done: synthetic Danish fillers (TTS too slow on the busy machine), threshold
+and silence-timeout retuning, live check.

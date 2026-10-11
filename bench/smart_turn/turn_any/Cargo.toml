@@ -1,0 +1,16 @@
+# Grace's Rust Smart Turn path (grace-vad) with a model argument, to check candidate models without
+# touching crates/. Its own workspace so the main workspace is unaffected.
+#   cargo build --release --manifest-path bench/smart_turn/turn_any/Cargo.toml --target-dir target
+#   target/release/turn_any.exe <model.onnx> bench-results/turn/*.wav > out.tsv
+[package]
+name = "turn_any"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+grace-vad = { path = "../../../crates/grace-vad" }
+anyhow = "1"
+hound = "3.5.1"

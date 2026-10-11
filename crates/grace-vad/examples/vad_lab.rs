@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
         let (mut segments, mut open) = (Vec::new(), None);
         let started = Instant::now();
         let frames = audio.len() / FRAME;
-        for chunk in audio.chunks_exact(FRAME) {
+        for chunk in audio.as_chunks::<FRAME>().0 {
             match gate.push(vad.process(chunk)?) {
                 Some(VadEdge::Started { frame }) => open = Some(secs(frame)),
                 Some(VadEdge::Stopped { frame }) => {

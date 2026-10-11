@@ -1,0 +1,51 @@
+id: 04-live-stt-hallucination
+title: Fluent Whisper hallucinations from breaths and pauses store nothing
+categories: [stt_garbled, abstention]
+persona: >
+  Mikkel in ordinary sessions; Whisper turns a breath or a pause into a fluent but meaningless
+  sentence.
+live_failure: >
+  Live memory run 3 (2026-10-11): "Tvernes ændring er blevet fornøjet at vente en anden opslag."
+  was transcribed from a breath and passed to memory.
+sessions:
+  - start: "2026-10-15T20:00:00+02:00"
+    turns:
+      - user: "hej grace jeg sidder og koder på grace igen"
+        grace: "Hi Mikkel! What are you working on?"
+      - user: "Tvernes ændring er blevet fornøjet at vente en anden opslag."
+        grace: "Sorry, I'm not sure what you mean."
+        stt_garbled: true
+      - user: "jeg prøver at få hukommelsen til at virke"
+        grace: "The memory system? What's giving you trouble?"
+      - user: "Det er blevet bekræftet af ministeriet for indre anliggender."
+        grace: "Sorry, I didn't follow that."
+        stt_garbled: true
+    expect:
+      facts_absent:
+        - assert: Nothing from the first hallucinated sentence is stored.
+          match: [[tvernes, ændring, fornøjet, opslag]]
+          scope: ever
+        - assert: Nothing from the second hallucinated sentence is stored.
+          match: [[ministeri, ministry, interior, indre anliggender, bekræftet]]
+          scope: ever
+      probes:
+        - question: "hvad ved du om tvernes"
+          abstain: true
+          must_not_contain: [opslag, fornøjet, 're:tvernes (is|was|has)']
+  - start: "2026-10-16T09:30:00+02:00"
+    turns:
+      - user: "Undertekster af Nicolai Winther"
+        grace: "Sorry, could you say that again?"
+        stt_garbled: true
+      - user: "godmorgen"
+        grace: "Good morning, Mikkel."
+    expect:
+      facts_absent:
+        - assert: The classic subtitle hallucination is not stored.
+          match: [[nicolai, winther, subtitle, undertekst]]
+          scope: ever
+      probe_at: "2026-10-17T09:00:00+02:00"
+      probes:
+        - question: "hvem er nicolai winther"
+          abstain: true
+          must_not_contain: [subtitle, undertekst]

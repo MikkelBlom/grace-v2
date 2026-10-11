@@ -1,0 +1,43 @@
+id: 16-vitamin-stopped
+title: Health routine started then stopped; unrelated medicine stays
+categories: [knowledge_update, multi_session]
+persona: >
+  Mikkel's health: vitamin D he later stops on the doctor's advice, and an asthma inhaler for
+  running that stays current.
+sessions:
+  - start: "2026-10-13T07:45:00+02:00"
+    turns:
+      - user: "jeg er begyndt at tage d-vitamin hver morgen"
+        grace: "Good idea with the darker months coming."
+      - user: "og så har jeg fået ventoline af lægen til når jeg løber"
+        grace: "Ventoline before running, noted."
+    expect:
+      facts_present:
+        - assert: Mikkel takes vitamin D every morning.
+          match: [['re:vitamin[ -]?d|d-vitamin']]
+        - assert: Mikkel uses Ventoline (asthma inhaler) when running.
+          match: [[ventoline, ventolin, inhaler, asthma, astma]]
+  - start: "2026-11-17T08:00:00+01:00"
+    turns:
+      - user: "jeg er stoppet med d-vitaminen lægen sagde mine tal var fine"
+        grace: "Good news that your levels are fine."
+    expect:
+      facts_invalidated:
+        - assert: Mikkel no longer takes vitamin D.
+          match: [['re:vitamin[ -]?d|d-vitamin'], ['re:\b(takes|taking|every morning|daily)\b']]
+          exclude: [stopped, no longer, quit]
+      facts_present:
+        - assert: The Ventoline fact is untouched.
+          match: [[ventoline, ventolin, inhaler, asthma, astma]]
+  - start: "2026-11-24T07:30:00+01:00"
+    turns:
+      - user: "jeg skal ud og løbe nu"
+        grace: "Have a good run. Remember your Ventoline."
+    expect:
+      probe_at: "2026-11-25T08:00:00+01:00"
+      probes:
+        - question: "tager jeg nogen vitaminer"
+          expect: [['re:\b(no|not|stopped|don''t)\b', stoppet]]
+          must_not_contain: ['re:you take vitamin d every']
+        - question: "hvad skal jeg huske når jeg løber"
+          expect: [[ventoline, ventolin, inhaler]]

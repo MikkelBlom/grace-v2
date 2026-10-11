@@ -254,12 +254,13 @@ fn spawn_pause_work(
     // ADR 0013: Smart Turn and STT both read our echo-cancelled signal. (The Windows-processed
     // path of ADR 0012 returned near-silence with a Bluetooth headset, and its stream is the
     // prime suspect for two Windows Audio service hangs.)
-    let (aec, stt_audio, raw, source) = {
+    let (aec, stt_audio, raw, lin, source) = {
         let shared = svc.shared.lock().expect("shared poisoned");
         (
             shared.aec16.read_span(start - 0.5, stop + 0.2),
             shared.aec16.read_span(start - 0.3, stop + 0.15),
             shared.raw16.read_span(start - 0.3, stop + 0.15),
+            shared.lin16.read_span(start - 0.3, stop + 0.15),
             "aec",
         )
     };
@@ -269,7 +270,7 @@ fn spawn_pause_work(
         let (a, r) = (stt_audio.clone(), raw);
         let base = dir.join(format!("t{turn}-{epoch}"));
         tokio::task::spawn_blocking(move || {
-            for (suffix, pcm) in [("aec", a), ("raw", r)] {
+            for (suffix, pcm) in [("aec", a), ("raw", r), ("lin", lin)] {
                 let _ = crate::speech::write_wav(
                     &base.with_extension(format!("{suffix}.wav")),
                     &pcm,

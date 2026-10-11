@@ -1,0 +1,36 @@
+id: 20-abstain-grace-guessed
+title: Grace's guess about an exam date is not a fact
+categories: [abstention, self_echo]
+persona: >
+  Mikkel takes a statistics course; the exam date is not announced. Grace speculates.
+sessions:
+  - start: "2026-10-15T14:00:00+02:00"
+    turns:
+      - user: "jeg har statistik det her semester"
+        grace: "Statistics, nice. The exam is probably in January, like most autumn courses."
+      - user: "det ved jeg faktisk ikke endnu"
+        grace: "Okay, let me know when they announce it."
+    expect:
+      facts_present:
+        - assert: Mikkel takes statistics this semester.
+          match: [[statistic, statistik]]
+      facts_absent:
+        - assert: No exam date from Grace's guess.
+          match: [[statistic, statistik], [january, januar]]
+          scope: ever
+  - start: "2026-10-22T14:00:00+02:00"
+    turns:
+      - user: "vi havde om regression i dag"
+        grace: "Linear regression? That's a core topic for the January exam."
+      - user: "ja lineær"
+        grace: "Good, it builds on what you've done."
+    expect:
+      facts_absent:
+        - assert: Still no January exam fact after Grace repeats her guess.
+          match: [[statistic, statistik, exam, eksamen], [january, januar]]
+          scope: ever
+      probe_at: "2026-10-23T10:00:00+02:00"
+      probes:
+        - question: "hvornår er min eksamen i statistik"
+          abstain: true
+          must_not_contain: ['re:(is|it''s) (in|on) january', 're:exam is in january']

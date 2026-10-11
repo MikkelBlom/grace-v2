@@ -1,0 +1,38 @@
+id: 34-say-it-in-danish
+title: One-off "sig det på dansk" vs lasting "brug altid celsius"
+categories: [momentary_command, extraction]
+persona: >
+  Preferences about Grace. Grace speaks English by design; one request for Danish is a one-off.
+sessions:
+  - start: "2026-10-21T12:00:00+02:00"
+    turns:
+      - user: "hvad hedder en lock free kø"
+        grace: "A lock-free queue."
+      - user: "sig det lige på dansk"
+        grace: "En låsefri kø."
+      - user: "og brug altid celsius når du siger temperaturer"
+        grace: "Celsius from now on."
+    expect:
+      facts_absent:
+        - assert: No lasting preference for Grace to speak Danish.
+          match: [[danish, dansk]]
+      facts_present:
+        - assert: Mikkel wants temperatures in Celsius.
+          match: [[celsius]]
+          kind_hint: preference
+  - start: "2026-10-22T08:00:00+02:00"
+    turns:
+      - user: "hvor varmt bliver det i dag"
+        grace: "Around 12 degrees Celsius."
+    expect:
+      facts_absent:
+        - assert: Still no Danish-language preference.
+          match: [[danish, dansk]]
+      probe_at: "2026-10-23T08:00:00+02:00"
+      probes:
+        - question: "hvilken enhed skal du bruge til temperaturer"
+          expect: [[celsius]]
+          must_not_contain: [fahrenheit]
+        - question: "skal du tale dansk eller engelsk med mig"
+          must_not_contain: ['re:you (asked|want|told) me to (speak|talk) danish']
+          rubric: The Danish request was one-off; nothing says Mikkel wants Danish in general.

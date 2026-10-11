@@ -1,0 +1,42 @@
+id: 35-mic-tests-and-commands
+title: Mic tests, "sig det igen" and timers store nothing; one real fact does
+categories: [momentary_command, extraction]
+persona: >
+  Mikkel testing a new headset; mostly system tests and commands, one genuine fact.
+sessions:
+  - start: "2026-10-25T13:00:00+01:00"
+    turns:
+      - user: "test test en to tre"
+        grace: "I hear you loud and clear."
+      - user: "kan du høre mig nu"
+        grace: "Yes, perfectly."
+      - user: "sig det igen"
+        grace: "Yes, I can hear you perfectly."
+      - user: "sæt en timer på fem minutter"
+        grace: "Five-minute timer started."
+      - user: "pause"
+        grace: "Paused."
+    expect:
+      facts_absent:
+        - assert: No test or command is stored.
+          match: [[test, hear, høre, timer, pause, repeat, gentag, igen]]
+          scope: ever
+  - start: "2026-10-25T13:20:00+01:00"
+    turns:
+      - user: "det nye headset er et jabra evolve to femoghalvfjerds"
+        grace: "The Jabra Evolve2 75, nice headset."
+      - user: "test igen"
+        grace: "Still loud and clear."
+    expect:
+      facts_present:
+        - assert: Mikkel's headset is a Jabra Evolve2 75.
+          match: [[jabra], ['re:\b75\b|seventy-five|femoghalvfjerds', evolve]]
+          kind_hint: environment
+      facts_absent:
+        - assert: Still no test or command stored.
+          match: [[test, timer, pause, repeat, gentag]]
+          scope: ever
+      probe_at: "2026-10-26T09:00:00+01:00"
+      probes:
+        - question: "hvilket headset har jeg"
+          expect: [[jabra]]

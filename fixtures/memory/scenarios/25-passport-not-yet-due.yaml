@@ -1,0 +1,55 @@
+id: 25-passport-not-yet-due
+title: A January reminder stays silent in October and fires in January
+categories: [commitment, temporal]
+persona: >
+  Mikkel's passport expires in February 2027; he wants a reminder in January.
+sessions:
+  - start: "2026-10-14T12:00:00+02:00"
+    turns:
+      - user: "mit pas udløber i februar mind mig om at forny det i januar"
+        grace: "I'll remind you in January to renew your passport."
+    expect:
+      facts_present:
+        - assert: Mikkel's passport expires in February 2027.
+          match: [[passport, pas], [february, februar, expir, udløb]]
+      commitments_open:
+        - assert: In January 2027, remind Mikkel to renew his passport.
+          match: [[passport, pas], [renew, forny]]
+          due: "2027-01-01"
+      probes:
+        - question: "hej grace"
+          proactive: true
+          must_not_contain: [passport]
+          rubric: Not due until January; Grace must not bring it up in October.
+  - start: "2026-10-20T19:00:00+02:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel, how was your day?"
+      - user: "fin nok lidt træt"
+        grace: "Take it easy tonight."
+    expect:
+      commitments_open:
+        - assert: Still open.
+          match: [[passport, pas], [renew, forny]]
+      probes:
+        - question: "godmorgen grace"
+          proactive: true
+          expect: [[passport]]
+          rubric: Early January; Grace brings up the passport renewal herself.
+  - start: "2027-01-05T08:30:00+01:00"
+    turns:
+      - user: "godmorgen grace"
+        grace: "Good morning! It's January, time to renew your passport before it expires in February."
+      - user: "godt du siger det jeg har booket tid hos borgerservice den tolvte"
+        grace: "Great, Borgerservice on the 12th."
+    expect:
+      commitments_done:
+        - assert: The January reminder has been delivered and acted on.
+          match: [[passport, pas], [renew, forny]]
+      facts_present:
+        - assert: Mikkel has an appointment at Borgerservice on 12 January 2027 for the passport.
+          match: [[borgerservice, citizen service], ['re:\b12(th|\.)?\b|twelfth']]
+      probe_at: "2027-01-06T09:00:00+01:00"
+      probes:
+        - question: "hvornår skal jeg på borgerservice"
+          expect: [['re:\b12(th|\.)?\b|twelfth'], [january, januar, jan]]

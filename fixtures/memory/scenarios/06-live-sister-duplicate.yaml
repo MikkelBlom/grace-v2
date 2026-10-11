@@ -1,0 +1,57 @@
+id: 06-live-sister-duplicate
+title: Sister moves Aarhus to Copenhagen; repeating it adds no duplicate
+categories: [duplicate, knowledge_update, multi_session]
+persona: >
+  Mikkel's sister Sofie moves from Aarhus to Copenhagen.
+live_failure: >
+  Live memory run 1 (2026-10-11): "Sofie lives in Copenhagen" was stored twice after Mikkel
+  mentioned it again.
+sessions:
+  - start: "2026-10-12T16:00:00+02:00"
+    turns:
+      - user: "min søster hedder sofie og hun bor i aarhus"
+        grace: "Nice, Sofie in Aarhus. Noted."
+    expect:
+      facts_present:
+        - assert: Mikkel's sister is Sofie and she lives in Aarhus.
+          match: [[sofie], [aarhus, århus]]
+      probes:
+        - question: "hvor bor min søster"
+          expect: [[aarhus, århus]]
+  - start: "2026-10-18T11:00:00+02:00"
+    turns:
+      - user: "min søster er faktisk flyttet til københavn"
+        grace: "Oh, so Sofie lives in Copenhagen now."
+      - user: "ja hun har fået job hos novo"
+        grace: "Great, congratulations to her."
+    expect:
+      facts_present:
+        - assert: Sofie lives in Copenhagen.
+          match: [[sofie, sister, søster], [copenhagen, københavn]]
+          max_count: 1
+        - assert: Sofie works at Novo (Novo Nordisk).
+          match: [[sofie, sister, søster], [novo]]
+      facts_invalidated:
+        - assert: Sofie no longer lives in Aarhus.
+          match: [[sofie, sister, søster], [aarhus, århus]]
+          exclude: [moved from, formerly, previously, used to, no longer, tidligere]
+  - start: "2026-10-26T18:30:00+01:00"
+    turns:
+      - user: "min søster bor i københavn"
+        grace: "Yes, Sofie lives in Copenhagen."
+      - user: "jeg skal besøge hende i weekenden"
+        grace: "Have a nice trip to Copenhagen."
+    expect:
+      facts_present:
+        - assert: Still exactly one current fact that Sofie lives in Copenhagen.
+          match: [[sofie, sister, søster], [copenhagen, københavn]]
+          max_count: 1
+      facts_absent:
+        - assert: Aarhus is not current again.
+          match: [[sofie, sister, søster], [aarhus, århus]]
+          exclude: [moved from, formerly, previously, used to, no longer, tidligere]
+      probe_at: "2026-10-27T10:00:00+01:00"
+      probes:
+        - question: "hvor bor sofie nu"
+          expect: [[copenhagen, københavn]]
+          must_not_contain: ['re:(lives|bor) in (aarhus|århus)']

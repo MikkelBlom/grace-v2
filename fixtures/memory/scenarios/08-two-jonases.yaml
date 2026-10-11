@@ -1,0 +1,58 @@
+id: 08-two-jonases
+title: Two different people called Jonas stay apart across sessions
+categories: [duplicate, multi_session]
+persona: >
+  Mikkel knows two Jonases: his cousin Jonas (an electrician in Horsens) and Jonas from his
+  study group (from Sønderborg).
+sessions:
+  - start: "2026-10-12T12:30:00+02:00"
+    turns:
+      - user: "min fætter jonas er elektriker i horsens"
+        grace: "Your cousin Jonas, an electrician in Horsens. Got it."
+      - user: "han skal giftes til sommer"
+        grace: "Oh, how nice! Congratulations to him."
+    expect:
+      facts_present:
+        - assert: Mikkel's cousin Jonas is an electrician in Horsens.
+          match: [[jonas], [cousin, fætter], [electrician, elektriker, horsens]]
+        - assert: Cousin Jonas is getting married in summer 2027.
+          match: [[jonas], [married, wedding, gift, bryllup]]
+  - start: "2026-10-15T10:00:00+02:00"
+    turns:
+      - user: "jonas fra min studiegruppe kommer fra sønderborg"
+        grace: "Is that a different Jonas from your cousin?"
+      - user: "ja ja det er en helt anden jonas"
+        grace: "Got it, Jonas from your study group, from Sønderborg."
+      - user: "han er rigtig god til rust"
+        grace: "Handy for your projects."
+    expect:
+      facts_present:
+        - assert: Jonas from the study group is from Sønderborg.
+          match: [[jonas], [study, studie], [sønderborg, sonderborg]]
+        - assert: Study-group Jonas is good at Rust.
+          match: [[jonas], [rust]]
+        - assert: Cousin Jonas is still an electrician in Horsens.
+          match: [[jonas], [cousin, fætter], [electrician, elektriker, horsens]]
+      facts_absent:
+        - assert: The cousin is not merged with the study-group Jonas.
+          match: [[cousin, fætter], [sønderborg, sonderborg, rust, study group, studiegruppe]]
+        - assert: Study-group Jonas is not getting married (that is the cousin).
+          match: [[study, studie], [married, wedding, gift, bryllup]]
+  - start: "2026-10-22T16:40:00+02:00"
+    turns:
+      - user: "jonas har lige sendt mig hans kode til parseren"
+        grace: "Jonas from your study group? Want me to look at it?"
+      - user: "ja ham"
+        grace: "Okay, open it and I'll take a look."
+    expect:
+      facts_absent:
+        - assert: Nothing is attributed to cousin Jonas from this session.
+          match: [[cousin, fætter], [parser, code, kode]]
+      probe_at: "2026-10-23T09:00:00+02:00"
+      probes:
+        - question: "hvad laver min fætter jonas"
+          expect: [[electrician, elektriker]]
+          must_not_contain: [rust, sønderborg]
+        - question: "hvor kommer jonas fra studiegruppen fra"
+          expect: [[sønderborg, sonderborg]]
+          must_not_contain: [horsens]

@@ -1,0 +1,41 @@
+id: 10-dentist-day-correction
+title: '"På torsdag ... nej vent, fredag" keeps only Friday'
+categories: [same_session_correction, temporal]
+persona: >
+  Mikkel books a dentist appointment and corrects the day in the same breath; a week later it
+  happens.
+sessions:
+  - start: "2026-10-12T09:10:00+02:00"
+    turns:
+      - user: "jeg skal til tandlæge på torsdag klokken ti"
+        grace: "Thursday the 15th at ten, noted."
+      - user: "nej vent det er fredag ikke torsdag"
+        grace: "Friday the 16th at ten then."
+      - user: "ja præcis"
+        grace: "Got it."
+    expect:
+      facts_present:
+        - assert: Mikkel has a dentist appointment on Friday 16 October 2026 at 10:00.
+          match: [[dentist, tandlæge], ['re:\b16(th|\.)?\b', friday, fredag]]
+          max_count: 1
+      facts_absent:
+        - assert: No current dentist appointment on Thursday 15 October.
+          match: [[dentist, tandlæge], ['re:\b15(th|\.)?\b', thursday, torsdag]]
+      probes:
+        - question: "hvornår skal jeg til tandlæge"
+          expect: [['re:\b16(th|\.)?\b', friday, fredag]]
+          must_not_contain: [thursday, torsdag, 're:\b15(th)?\b']
+  - start: "2026-10-16T13:00:00+02:00"
+    turns:
+      - user: "så var jeg hos tandlægen det gik fint ingen huller"
+        grace: "Great, no cavities!"
+    expect:
+      facts_absent:
+        - assert: The appointment is in the past and is no longer an upcoming plan.
+          match: [[dentist, tandlæge], ['re:\b(has|have) an? (dentist )?appointment']]
+      probe_at: "2026-10-20T09:00:00+02:00"
+      probes:
+        - question: "skal jeg til tandlæge snart"
+          expect: [['re:\b(no|not|already|was|last week)\b', sidste uge]]
+          must_not_contain: ['re:you (have|are going to) .*dentist .*(friday|16)']
+          rubric: The appointment was on 16 October and went fine (no cavities); nothing upcoming.

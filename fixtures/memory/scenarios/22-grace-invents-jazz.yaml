@@ -1,0 +1,43 @@
+id: 22-grace-invents-jazz
+title: A preference Grace invented is never stored; the real one is
+categories: [self_echo, abstention, extraction]
+persona: >
+  Mikkel's music taste. Grace makes up that he loves jazz; he actually listens to lo-fi when
+  coding.
+sessions:
+  - start: "2026-10-16T21:00:00+02:00"
+    turns:
+      - user: "spil noget musik jeg kan arbejde til"
+        grace: "Here's some jazz, since you love jazz."
+      - user: "hmm okay"
+        grace: "Enjoy."
+    expect:
+      facts_absent:
+        - assert: No jazz preference from Grace's invention.
+          match: [[jazz]]
+          scope: ever
+      probes:
+        - question: "hvilken musik kan jeg lide"
+          abstain: true
+          must_not_contain: ['re:you (love|like|enjoy) jazz']
+  - start: "2026-10-17T10:00:00+02:00"
+    turns:
+      - user: "jeg hører faktisk mest lo-fi når jeg koder"
+        grace: "Lo-fi it is next time."
+      - user: "og så noget metal når jeg træner"
+        grace: "Metal for training, good combo."
+    expect:
+      facts_present:
+        - assert: Mikkel listens to lo-fi when coding.
+          match: [['re:lo-?fi'], [cod, programm, work, arbejd]]
+        - assert: Mikkel listens to metal when training.
+          match: [[metal], [train, gym, workout, exercis, træn]]
+      facts_absent:
+        - assert: Still no jazz fact.
+          match: [[jazz]]
+          scope: ever
+      probe_at: "2026-10-18T10:00:00+02:00"
+      probes:
+        - question: "hvad skal jeg høre mens jeg koder"
+          expect: [['re:lo-?fi']]
+          must_not_contain: [jazz]

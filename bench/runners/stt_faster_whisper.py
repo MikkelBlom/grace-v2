@@ -40,22 +40,29 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--language", default="da")
     ap.add_argument("--beams", type=int, default=1)
+    ap.add_argument("--no-fallback", action="store_true",
+                    help="decode at temperature 0 only (faster-whisper otherwise retries hotter)")
     args = ap.parse_args()
 
     def load():
         path = convert(args.model, "float16" if args.compute == "float16" else "int8_float16")
         model = WhisperModel(str(path), device=args.device, compute_type=args.compute)
-        return model, {"model": args.model, "runtime": f"ctranslate2-{args.compute}-{args.device}", "beams": args.beams}
+        return model, {"model": args.model, "runtime": f"ctranslate2-{args.compute}-{args.device}",
+                       "beams": args.beams, "fallback": not args.no_fallback}
 
     def handle(model, req):
         audio, _ = sf.read(req["audio"], dtype="float32")
         elapsed = timer()
+        extra = {"temperature": 0.0} if args.no_fallback else {}
         segments, _ = model.transcribe(
             audio, language=args.language, beam_size=args.beams, vad_filter=False,
-            without_timestamps=True, condition_on_previous_text=False,
+            without_timestamps=True, condition_on_previous_text=False, **extra,
         )
+        segments = list(segments)
         text = " ".join(s.text.strip() for s in segments)
-        return {"text": text, "ms": elapsed()}
+        return {"text": text, "ms": elapsed(),
+                "avg_logprob": min((s.avg_logprob for s in segments), default=0.0),
+                "no_speech_prob": max((s.no_speech_prob for s in segments), default=1.0)}
 
     serve(load, handle)
 

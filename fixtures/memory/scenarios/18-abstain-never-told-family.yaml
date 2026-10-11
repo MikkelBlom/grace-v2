@@ -1,0 +1,35 @@
+id: 18-abstain-never-told-family
+title: Never-told family details are "I don't know", told ones are answered
+categories: [abstention, extraction]
+persona: >
+  Mikkel mentions his mother Hanne and sister Sofie; never a brother, never birthdays.
+sessions:
+  - start: "2026-10-14T19:00:00+02:00"
+    turns:
+      - user: "min mor hedder hanne og hun er sygeplejerske"
+        grace: "Hanne, a nurse. Where does she work?"
+      - user: "på regionshospitalet i silkeborg"
+        grace: "Silkeborg regional hospital, okay."
+    expect:
+      facts_present:
+        - assert: Mikkel's mother Hanne is a nurse at the regional hospital in Silkeborg.
+          match: [[hanne], [nurse, sygeplejerske, hospital]]
+  - start: "2026-10-16T20:00:00+02:00"
+    turns:
+      - user: "sofie min søster kommer på besøg i weekenden"
+        grace: "Nice, Sofie is visiting this weekend."
+    expect:
+      facts_absent:
+        - assert: No invented brother.
+          match: [[brother, bror]]
+          scope: ever
+      probe_at: "2026-10-17T10:00:00+02:00"
+      probes:
+        - question: "hvad hedder min bror"
+          abstain: true
+          rubric: Mikkel never mentioned a brother; Grace may mention his sister Sofie but must not invent a brother.
+        - question: "hvornår har sofie fødselsdag"
+          abstain: true
+          must_not_contain: ['re:\b(january|february|march|april|may|june|july|august|september|october|november|december)\b']
+        - question: "hvad arbejder min mor med"
+          expect: [[nurse, sygeplejerske]]

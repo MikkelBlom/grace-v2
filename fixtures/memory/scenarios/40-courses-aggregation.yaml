@@ -1,0 +1,52 @@
+id: 40-courses-aggregation
+title: Semester courses gathered over four sessions, one dropped, one repeated
+categories: [multi_session, duplicate, knowledge_update, extraction]
+persona: >
+  Mikkel's autumn 2026 semester: courses mentioned piecemeal across weeks.
+sessions:
+  - start: "2026-10-12T09:00:00+02:00"
+    turns:
+      - user: "jeg har compilere og statistik det her semester"
+        grace: "Compilers and statistics, a solid mix."
+    expect:
+      facts_present:
+        - assert: Mikkel takes Compilers this semester.
+          match: [[compiler, compilere]]
+        - assert: Mikkel takes Statistics this semester.
+          match: [[statistic, statistik]]
+  - start: "2026-10-19T09:00:00+02:00"
+    turns:
+      - user: "og så har jeg også valgt ux design som valgfag"
+        grace: "UX design as an elective, nice."
+    expect:
+      facts_present:
+        - assert: Mikkel takes UX design as an elective.
+          match: [['re:\bux\b']]
+  - start: "2026-11-02T09:00:00+01:00"
+    turns:
+      - user: "jeg har droppet ux design det tog for meget tid"
+        grace: "Fair, better to focus on fewer courses."
+    expect:
+      facts_invalidated:
+        - assert: Mikkel no longer takes UX design.
+          match: [['re:\bux\b']]
+          exclude: [dropped, no longer, quit, stopped, droppet, previously]
+  - start: "2026-11-09T09:00:00+01:00"
+    turns:
+      - user: "jeg har compilere i dag så jeg er på uni hele dagen"
+        grace: "Long day then. Good luck in compilers."
+    expect:
+      facts_present:
+        - assert: Compilers is stored once despite being mentioned again.
+          match: [[compiler, compilere]]
+          max_count: 1
+      facts_absent:
+        - assert: UX design is not current.
+          match: [['re:\bux\b']]
+          exclude: [dropped, no longer, quit, stopped, droppet, previously]
+      probe_at: "2026-11-10T09:00:00+01:00"
+      probes:
+        - question: "hvilke fag har jeg det her semester"
+          expect: [[compiler, compilere], [statistic, statistik]]
+          must_not_contain: ['re:(and|,) ux design']
+          rubric: Compilers and statistics; UX design was dropped (mentioning it as dropped is fine).

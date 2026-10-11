@@ -1,0 +1,48 @@
+id: 26-rome-flight-correction
+title: Barge-in correction of a travel date, plus a check-in reminder
+categories: [interrupted, same_session_correction, commitment, temporal]
+persona: >
+  Mikkel and his girlfriend Emma fly to Rome. He cuts Grace off to fix the date.
+sessions:
+  - start: "2026-10-22T20:00:00+02:00"
+    turns:
+      - user: "jeg flyver til rom den fjortende november med min kæreste emma"
+        grace: "Rome on Saturday the 14th, lovely! Are you staying in"
+        interrupted: true
+      - user: "nej vent det er den femtende om søndagen"
+        grace: "Sunday the 15th of November then."
+      - user: "og mind mig om at tjekke ind dagen før"
+        grace: "I'll remind you on the 14th to check in."
+    expect:
+      facts_present:
+        - assert: Mikkel flies to Rome on Sunday 15 November 2026 with his girlfriend Emma.
+          match: [[rome, rom], ['re:\b15(th|\.)?\b|fifteenth|sunday|søndag']]
+          max_count: 1
+        - assert: Mikkel's girlfriend is called Emma.
+          match: [[emma], [girlfriend, kæreste, partner]]
+      facts_absent:
+        - assert: The flight is not stored on the 14th.
+          match: [[rome, rom, flight, fly], ['re:\b14(th|\.)? nov|nov(ember)? 14\b|saturday|lørdag']]
+          exclude: [check in, check-in, tjek]
+      commitments_open:
+        - assert: On 14 November remind Mikkel to check in for the Rome flight.
+          match: [[check in, check-in, tjek]]
+          due: "2026-11-14"
+      probes:
+        - question: "hvornår flyver jeg til rom"
+          expect: [['re:\b15(th|\.)?\b|fifteenth|sunday|søndag']]
+          must_not_contain: ['re:(fly|flight|leav)\w* on (saturday|the 14)']
+  - start: "2026-11-14T10:00:00+01:00"
+    turns:
+      - user: "godmorgen grace"
+        grace: "Good morning! Remember to check in for your flight to Rome tomorrow."
+      - user: "tak det har jeg lige gjort"
+        grace: "Great, have a wonderful trip with Emma."
+    expect:
+      commitments_done:
+        - assert: Check-in reminder delivered and done.
+          match: [[check in, check-in, tjek]]
+      probe_at: "2026-11-14T18:00:00+01:00"
+      probes:
+        - question: "hvornår skal jeg afsted"
+          expect: [[tomorrow, i morgen, 're:\b15(th|\.)?\b', sunday, søndag]]

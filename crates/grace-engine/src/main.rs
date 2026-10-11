@@ -3,15 +3,6 @@
 //!
 //!   cargo run --release -p grace
 
-mod audio_io;
-mod clock;
-mod conductor;
-mod delay;
-mod frontend;
-mod memory;
-mod speech;
-mod timed;
-
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -28,10 +19,11 @@ use grace_core::vad_gate::VadGateConfig;
 use grace_llm::client::LlmClient;
 use grace_vad::smart_turn::SmartTurn;
 
-use crate::{
-    audio_io::Source,
-    frontend::{FrontendConfig, Shared},
-    timed::TimedRing,
+use grace::{
+    audio_io::{self, Source},
+    clock, conductor,
+    frontend::{self, FrontendConfig, Shared},
+    memory, speech,
 };
 
 const LLM_URL: &str = "http://127.0.0.1:8080";
@@ -171,11 +163,7 @@ async fn main() -> anyhow::Result<()> {
     let (front_tx, front_rx) = tokio::sync::mpsc::unbounded_channel();
     let (render_tx, render_rx) = mpsc::channel();
     let (render_ev_tx, render_ev_rx) = tokio::sync::mpsc::unbounded_channel();
-    let shared = Arc::new(Mutex::new(Shared {
-        aec16: TimedRing::new(16_000, 30.0),
-        speakers16: TimedRing::new(16_000, 30.0),
-        raw16: TimedRing::new(16_000, 30.0),
-    }));
+    let shared = Arc::new(Mutex::new(Shared::new(30.0)));
 
     let threads = vec![
         audio_io::spawn_render(
@@ -205,6 +193,7 @@ async fn main() -> anyhow::Result<()> {
                 initial_delay_ms: delay,
                 lead_ms: LEAD_MS,
                 gate: VadGateConfig::default(),
+                noise_suppression: true,
             },
             chunk_rx,
             shared.clone(),

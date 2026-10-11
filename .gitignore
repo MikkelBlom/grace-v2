@@ -16,3 +16,5 @@ __pycache__/
 .env.*
 /.runtime
 /data
+/fixtures/coral-v3
+/fixtures/corpora

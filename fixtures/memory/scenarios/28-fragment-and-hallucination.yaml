@@ -1,0 +1,42 @@
+id: 28-fragment-and-hallucination
+title: Half a thought and a hallucinated outro store nothing; the later real plan does
+categories: [interrupted, stt_garbled, extraction]
+persona: >
+  Mikkel loses his train of thought mid-sentence; the STT fills a pause with a TV outro line.
+sessions:
+  - start: "2026-10-23T18:00:00+02:00"
+    turns:
+      - user: "hvordan bliver vejret i morgen"
+        grace: "Tomorrow will be grey and windy with showers in the"
+        interrupted: true
+      - user: "nej vent jeg skal huske at øh"
+        grace: "Take your time."
+      - user: "Tak fordi du så med."
+        grace: "Sorry, what did you say?"
+        stt_garbled: true
+      - user: "glem det det kommer nok"
+        grace: "Okay, just tell me when it comes back."
+    expect:
+      facts_absent:
+        - assert: No empty or guessed reminder from the unfinished sentence.
+          match: [['re:remember (to|that)\b', huske]]
+          scope: ever
+        - assert: Nothing from the hallucinated outro.
+          match: [[watching, så med, thank]]
+          scope: ever
+        - assert: Grace's half-spoken forecast is not stored.
+          match: [[windy, showers, grey, blæs]]
+          scope: ever
+  - start: "2026-10-23T18:40:00+02:00"
+    turns:
+      - user: "nu kan jeg huske det jeg skal hente en pakke i pakkeshoppen i morgen inden de lukker klokken seks"
+        grace: "Pick up a parcel tomorrow before six, noted."
+    expect:
+      facts_present:
+        - assert: Mikkel must pick up a parcel at the parcel shop on 24 October 2026 before 18:00.
+          match: [[parcel, package, pakke], [pick up, collect, hente, pakkeshop]]
+      probe_at: "2026-10-24T09:00:00+02:00"
+      probes:
+        - question: "hvad skulle jeg huske i dag"
+          expect: [[parcel, package, pakke]]
+          must_not_contain: [windy, showers]

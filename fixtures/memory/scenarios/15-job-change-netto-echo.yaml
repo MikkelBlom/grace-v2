@@ -1,0 +1,49 @@
+id: 15-job-change-netto-echo
+title: Job change; Grace's stale "how was Netto?" must not bring Netto back
+categories: [knowledge_update, self_echo, temporal]
+persona: >
+  Mikkel quits his supermarket student job for a student developer job.
+sessions:
+  - start: "2026-10-12T20:00:00+02:00"
+    turns:
+      - user: "jeg har et studiejob i netto på femten timer om ugen"
+        grace: "Fifteen hours a week at Netto, that's a fair amount next to studying."
+    expect:
+      facts_present:
+        - assert: Mikkel has a 15-hour-a-week student job at Netto.
+          match: [[netto], [job, work, arbejde]]
+  - start: "2026-10-26T19:00:00+01:00"
+    turns:
+      - user: "jeg har sagt op i netto og starter som studentermedhjælper hos systematic den første november"
+        grace: "Congratulations! A student developer job at Systematic from the 1st of November."
+      - user: "tak jeg glæder mig vildt"
+        grace: "You should, it's a great step."
+    expect:
+      facts_present:
+        - assert: Mikkel works as a student assistant at Systematic from 1 November 2026.
+          match: [[systematic], ['re:\b(1st|1\.|first|1)\b', '2026-11-01', november]]
+      facts_invalidated:
+        - assert: The Netto job has ended.
+          match: [[netto]]
+          exclude: [quit, left, former, previously, used to, no longer, sagt op, instead]
+  - start: "2026-11-03T18:30:00+01:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel! How was your shift at Netto today?"
+      - user: "det var fint nok"
+        grace: "Good to hear."
+      - user: "jeg er bare lidt træt"
+        grace: "Get some rest tonight."
+    expect:
+      facts_absent:
+        - assert: Netto is not current again because Grace mentioned it.
+          match: [[netto]]
+          exclude: [quit, left, former, previously, used to, no longer, sagt op, instead]
+      facts_present:
+        - assert: Systematic is still the current job.
+          match: [[systematic]]
+      probe_at: "2026-11-04T09:00:00+01:00"
+      probes:
+        - question: "hvor arbejder jeg"
+          expect: [[systematic]]
+          must_not_contain: ['re:(work|works|working) (at|in) netto']

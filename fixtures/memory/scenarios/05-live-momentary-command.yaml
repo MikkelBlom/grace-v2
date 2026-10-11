@@ -1,0 +1,48 @@
+id: 05-live-momentary-command
+title: '"Hold din kæft" is not a lasting preference; "svar kort" is'
+categories: [momentary_command, extraction]
+persona: >
+  Mikkel, slightly irritated during a coding evening.
+live_failure: >
+  Live memory run 1 (2026-10-11): "hold din kæft" was stored as the preference "Mikkel wants Grace
+  to be quiet", which then shaped every following session.
+sessions:
+  - start: "2026-10-13T22:15:00+02:00"
+    turns:
+      - user: "hvad er forskellen på en mutex og en semafor"
+        grace: "A mutex lets one thread hold a lock at a time, while a semaphore counts permits, so several threads can"
+      - user: "hold din kæft"
+        grace: "Okay, I'll be quiet."
+      - user: "undskyld jeg er bare træt"
+        grace: "No worries."
+      - user: "jeg kan bedst lide når du svarer kort"
+        grace: "Understood, I'll keep it short."
+    expect:
+      facts_absent:
+        - assert: No lasting preference to be quiet / silent.
+          match: [[quiet, silent, shut up, kæft, stille, stop talking]]
+        - assert: Being tired is a mood, not a fact.
+          match: [[tired, træt]]
+      facts_present:
+        - assert: Mikkel prefers short answers.
+          match: [[short, brief, concise, kort]]
+          kind_hint: preference
+      probes:
+        - question: "hvordan kan jeg bedst lide at du svarer"
+          expect: [[short, brief, concise, kort]]
+          must_not_contain: [quiet, silent]
+  - start: "2026-10-14T08:00:00+02:00"
+    turns:
+      - user: "stop stop stop"
+        grace: "Stopped."
+      - user: "nej det var ikke til dig det var til radioen"
+        grace: "Ha, okay."
+    expect:
+      facts_absent:
+        - assert: No preference about stopping, nothing about the radio.
+          match: [[stop, radio]]
+      probe_at: "2026-10-15T08:00:00+02:00"
+      probes:
+        - question: "skal du være stille når jeg taler til dig"
+          must_not_contain: ['re:you (asked|want|told) me to (be quiet|stay quiet|be silent)']
+          rubric: Grace must not believe Mikkel asked her to be quiet in general; short answers is the real preference.

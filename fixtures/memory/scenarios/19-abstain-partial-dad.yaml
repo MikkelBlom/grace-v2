@@ -1,0 +1,30 @@
+id: 19-abstain-partial-dad
+title: Knows the father's name and town, not his job or anything about a pet
+categories: [abstention, multi_session]
+persona: >
+  Mikkel's father Per lives in Skive; his job is never mentioned. Mikkel has no pet.
+sessions:
+  - start: "2026-10-12T18:00:00+02:00"
+    turns:
+      - user: "min far hedder per"
+        grace: "Okay, your dad is Per."
+  - start: "2026-10-22T18:00:00+02:00"
+    turns:
+      - user: "min far har lige købt hus i skive"
+        grace: "A house in Skive, how nice for Per."
+      - user: "han flytter ind til januar"
+        grace: "A fresh start in the new year."
+    expect:
+      facts_present:
+        - assert: Mikkel's father Per has bought a house in Skive and moves in January 2027.
+          match: [[per, father, dad, far], [skive]]
+      probe_at: "2026-10-23T09:00:00+02:00"
+      probes:
+        - question: "hvad arbejder min far med"
+          abstain: true
+          rubric: The job was never mentioned; Grace may say what she does know (Per, house in Skive).
+        - question: "hvad hedder min hund"
+          abstain: true
+          rubric: No pet was ever mentioned (Jonas's dog does not exist in this scenario).
+        - question: "hvor skal min far bo"
+          expect: [[skive]]

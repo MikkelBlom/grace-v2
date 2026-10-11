@@ -1,0 +1,46 @@
+id: 37-copenhagen-slang-farewell
+title: Slang-heavy hangover chat with a real move and a gift reminder
+categories: [dialect, temporal, commitment]
+persona: >
+  Mikkel the morning after a party, talking loose Copenhagen slang. His friend Kasper is moving
+  to Berlin.
+sessions:
+  - start: "2026-11-29T11:30:00+01:00"
+    turns:
+      - user: "jeg er helt smadret mand var til fest hos kasper i går det var sygt nice"
+        grace: "Sounds like a big night. Drink some water."
+      - user: "han rykker til berlin til januar han har fået job hos et startup derovre"
+        grace: "Kasper's moving to Berlin in January for a startup job, exciting."
+      - user: "husk mig lige på at købe en afskedsgave til ham inden jul"
+        grace: "I'll remind you about a farewell gift for Kasper before Christmas."
+    expect:
+      facts_present:
+        - assert: Kasper moves to Berlin in January 2027 for a startup job.
+          match: [[kasper], [berlin]]
+      facts_absent:
+        - assert: Hangover and party mood are not stored as facts.
+          match: [[hangover, smadret, wrecked, tired]]
+      commitments_open:
+        - assert: Remind Mikkel before Christmas to buy Kasper a farewell gift.
+          match: [[kasper], [gift, gave, present]]
+          due: "2026-11-30"
+      probes:
+        - question: "hej grace"
+          proactive: true
+          expect: [[kasper], [gift, gave, present]]
+  - start: "2026-12-10T17:00:00+01:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel! Did you find a farewell gift for Kasper yet?"
+      - user: "jep har købt en fed bog om berlin til ham"
+        grace: "Perfect gift."
+    expect:
+      commitments_done:
+        - assert: The gift reminder is done.
+          match: [[kasper], [gift, gave, present]]
+      probe_at: "2027-01-15T10:00:00+01:00"
+      probes:
+        - question: "hvor er kasper flyttet hen"
+          expect: [[berlin]]
+        - question: "hvad gav jeg kasper i afskedsgave"
+          expect: [[book, bog]]

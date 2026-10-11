@@ -1,0 +1,50 @@
+id: 23-call-grandma-interrupted
+title: Reminder asked for in an interrupted turn is surfaced on the day, then closed
+categories: [commitment, interrupted, temporal]
+persona: >
+  Mikkel's grandmother (mormor) has her birthday on Sunday; he asks Grace to remind him to call.
+sessions:
+  - start: "2026-10-15T20:30:00+02:00"
+    turns:
+      - user: "mind mig om at ringe til mormor på søndag hun fylder firs"
+        grace: "Of course, I'll remind you on Sunday. Eighty is a big birthday, are you going to"
+        interrupted: true
+      - user: "ja ja bare mind mig om det"
+        grace: "I will."
+    expect:
+      facts_present:
+        - assert: Mikkel's grandmother turns 80 on Sunday 18 October 2026.
+          match: [[grandmother, grandma, mormor], ['re:\b(80|eighty|firs)\b']]
+      commitments_open:
+        - assert: Remind Mikkel on Sunday 18 October to call his grandmother.
+          match: [[grandmother, grandma, mormor], [call, ring]]
+          due: "2026-10-18"
+      probes:
+        - question: "godmorgen grace"
+          proactive: true
+          expect: [[grandmother, grandma, mormor], [call, ring, birthday, fødselsdag]]
+          rubric: On the Sunday, Grace reminds Mikkel to call his grandmother on her 80th birthday.
+  - start: "2026-10-18T09:30:00+02:00"
+    turns:
+      - user: "godmorgen grace"
+        grace: "Good morning! Don't forget to call your grandmother today, it's her 80th birthday."
+      - user: "tak jeg ringer til hende efter morgenmad"
+        grace: "Lovely."
+    expect:
+      commitments_open:
+        - assert: Not yet done; he only said he will call after breakfast.
+          match: [[grandmother, grandma, mormor], [call, ring]]
+  - start: "2026-10-18T16:00:00+02:00"
+    turns:
+      - user: "jeg fik ringet til mormor hun blev rigtig glad"
+        grace: "That's so nice to hear."
+    expect:
+      commitments_done:
+        - assert: The call reminder is done.
+          match: [[grandmother, grandma, mormor], [call, ring]]
+      probe_at: "2026-10-19T08:00:00+02:00"
+      probes:
+        - question: "godmorgen grace"
+          proactive: true
+          must_not_contain: ['re:(don''t forget|remember) to call']
+          rubric: The call is done; Grace must not remind him again.

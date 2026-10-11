@@ -1,0 +1,37 @@
+id: 38-coffee-double-negation
+title: '"Det er ikke fordi jeg ikke kan lide kaffe, men ..." parsed correctly'
+categories: [dialect, knowledge_update]
+persona: >
+  Mikkel's coffee habit; the update comes wrapped in a Danish double negation.
+sessions:
+  - start: "2026-10-13T08:00:00+02:00"
+    turns:
+      - user: "jeg drikker sgu nok fire kopper kaffe om dagen"
+        grace: "That's a fair amount of coffee."
+    expect:
+      facts_present:
+        - assert: Mikkel drinks about four cups of coffee a day.
+          match: [[coffee, kaffe], ['re:\b(4|four|fire)\b']]
+  - start: "2026-11-09T08:00:00+01:00"
+    turns:
+      - user: "det er altså ikke fordi jeg ikke kan lide kaffe men jeg drikker det ikke længere jeg er gået over til te"
+        grace: "Switched to tea, okay."
+      - user: "mest grøn te"
+        grace: "Green tea is a good choice."
+    expect:
+      facts_invalidated:
+        - assert: The four-cups-a-day habit has ended.
+          match: [[coffee, kaffe], ['re:\b(4|four|fire)\b']]
+          exclude: [no longer, stopped, used to, previously, formerly, instead, switched]
+      facts_present:
+        - assert: Mikkel drinks (mostly green) tea instead of coffee.
+          match: [[tea, 're:\bte\b']]
+      facts_absent:
+        - assert: He is not recorded as disliking coffee.
+          match: [[coffee, kaffe], ['re:(dislike|doesn''t like|does not like|hates?)']]
+      probe_at: "2026-11-10T08:00:00+01:00"
+      probes:
+        - question: "skal jeg have en kop kaffe"
+          expect: [[tea, 're:\bte\b']]
+          must_not_contain: ['re:(you don''t|you do not) like coffee']
+          rubric: He drinks tea now (mostly green); he likes coffee but has stopped drinking it.

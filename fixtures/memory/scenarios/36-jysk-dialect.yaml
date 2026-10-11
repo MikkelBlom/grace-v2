@@ -1,0 +1,38 @@
+id: 36-jysk-dialect
+title: West Jutlandic phrasing as an STT would half-normalise it
+categories: [dialect, extraction]
+persona: >
+  Mikkel home in Thy for the weekend; he slips into Jysk ("a" for jeg, "æ" for den/det, "te" for
+  til), and the transcript keeps some of it.
+sessions:
+  - start: "2026-10-30T16:00:00+01:00"
+    turns:
+      - user: "a ska hjem te min mor i thisted i weekenden"
+        grace: "Going home to your mum in Thisted, nice."
+      - user: "hun hår købt en ny bil æ er en elbil en polestar"
+        grace: "A Polestar, nice electric car."
+      - user: "og min lillebror mathias han går på æ efterskole i hurup"
+        grace: "Your little brother Mathias at boarding school in Hurup, okay."
+    expect:
+      facts_present:
+        - assert: Mikkel's mother lives in Thisted.
+          match: [[mother, mom, mum, mor], [thisted]]
+        - assert: His mother has bought an electric Polestar.
+          match: [[polestar]]
+        - assert: Mikkel's younger brother Mathias attends an efterskole in Hurup.
+          match: [[mathias], [brother, bror], [hurup, efterskole, boarding school]]
+      facts_absent:
+        - assert: Dialect words are not misread as names or places.
+          match: [['re:\bæ\b', 're:\bhår\b', 're:\bska\b']]
+          scope: ever
+  - start: "2026-11-02T09:00:00+01:00"
+    turns:
+      - user: "det var en go tur hjem"
+        grace: "Good to hear it was a nice trip."
+    expect:
+      probe_at: "2026-11-03T09:00:00+01:00"
+      probes:
+        - question: "hvor går mathias i skole"
+          expect: [[hurup]]
+        - question: "hvad kører min mor i"
+          expect: [[polestar]]

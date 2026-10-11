@@ -1,0 +1,39 @@
+id: 11-colleague-name-correction
+title: Colleague's name corrected mid-session, with colloquial filler
+categories: [same_session_correction, dialect, extraction]
+persona: >
+  Mikkel works part-time as a student developer. Talks about a new colleague; mixes up names and
+  speaks loosely ("øh", "altså", "ham der").
+sessions:
+  - start: "2026-10-14T16:30:00+02:00"
+    turns:
+      - user: "øh vi har fået en ny på arbejdet han hedder mads"
+        grace: "A new colleague, Mads. What does he do?"
+      - user: "altså undskyld magnus han hedder magnus mads er ham der fra regnskab"
+        grace: "Got it, the new one is Magnus; Mads is from accounting."
+      - user: "magnus er backend udvikler og han er fra norge"
+        grace: "A Norwegian backend developer, nice."
+    expect:
+      facts_present:
+        - assert: Mikkel's new colleague Magnus is a backend developer from Norway.
+          match: [[magnus], [backend, norway, norge, norwegian]]
+        - assert: Mads works in accounting.
+          match: [[mads], [accounting, regnskab, finance]]
+      facts_absent:
+        - assert: Mads is not recorded as the new colleague / backend developer.
+          match: [[mads], [new colleague, backend, norway, norge, norwegian]]
+      probes:
+        - question: "hvad hedder ham den nye backend udvikler"
+          expect: [[magnus]]
+          must_not_contain: ['re:\bmads\b (is|er) (the|den) (new|nye)']
+  - start: "2026-10-21T16:00:00+02:00"
+    turns:
+      - user: "magnus og jeg skal parprogrammere i morgen"
+        grace: "Pair programming with Magnus tomorrow, sounds fun."
+    expect:
+      probe_at: "2026-10-22T08:30:00+02:00"
+      probes:
+        - question: "hvor er magnus fra"
+          expect: [[norway, norge, norwegian]]
+        - question: "hvad laver mads"
+          expect: [[accounting, regnskab, finance]]

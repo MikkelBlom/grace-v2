@@ -1,0 +1,48 @@
+id: 31-tv-in-background
+title: TV speech that leaked into STT is not Mikkel's life
+categories: [stt_garbled, extraction]
+persona: >
+  Friday evening with the TV on. Two news lines reach the transcript as if Mikkel said them
+  (echo cancellation only removes what the PC plays, not a separate TV).
+sessions:
+  - start: "2026-10-23T19:55:00+02:00"
+    turns:
+      - user: "og nu til vejret i morgen bliver det regnvejr over hele landet med op til tyve millimeter"
+        grace: "Sounds like a wet Saturday."
+        stt_garbled: true
+        stt_logprob: -0.6
+      - user: "vi ser altid vild med dans fredag aften emma og jeg"
+        grace: "Cosy Friday tradition!"
+      - user: "statsministeren har i dag meddelt at hun går af til nytår"
+        grace: "That's big news."
+        stt_garbled: true
+        stt_logprob: -0.65
+    expect:
+      facts_present:
+        - assert: Mikkel and Emma always watch Vild med Dans on Friday evenings.
+          match: [[vild med dans, dancing], [friday, fredag]]
+      facts_absent:
+        - assert: No weather forecast stored.
+          match: [[rain, regn, millimet]]
+          scope: ever
+        - assert: No news about the prime minister stored.
+          match: [[prime minister, statsminister, resign, går af]]
+          scope: ever
+  - start: "2026-10-30T20:00:00+01:00"
+    turns:
+      - user: "så er det fredag igen"
+        grace: "Vild med Dans tonight?"
+      - user: "ja selvfølgelig"
+        grace: "Enjoy it with Emma."
+    expect:
+      facts_present:
+        - assert: The Friday habit is stored once.
+          match: [[vild med dans, dancing], [friday, fredag]]
+          max_count: 1
+      probe_at: "2026-10-31T10:00:00+01:00"
+      probes:
+        - question: "hvad laver jeg og emma om fredagen"
+          expect: [[vild med dans, dancing]]
+        - question: "hvad ved du om statsministeren"
+          must_not_contain: ['re:(resign|stepping down|går af)']
+          rubric: The news line was TV audio; Grace must not present it as something Mikkel told her.

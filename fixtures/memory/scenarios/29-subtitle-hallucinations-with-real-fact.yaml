@@ -1,0 +1,48 @@
+id: 29-subtitle-hallucinations-with-real-fact
+title: Subtitle/outro hallucinations around a real setup fact
+categories: [stt_garbled, extraction]
+persona: >
+  Mikkel's PC setup. Long pauses while he plugs in a monitor make Whisper produce subtitle credits.
+sessions:
+  - start: "2026-10-18T14:00:00+02:00"
+    turns:
+      - user: "jeg har købt en ny skærm en lg på toogtredive tommer"
+        grace: "Nice, a 32-inch LG. Is it 4K?"
+      - user: "Tekstet af Dansk Video Tekst"
+        grace: "Sorry?"
+        stt_garbled: true
+      - user: "ja den er fire k"
+        grace: "That'll be great for coding."
+      - user: "Tak for at se med. Husk at abonnere."
+        grace: "Sorry, I didn't catch that."
+        stt_garbled: true
+    expect:
+      facts_present:
+        - assert: Mikkel has a new 32-inch 4K LG monitor.
+          match: [[lg], ['re:\b32\b|thirty-two|toogtredive', 4k]]
+          kind_hint: environment
+      facts_absent:
+        - assert: Nothing from the subtitle credit.
+          match: [[dansk video tekst, subtitle, tekstet, caption]]
+          scope: ever
+        - assert: Nothing from the subscribe outro.
+          match: [[subscribe, abonnere, watching, se med]]
+          scope: ever
+  - start: "2026-10-19T09:00:00+02:00"
+    turns:
+      - user: "Undertekster af Nicolai Winther"
+        grace: "Sorry, could you repeat that?"
+        stt_garbled: true
+      - user: "skærmen flimrer lidt når den kører på hundrede og fyrre hertz"
+        grace: "Try a different DisplayPort cable or lower it to 120 Hz."
+    expect:
+      facts_absent:
+        - assert: Nothing from the subtitle hallucination.
+          match: [[nicolai, winther, undertekst, subtitle]]
+          scope: ever
+      probe_at: "2026-10-20T10:00:00+02:00"
+      probes:
+        - question: "hvilken skærm har jeg"
+          expect: [[lg], ['re:\b32\b|thirty-two', 4k]]
+        - question: "hvad betyder dansk video tekst for mig"
+          abstain: true

@@ -1,0 +1,61 @@
+id: 02-live-reminder-not-surfaced
+title: Requested follow-up about an assignment is raised next session, then closed
+categories: [commitment, temporal, multi_session]
+persona: >
+  Mikkel, student. Asks Grace to ask him later about an assignment due 16 November.
+live_failure: >
+  Live memory run 2 (2026-10-11): "spørg mig senere om detaljerne" was stored as an ordinary fact,
+  buried in the list, and never brought up in the next session.
+sessions:
+  - start: "2026-10-11T21:10:00+02:00"
+    turns:
+      - user: "jeg skal aflevere en opgave den sekstende november spørg mig senere om detaljerne for jeg glemmer det"
+        grace: "Got it, I'll ask you about the details later."
+      - user: "godnat grace"
+        grace: "Good night, Mikkel."
+    expect:
+      facts_present:
+        - assert: Mikkel has an assignment due 16 November 2026.
+          match: [[assignment, opgave, hand-in, aflevering], ['re:\b16(th|\.)?\b', sixteenth], [november, nov]]
+      commitments_open:
+        - assert: Grace should ask Mikkel for the details of the 16 November assignment.
+          match: [[assignment, opgave, hand-in, aflevering], [detail, detaljer]]
+          due: "2026-10-12"
+      probes:
+        - question: "godmorgen grace"
+          proactive: true
+          expect: [[assignment, opgave, hand-in, aflevering], [detail, 're:\b16(th)?\b', november, tell me more, what is it]]
+          rubric: Grace brings up the 16 November assignment and asks for the details without being prompted.
+  - start: "2026-10-12T08:45:00+02:00"
+    turns:
+      - user: "godmorgen grace"
+        grace: "Good morning! You asked me to remind you: what are the details of the assignment due on the 16th of November?"
+      - user: "nåh ja det er en rapport i softwarearkitektur på ti sider og vi er tre i gruppen"
+        grace: "A ten-page software architecture report in a group of three. Noted."
+      - user: "fedt tak"
+        grace: "You're welcome."
+    expect:
+      commitments_done:
+        - assert: The ask-about-details follow-up is closed because Mikkel gave the details.
+          match: [[assignment, opgave, hand-in, aflevering], [detail, detaljer]]
+      facts_present:
+        - assert: The 16 November assignment is a 10-page software architecture report.
+          match: [[software architecture, softwarearkitektur], [report, rapport, assignment]]
+        - assert: Mikkel works on it in a group of three.
+          match: [[group, gruppe], ['re:\b(three|3|tre)\b']]
+  - start: "2026-10-19T14:00:00+02:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel, how's the architecture report going?"
+      - user: "det går fint vi har skrevet fire sider"
+        grace: "Four of ten pages, nice progress."
+    expect:
+      probe_at: "2026-11-15T10:00:00+01:00"
+      probes:
+        - question: "hvornår skal jeg aflevere min rapport"
+          expect: [['re:\b16(th|\.)?\b', sixteenth, tomorrow, i morgen]]
+          rubric: Due 16 November, i.e. tomorrow relative to the probe time.
+        - question: "hej grace"
+          proactive: true
+          must_not_contain: ['re:what are the details']
+          rubric: The details were already given; Grace must not ask for them again.

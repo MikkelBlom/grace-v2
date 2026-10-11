@@ -104,6 +104,9 @@ struct SttItem {
     cer: f64,
     runner_ms: Option<f64>,
     wall_ms: f64,
+    /// Whisper's own confidence, when the runner reports it (for hallucination filters).
+    avg_logprob: Option<f64>,
+    no_speech_prob: Option<f64>,
     error: Option<String>,
 }
 
@@ -190,6 +193,7 @@ fn run_stt(
     let mut items = Vec::new();
     let (mut words, mut chars) = (ErrorCount::default(), ErrorCount::default());
     let mut audio_total = 0.0;
+    let (mut silent_clips, mut hallucinated) = (0usize, 0usize);
     for (i, clip) in clips.iter().enumerate() {
         let audio = absolute(&base.join(&clip.audio))?;
         let audio_s = wav_seconds(&audio).unwrap_or(0.0);
@@ -208,8 +212,16 @@ fn run_stt(
             word_errors(&clip.text, &hypothesis),
             char_errors(&clip.text, &hypothesis),
         );
-        words = words.add(w);
-        chars = chars.add(c);
+        // Clips without words (noise, echo, media) measure hallucination, not WER.
+        if clip.text.trim().is_empty() {
+            silent_clips += 1;
+            if !hypothesis.trim().is_empty() {
+                hallucinated += 1;
+            }
+        } else {
+            words = words.add(w);
+            chars = chars.add(c);
+        }
         audio_total += audio_s;
         eprintln!(
             "[{label}] {}/{} {} wer={:.2} {:.0} ms",
@@ -229,6 +241,8 @@ fn run_stt(
             cer: c.rate(),
             runner_ms: reply.get("ms").and_then(Value::as_f64),
             wall_ms,
+            avg_logprob: reply.get("avg_logprob").and_then(Value::as_f64),
+            no_speech_prob: reply.get("no_speech_prob").and_then(Value::as_f64),
             error,
         });
     }
@@ -246,6 +260,8 @@ fn run_stt(
         "errors": items.iter().filter(|i| i.error.is_some()).count(),
         "wer": words.rate(),
         "cer": chars.rate(),
+        "silent_clips": silent_clips,
+        "hallucinated": hallucinated,
         "p50_ms": percentile(&latencies, 50.0),
         "p95_ms": percentile(&latencies, 95.0),
         "rtf": if audio_total > 0.0 { infer_total / 1000.0 / audio_total } else { 0.0 },

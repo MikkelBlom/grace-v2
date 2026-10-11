@@ -1,0 +1,49 @@
+id: 21-badminton-stale-summary
+title: Stopped hobby mentioned by Grace from an old summary is not re-learned
+categories: [self_echo, knowledge_update, multi_session]
+persona: >
+  Mikkel swaps Thursday badminton for bouldering. Session summaries from the badminton weeks
+  still exist when Grace greets him.
+sessions:
+  - start: "2026-10-12T18:00:00+02:00"
+    turns:
+      - user: "jeg spiller badminton i odense badmintonklub hver torsdag"
+        grace: "Thursday badminton, nice way to stay active."
+      - user: "ja vi er en fast gruppe på fire"
+        grace: "Sounds fun."
+    expect:
+      facts_present:
+        - assert: Mikkel plays badminton every Thursday at Odense Badmintonklub.
+          match: [[badminton], [thursday, torsdag]]
+  - start: "2026-10-28T19:00:00+01:00"
+    turns:
+      - user: "jeg er stoppet med badminton jeg er begyndt at klatre i stedet i blocs and walls"
+        grace: "Bouldering, cool! How do you like it?"
+      - user: "det er sindssygt sjovt men mine underarme er smadrede"
+        grace: "That's normal at the start."
+    expect:
+      facts_invalidated:
+        - assert: Mikkel no longer plays badminton on Thursdays.
+          match: [[badminton], [thursday, torsdag, plays, spiller]]
+          exclude: [stopped, quit, no longer, instead, used to, formerly]
+      facts_present:
+        - assert: Mikkel climbs / boulders at Blocs & Walls.
+          match: [[climb, boulder, klatre, blocs]]
+  - start: "2026-11-05T17:30:00+01:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel! It's Thursday, are you off to badminton tonight?"
+      - user: "mm"
+        grace: "Have fun."
+      - user: "hvad var det nu jeg skulle købe"
+        grace: "I'm not sure, you didn't tell me."
+    expect:
+      facts_absent:
+        - assert: Badminton is not current again because Grace mentioned it.
+          match: [[badminton]]
+          exclude: [stopped, quit, no longer, instead, used to, formerly]
+      probe_at: "2026-11-06T09:00:00+01:00"
+      probes:
+        - question: "hvilken sport dyrker jeg"
+          expect: [[climb, boulder, klatre, blocs]]
+          must_not_contain: ['re:you play badminton']

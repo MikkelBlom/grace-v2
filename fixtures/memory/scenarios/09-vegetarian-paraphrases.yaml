@@ -1,0 +1,43 @@
+id: 09-vegetarian-paraphrases
+title: Same fact said three ways is stored once
+categories: [duplicate, dialect]
+persona: >
+  Mikkel is vegetarian and says so in three different colloquial ways over three sessions.
+sessions:
+  - start: "2026-10-12T17:30:00+02:00"
+    turns:
+      - user: "jeg spiser ikke kød"
+        grace: "Noted, no meat. Do you eat fish?"
+      - user: "nej heller ikke fisk"
+        grace: "Okay, vegetarian then."
+    expect:
+      facts_present:
+        - assert: Mikkel is vegetarian (no meat, no fish).
+          match: [[vegetarian, vegetar, meat, kød]]
+  - start: "2026-10-19T17:45:00+02:00"
+    turns:
+      - user: "du ved jo godt jeg er vegetar ikke"
+        grace: "Yes, you don't eat meat or fish."
+      - user: "hvad kan jeg lave med kikærter"
+        grace: "A chickpea curry with coconut milk and spinach is quick."
+    expect:
+      facts_present:
+        - assert: Still one vegetarian fact.
+          match: [[vegetarian, vegetar, meat, kød]]
+          max_count: 1
+  - start: "2026-10-28T18:10:00+01:00"
+    turns:
+      - user: "jeg rører sgu ikke kød det ved du"
+        grace: "I know, vegetarian. What are you in the mood for?"
+      - user: "noget med pasta"
+        grace: "Pasta with roasted vegetables and feta?"
+    expect:
+      facts_present:
+        - assert: Still exactly one vegetarian fact after three paraphrases.
+          match: [[vegetarian, vegetar, meat, kød]]
+          max_count: 1
+      probe_at: "2026-10-29T17:00:00+01:00"
+      probes:
+        - question: "kan du foreslå en aftensmad til i aften"
+          must_not_contain: [chicken, kylling, beef, oksekød, bacon, pork, svinekød, salmon, laks, tuna, tun, shrimp, rejer]
+          rubric: Suggests a vegetarian dish with no meat or fish.

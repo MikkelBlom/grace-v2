@@ -1,0 +1,55 @@
+id: 03-live-interrupted-fact
+title: Facts in a turn whose reply was interrupted are still learned
+categories: [interrupted, extraction, knowledge_update]
+persona: >
+  Mikkel tells Grace about his best friend Jonas and Jonas's new puppy, cutting her off.
+live_failure: >
+  Live memory run 3 (2026-10-11): learning only ran after a completed reply, so facts from turns
+  where Mikkel barged in were never stored.
+sessions:
+  - start: "2026-10-14T17:20:00+02:00"
+    turns:
+      - user: "min bedste ven jonas har lige fået en hundehvalp den hedder bølle"
+        grace: "Oh how lovely! A puppy is so much fun, what breed is"
+        interrupted: true
+      - user: "det er en beagle og han bor i vejle"
+        grace: "A beagle in Vejle, cute. Puppies at that age need a lot of"
+        interrupted: true
+      - user: "nå men hvad er klokken"
+        grace: "It's twenty past five."
+    expect:
+      facts_present:
+        - assert: Mikkel's best friend is Jonas.
+          match: [[jonas], [best friend, bedste ven, friend]]
+        - assert: Jonas has a beagle puppy called Bølle.
+          match: [[bølle, bolle, boelle], [puppy, dog, hund, hvalp, beagle]]
+        - assert: Jonas lives in Vejle.
+          match: [[jonas], [vejle]]
+      facts_absent:
+        - assert: Grace's half-sentence about puppy care is not stored.
+          match: [[puppies at that age, need a lot]]
+          scope: ever
+      probes:
+        - question: "hvad hedder jonas' hund"
+          expect: [[bølle, bolle]]
+  - start: "2026-10-21T19:00:00+02:00"
+    turns:
+      - user: "jonas har omdøbt hunden den hedder bobby nu fordi bølle var for svært for hans kæreste at sige"
+        grace: "Ha, Bobby it is then. That's a much easier"
+        interrupted: true
+      - user: "ja ja det er fint"
+        grace: "Okay."
+    expect:
+      facts_present:
+        - assert: Jonas's dog is now called Bobby.
+          match: [[bobby], [dog, puppy, hund, beagle, jonas]]
+          max_count: 1
+      facts_invalidated:
+        - assert: The dog is no longer called Bølle.
+          match: [[bølle, bolle, boelle], [dog, puppy, hund, hvalp, beagle, called]]
+          exclude: [formerly, previously, renamed, used to, was called, no longer, instead]
+      probe_at: "2026-10-30T12:00:00+01:00"
+      probes:
+        - question: "hvad hedder jonas' hund"
+          expect: [[bobby]]
+          rubric: Bobby (formerly Bølle). Mentioning the old name as history is fine.

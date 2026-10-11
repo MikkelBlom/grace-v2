@@ -1,0 +1,39 @@
+id: 13-concert-and-cinema-dates
+title: '"I går" and "i fredags" resolved to dates; order of past events'
+categories: [temporal, multi_session]
+persona: >
+  Mikkel's free time: a concert and a cinema trip, both mentioned after the fact with relative
+  dates.
+sessions:
+  - start: "2026-10-20T11:00:00+02:00"
+    turns:
+      - user: "i går var jeg til koncert med mø i royal arena sammen med ida"
+        grace: "Oh fun, MØ at Royal Arena! How was it?"
+      - user: "den var vildt god"
+        grace: "Sounds like a great night."
+    expect:
+      facts_present:
+        - assert: On 19 October 2026 Mikkel saw MØ in concert at Royal Arena with Ida.
+          match: [[mø, 'concert', koncert], ['re:\b19(th|\.)?\b|2026-10-19|monday|mandag']]
+      facts_absent:
+        - assert: The concert is not dated to today (20 October).
+          match: [[mø, concert, koncert], ['re:\b20(th|\.)? oct|oct(ober)? 20\b|2026-10-20']]
+  - start: "2026-11-02T18:00:00+01:00"
+    turns:
+      - user: "i fredags var jeg i biografen og så den nye dune film"
+        grace: "Nice, how was Dune?"
+      - user: "lidt for lang men flot"
+        grace: "They usually are."
+    expect:
+      facts_present:
+        - assert: On Friday 30 October 2026 Mikkel saw the new Dune film at the cinema.
+          match: [[dune], [cinema, biograf, movie, film], ['re:\b30(th|\.)?\b|2026-10-30|friday|fredag']]
+      probe_at: "2026-11-03T10:00:00+01:00"
+      probes:
+        - question: "hvad var jeg til først koncerten eller biografen"
+          expect: [[concert, koncert, mø]]
+          rubric: The concert (19 October) came before the cinema (30 October).
+        - question: "hvem var jeg til koncert med"
+          expect: [[ida]]
+        - question: "hvornår var jeg til koncert sidst"
+          expect: [['re:\b19(th|\.)?\b'], [october, oktober, oct]]

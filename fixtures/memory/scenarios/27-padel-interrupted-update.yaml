@@ -1,0 +1,38 @@
+id: 27-padel-interrupted-update
+title: A hobby and its later change both arrive in interrupted turns
+categories: [interrupted, knowledge_update]
+persona: >
+  Mikkel starts playing padel with colleagues; later the day moves.
+sessions:
+  - start: "2026-11-02T17:00:00+01:00"
+    turns:
+      - user: "jeg er begyndt at spille padel hver tirsdag med nogen fra arbejdet"
+        grace: "Padel with your colleagues every Tuesday, that's a great way to get to know"
+        interrupted: true
+      - user: "kan du sætte en timer på ti minutter"
+        grace: "Timer set for ten minutes."
+    expect:
+      facts_present:
+        - assert: Mikkel plays padel every Tuesday with colleagues.
+          match: [[padel], [tuesday, tirsdag]]
+  - start: "2026-11-16T18:00:00+01:00"
+    turns:
+      - user: "padel er rykket til onsdag fra næste uge fordi banen var optaget"
+        grace: "Wednesdays from next week then. Do you still play with the same"
+        interrupted: true
+      - user: "ja samme folk"
+        grace: "Good."
+    expect:
+      facts_present:
+        - assert: Padel is on Wednesdays (from the week of 23 November 2026).
+          match: [[padel], [wednesday, onsdag]]
+          max_count: 1
+      facts_absent:
+        - assert: Tuesday padel is not current.
+          match: [[padel], [tuesday, tirsdag]]
+          exclude: [moved, instead, no longer, previously, formerly, rykket, from tuesday]
+      probe_at: "2026-11-24T08:00:00+01:00"
+      probes:
+        - question: "hvilken dag spiller jeg padel"
+          expect: [[wednesday, onsdag]]
+          must_not_contain: ['re:(on|every) tuesdays?']

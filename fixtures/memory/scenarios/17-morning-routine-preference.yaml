@@ -1,0 +1,54 @@
+id: 17-morning-routine-preference
+title: Preference about Grace herself replaced; nickname added
+categories: [knowledge_update, extraction]
+persona: >
+  How Mikkel wants Grace to behave: morning greeting contents and what to call him.
+sessions:
+  - start: "2026-10-12T07:30:00+02:00"
+    turns:
+      - user: "når jeg siger godmorgen vil jeg gerne have at du fortæller hvordan vejret bliver"
+        grace: "Okay, I'll include the weather when you say good morning."
+      - user: "og du må gerne kalde mig mikke"
+        grace: "Sure, Mikke."
+    expect:
+      facts_present:
+        - assert: Mikkel wants the weather forecast when he says good morning.
+          match: [[weather, vejr], [morning, godmorgen]]
+          kind_hint: preference
+        - assert: Mikkel likes to be called Mikke.
+          match: [[mikke]]
+          kind_hint: preference
+  - start: "2026-10-19T07:35:00+02:00"
+    turns:
+      - user: "godmorgen"
+        grace: "Good morning, Mikke! Today will be cloudy with a chance of rain, around eleven degrees."
+      - user: "drop vejret om morgenen det irriterer mig sig hellere hvad jeg har i kalenderen"
+        grace: "Got it: no weather in the morning, your calendar instead."
+    expect:
+      facts_invalidated:
+        - assert: The weather-in-the-morning preference is no longer current.
+          match: [[weather, vejr], [morning, godmorgen]]
+          exclude: [instead, no longer, not the weather, rather than, stopped, drop, no weather]
+      facts_present:
+        - assert: In the morning Mikkel wants his calendar, not the weather.
+          match: [[calendar, kalender, schedule], [morning, godmorgen]]
+          kind_hint: preference
+        - assert: The nickname preference is untouched.
+          match: [[mikke]]
+      facts_absent:
+        - assert: Today's forecast spoken by Grace is not stored.
+          match: [[cloudy, rain, eleven degrees, overskyet, regn]]
+          scope: ever
+  - start: "2026-10-26T07:40:00+01:00"
+    turns:
+      - user: "hvad skal du sige når jeg siger godmorgen"
+        grace: "What's in your calendar today, Mikke."
+    expect:
+      probe_at: "2026-10-27T07:30:00+01:00"
+      probes:
+        - question: "godmorgen grace"
+          proactive: true
+          must_not_contain: [weather, degrees, rain, cloudy, sunny, forecast]
+          rubric: Greets Mikkel (ideally as Mikke) and offers the calendar; no weather.
+        - question: "hvad må du kalde mig"
+          expect: [[mikke]]

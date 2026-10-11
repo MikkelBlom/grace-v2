@@ -460,6 +460,7 @@ dependencies = [
  "anyhow",
  "base64",
  "chrono",
+ "clap",
  "futures-util",
  "grace-audio",
  "grace-core",

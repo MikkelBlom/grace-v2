@@ -1,0 +1,62 @@
+id: 01-live-stale-exam-self-echo
+title: Cancelled exam must not come back from Grace's own words
+categories: [knowledge_update, self_echo, temporal, multi_session]
+persona: >
+  Mikkel, software engineering student. Study topic: a databases exam that gets cancelled and
+  turned into a hand-in.
+live_failure: >
+  Live memory run 2 (2026-10-11): the exam was invalidated, an old session summary still mentioned
+  it, Grace said "you have a database exam on December fourteenth", and learning re-stored it.
+sessions:
+  - start: "2026-10-12T19:30:00+02:00"
+    turns:
+      - user: "hej grace hvordan går det"
+        grace: "Hi Mikkel, I'm good. How about you?"
+      - user: "jeg har en eksamen i databaser den fjortende december"
+        grace: "Good luck with the database exam on the 14th of December."
+      - user: "tak det bliver hårdt"
+        grace: "You'll be fine. We can plan some revision if you like."
+    expect:
+      facts_present:
+        - assert: Mikkel has a databases exam on 14 December 2026.
+          match: [[database, databaser], [exam, eksamen], ['re:\b14(th|\.)?\b', fourteenth], [december, dec]]
+          max_count: 1
+      probes:
+        - question: "hvornår er min eksamen i databaser"
+          expect: [['re:\b14(th|\.)?\b', fourteenth], [december]]
+  - start: "2026-10-20T18:00:00+02:00"
+    turns:
+      - user: "eksamenen i databaser er blevet aflyst de laver det om til en aflevering i stedet"
+        grace: "Oh, so no exam, it's a hand-in instead. Do you know the deadline yet?"
+      - user: "nej det har de ikke sagt endnu"
+        grace: "Okay, tell me when you hear and I'll keep track of it."
+    expect:
+      facts_invalidated:
+        - assert: The 14 December databases exam is no longer current.
+          match: [[database, databaser], ['re:\b(exam|eksamen)\b'], ['re:\b14(th|\.)?\b', fourteenth]]
+          exclude: [instead, cancel, replaced, no longer, aflyst]
+      facts_present:
+        - assert: Databases is now assessed by a hand-in (deadline unknown).
+          match: [[database, databaser], [hand-in, handin, assignment, aflevering, project, submission]]
+  - start: "2026-10-27T10:00:00+01:00"
+    turns:
+      - user: "hvad skal vi lave i dag"
+        grace: "You have a database exam on December fourteenth, so let's study for that."
+      - user: "okay"
+        grace: "Great, where do you want to start?"
+      - user: "måske normalisering"
+        grace: "Good choice. Let's start with first normal form."
+    expect:
+      facts_absent:
+        - assert: No current fact says there is a databases exam on 14 December (Grace's stale words must not re-add it).
+          match: [[database, databaser], ['re:\b(exam|eksamen)\b'], ['re:\b14(th|\.)?\b', fourteenth]]
+          exclude: [instead, cancel, replaced, no longer, aflyst]
+      facts_present:
+        - assert: The hand-in fact is still current.
+          match: [[database, databaser], [hand-in, handin, assignment, aflevering, project, submission]]
+      probe_at: "2026-10-28T09:00:00+01:00"
+      probes:
+        - question: "har jeg nogen eksamener i december"
+          expect: [[cancel, aflyst, no longer, "no exam", hand-in, handin, assignment, aflevering, "don't have"]]
+          must_not_contain: ['re:you have (a|your|the) databases? exam']
+          rubric: Grace says the databases exam was cancelled / replaced by a hand-in; she must not claim an exam on 14 December.

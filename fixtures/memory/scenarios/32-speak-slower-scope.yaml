@@ -1,0 +1,42 @@
+id: 32-speak-slower-scope
+title: '"Snak lidt langsommere" now vs "tal altid langsommere"'
+categories: [momentary_command, multi_session]
+persona: >
+  Mikkel adjusts how Grace talks: first in the moment, later as a lasting wish.
+sessions:
+  - start: "2026-10-19T08:00:00+02:00"
+    turns:
+      - user: "hvad står der i min kalender i dag"
+        grace: "At ten you have a lecture, at one a group meeting, and at four"
+      - user: "snak lidt langsommere"
+        grace: "Sorry. At ten: lecture. At one: group meeting. At four: padel."
+      - user: "skru lige op"
+        grace: "Volume up."
+      - user: "gentag lige det sidste"
+        grace: "At four: padel."
+    expect:
+      facts_absent:
+        - assert: No lasting speaking-rate preference from a one-off request.
+          match: [[slow, langsom, pace, speed, tempo]]
+        - assert: No volume preference.
+          match: [[volume, loud, lydstyrke, skru op]]
+        - assert: No preference from "repeat".
+          match: [[repeat, gentag]]
+  - start: "2026-10-26T08:10:00+01:00"
+    turns:
+      - user: "du snakker generelt for hurtigt kan du ikke altid tale lidt langsommere"
+        grace: "Of course, I'll speak more slowly from now on."
+    expect:
+      facts_present:
+        - assert: Mikkel wants Grace to always speak more slowly.
+          match: [[slow, langsom, pace, speed, tempo]]
+          kind_hint: preference
+          max_count: 1
+      facts_absent:
+        - assert: Still no volume preference.
+          match: [[volume, loud, lydstyrke]]
+      probe_at: "2026-10-27T08:00:00+01:00"
+      probes:
+        - question: "hvordan vil jeg have at du taler"
+          expect: [[slow, langsom]]
+          must_not_contain: [louder, volume]

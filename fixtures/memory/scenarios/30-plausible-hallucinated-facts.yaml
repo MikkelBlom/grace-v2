@@ -1,0 +1,47 @@
+id: 30-plausible-hallucinated-facts
+title: Grammatical, fact-shaped transcripts with low STT confidence store nothing
+categories: [stt_garbled, abstention]
+persona: >
+  The hardest STT case: low-confidence transcripts that read like real personal facts. Their
+  stt_logprob is far below the gate; nothing in them was said by Mikkel.
+sessions:
+  - start: "2026-10-24T11:00:00+02:00"
+    turns:
+      - user: "jeg sidder bare og rydder op på skrivebordet"
+        grace: "Good idea, a clean desk helps."
+      - user: "jeg har købt en hest i lørdags"
+        grace: "A horse? That's a big purchase!"
+        stt_garbled: true
+        stt_logprob: -0.82
+      - user: "hvad"
+        grace: "You said you bought a horse on Saturday."
+      - user: "nej det har jeg ikke sagt"
+        grace: "Sorry, I must have misheard."
+    expect:
+      facts_absent:
+        - assert: No horse.
+          match: [[horse, hest]]
+          scope: ever
+      probes:
+        - question: "har jeg nogen dyr"
+          abstain: true
+          must_not_contain: [horse, hest]
+          rubric: No animals were ever stated; Grace must not mention the misheard horse as fact.
+  - start: "2026-10-25T15:00:00+01:00"
+    turns:
+      - user: "min bror hedder anders og han bor i spanien"
+        grace: "Anders in Spain, noted."
+        stt_garbled: true
+        stt_logprob: -0.78
+      - user: "hvad er klokken"
+        grace: "It's three o'clock."
+    expect:
+      facts_absent:
+        - assert: No brother Anders in Spain from a low-confidence transcript.
+          match: [[anders, brother, bror, spain, spanien]]
+          scope: ever
+      probe_at: "2026-10-26T10:00:00+01:00"
+      probes:
+        - question: "hvor bor min bror"
+          abstain: true
+          must_not_contain: [spain, spanien, anders]

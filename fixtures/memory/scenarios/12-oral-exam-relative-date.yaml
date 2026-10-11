@@ -1,0 +1,49 @@
+id: 12-oral-exam-relative-date
+title: '"Mandag i næste uge" resolved to a date; days-until answered later'
+categories: [temporal, extraction, commitment]
+persona: >
+  Mikkel has an oral exam in machine learning. He states it with a relative date and asks Grace
+  to check in the day before.
+sessions:
+  - start: "2026-11-04T10:00:00+01:00"
+    turns:
+      - user: "på mandag i næste uge har jeg mundtlig eksamen i machine learning"
+        grace: "Monday the 9th of November, the oral ML exam. How do you feel about it?"
+      - user: "lidt nervøs spørg mig om søndagen hvordan jeg har det"
+        grace: "I'll check in on Sunday."
+    expect:
+      facts_present:
+        - assert: Mikkel has an oral machine learning exam on Monday 9 November 2026.
+          match: [[machine learning, ml], [oral, mundtlig, exam, eksamen], ['re:\b9(th|\.)?\b|ninth|2026-11-09']]
+      commitments_open:
+        - assert: On Sunday 8 November Grace should ask how Mikkel feels about the oral exam.
+          match: [[exam, eksamen, machine learning, ml], [feel, ask, check, har det, nervous, nervøs]]
+          due: "2026-11-08"
+      facts_absent:
+        - assert: The date is not stored as the 2nd (this Monday) or 16th.
+          match: [[machine learning, ml], ['re:\b(2|16)(nd|th|\.)? nov|nov(ember)? (2|16)\b']]
+  - start: "2026-11-06T09:00:00+01:00"
+    turns:
+      - user: "hvor mange dage er der til min mundtlige eksamen"
+        grace: "Three days, it's on Monday the 9th."
+    expect:
+      probes:
+        - question: "hej grace"
+          proactive: true
+          expect: [[exam, eksamen, machine learning, ml], [feel, how are you, nervous, ready, klar, tomorrow]]
+          rubric: On Sunday 8 November Grace checks in about tomorrow's oral exam without being asked.
+  - start: "2026-11-08T19:00:00+01:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel! Your oral ML exam is tomorrow. How are you feeling about it?"
+      - user: "det går faktisk okay jeg har læst det hele igennem"
+        grace: "That's great. Get some sleep tonight."
+    expect:
+      commitments_done:
+        - assert: The Sunday check-in has happened.
+          match: [[exam, eksamen, machine learning, ml], [feel, ask, check, har det, nervous, nervøs]]
+      probe_at: "2026-11-09T07:30:00+01:00"
+      probes:
+        - question: "hvornår er min eksamen"
+          expect: [[today, i dag]]
+          rubric: The oral exam is today (9 November).

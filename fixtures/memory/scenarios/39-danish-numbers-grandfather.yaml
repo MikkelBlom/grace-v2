@@ -1,0 +1,42 @@
+id: 39-danish-numbers-grandfather
+title: Vigesimal Danish numbers, corrected in the same breath
+categories: [dialect, same_session_correction, temporal]
+persona: >
+  Mikkel's grandfather (morfar) has a round birthday. Danish number words (halvfems = 90,
+  femoghalvfems = 95, tooghalvtreds = 52) must become the right numbers.
+sessions:
+  - start: "2026-11-18T19:00:00+01:00"
+    turns:
+      - user: "min morfar fylder halvfems på lørdag"
+        grace: "Ninety on Saturday, what a milestone!"
+      - user: "nej undskyld han fylder femoghalvfems halvfems var sidste fest"
+        grace: "Ninety-five, even better."
+      - user: "vi bliver tooghalvtreds til festen i forsamlingshuset"
+        grace: "Fifty-two guests, quite a party."
+    expect:
+      facts_present:
+        - assert: Mikkel's grandfather turns 95 on Saturday 21 November 2026.
+          match: [[grandfather, grandpa, morfar], ['re:\b(95|ninety-five)\b']]
+          max_count: 1
+        - assert: 52 guests at the party in the village hall.
+          match: [['re:\b(52|fifty-two)\b']]
+      facts_absent:
+        - assert: Turning 90 is not stored as the current age milestone.
+          match: [[grandfather, grandpa, morfar], ['re:\b90\b', 're:\bninety( |\.|,|$)']]
+          exclude: [last, previous, sidste, earlier]
+        - assert: No mis-parsed numbers (50 or 25 from halvtreds/fem).
+          match: [['re:\b(25|50)\b', 're:\b(twenty-five|fifty)( |\.|,|$)']]
+      probes:
+        - question: "hvor gammel bliver min morfar"
+          expect: [['re:\b(95|ninety-five)\b']]
+        - question: "hvornår er festen"
+          expect: [[saturday, lørdag, 're:\b21(st|\.)?\b']]
+  - start: "2026-11-22T12:00:00+01:00"
+    turns:
+      - user: "festen i går var helt fantastisk morfar holdt tale"
+        grace: "How lovely that he gave a speech."
+    expect:
+      probe_at: "2026-11-23T09:00:00+01:00"
+      probes:
+        - question: "hvor mange var vi til morfars fest"
+          expect: [['re:\b(52|fifty-two)\b']]

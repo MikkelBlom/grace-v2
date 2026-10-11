@@ -1,0 +1,39 @@
+id: 33-not-today-exam
+title: '"Gider ikke snakke om eksamen i dag" does not ban the topic forever'
+categories: [momentary_command, multi_session]
+persona: >
+  Mikkel has a compilers exam on 7 January 2027 and is stressed one evening.
+sessions:
+  - start: "2026-11-25T10:00:00+01:00"
+    turns:
+      - user: "min eksamen i compilere er den syvende januar"
+        grace: "Compilers exam on the 7th of January, noted."
+    expect:
+      facts_present:
+        - assert: Mikkel's compilers exam is on 7 January 2027.
+          match: [[compiler, compilere], ['re:\b7(th|\.)?\b|seventh'], [january, januar, jan]]
+  - start: "2026-12-02T21:00:00+01:00"
+    turns:
+      - user: "hej grace"
+        grace: "Hi Mikkel! Five weeks until your compilers exam. Want to plan some revision?"
+      - user: "jeg gider ikke snakke om eksamen i dag jeg er færdig"
+        grace: "Fair enough, no exam talk tonight."
+      - user: "find en god film"
+        grace: "How about Arrival? Calm and clever."
+    expect:
+      facts_absent:
+        - assert: No lasting rule against mentioning the exam.
+          match: [['re:(not|never|doesn''t|does not|don''t|avoid).{0,30}(mention|talk|discuss|bring up)']]
+      facts_present:
+        - assert: The exam fact is untouched.
+          match: [[compiler, compilere], ['re:\b7(th|\.)?\b|seventh']]
+  - start: "2026-12-09T10:00:00+01:00"
+    turns:
+      - user: "okay nu er jeg klar til at planlægge eksamenslæsning"
+        grace: "Great, four weeks until the 7th of January. Let's split it into topics."
+    expect:
+      probe_at: "2026-12-10T10:00:00+01:00"
+      probes:
+        - question: "hvornår er min eksamen"
+          expect: [['re:\b7(th|\.)?\b|seventh'], [january, januar, jan]]
+          must_not_contain: ["don't want to talk", "you didn't want"]

@@ -1,0 +1,46 @@
+id: 14-berlin-trip-and-birthday
+title: Trip and birthday from different sessions, asked about after one has passed
+categories: [temporal, multi_session, extraction]
+persona: >
+  Mikkel plans a Berlin trip with his friend Kasper and has his mother's 60th birthday coming up.
+sessions:
+  - start: "2026-10-13T20:00:00+02:00"
+    turns:
+      - user: "jeg skal til berlin med kasper fra den tredje til den sjette december"
+        grace: "Berlin from the 3rd to the 6th of December with Kasper, nice."
+      - user: "vi tager toget"
+        grace: "Good choice, it's a nice ride."
+    expect:
+      facts_present:
+        - assert: Mikkel goes to Berlin with Kasper 3-6 December 2026, by train.
+          match: [[berlin], ['re:\b3(rd|\.)?\b'], ['re:\b6(th|\.)?\b'], [december, dec]]
+        - assert: The Berlin trip is by train.
+          match: [[berlin, trip, rejse], [train, tog]]
+  - start: "2026-10-30T17:00:00+01:00"
+    turns:
+      - user: "min mor fylder tres den niende november"
+        grace: "Her 60th on the 9th of November, big day! Are you celebrating?"
+      - user: "ja vi holder fest hjemme hos hende i silkeborg"
+        grace: "Lovely, a party in Silkeborg."
+    expect:
+      facts_present:
+        - assert: Mikkel's mother turns 60 on 9 November 2026.
+          match: [[mother, mom, mor], ['re:\b(60|sixty|tres)\b'], ['re:\b9(th|\.)?\b|ninth']]
+        - assert: The party is at his mother's home in Silkeborg.
+          match: [[mother, mom, mor, party, fest], [silkeborg]]
+  - start: "2026-11-10T09:00:00+01:00"
+    turns:
+      - user: "festen i går var hyggelig"
+        grace: "I'm glad your mum's 60th went well."
+    expect:
+      probe_at: "2026-11-11T09:00:00+01:00"
+      probes:
+        - question: "hvad er det næste store jeg skal"
+          expect: [[berlin]]
+          must_not_contain: ['re:(mother|mum|mom).{0,40}(turns|is turning|will turn)']
+          rubric: The birthday is past; the next big event is Berlin on 3 December.
+        - question: "hvor gammel er min mor"
+          expect: [['re:\b(60|sixty)\b']]
+        - question: "hvor mange nætter er jeg i berlin"
+          expect: [['re:\b(3|three|tre)\b']]
+          rubric: 3 to 6 December is three nights.

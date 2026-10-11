@@ -1,0 +1,59 @@
+id: 07-two-sisters
+title: Two sisters are two people, not a duplicate; cousin mix-up corrected in-session
+categories: [duplicate, extraction, same_session_correction]
+persona: >
+  Mikkel has two sisters, Sofie and Ida, and a cousin Freja. Similar sentences about different
+  people must stay separate facts.
+sessions:
+  - start: "2026-10-13T18:00:00+02:00"
+    turns:
+      - user: "jeg har to søstre sofie og ida"
+        grace: "Two sisters, Sofie and Ida. Are you the oldest?"
+      - user: "nej ida er den ældste så kommer jeg og så sofie"
+        grace: "So Ida is the oldest, then you, then Sofie."
+      - user: "sofie bor i aarhus og ida bor i odense"
+        grace: "Sofie in Aarhus and Ida in Odense. Noted."
+    expect:
+      facts_present:
+        - assert: Sofie lives in Aarhus.
+          match: [[sofie], [aarhus, århus]]
+        - assert: Ida lives in Odense.
+          match: [[ida], [odense]]
+        - assert: Ida is the oldest sibling, Sofie the youngest.
+          match: [[ida, sofie], [oldest, eldest, ældste, youngest, yngste, older, younger]]
+      probes:
+        - question: "hvor bor ida"
+          expect: [[odense]]
+          must_not_contain: ['re:ida (lives|bor) in (aarhus|århus)']
+        - question: "hvor mange søstre har jeg"
+          expect: [['re:\b(two|2|to)\b'], [sofie], [ida]]
+  - start: "2026-10-20T19:15:00+02:00"
+    turns:
+      - user: "min søster freja har fået en lille dreng"
+        grace: "Congratulations! So Freja is a"
+        interrupted: true
+      - user: "nej undskyld freja er min kusine ikke min søster hun bor også i odense"
+        grace: "Ah, your cousin Freja in Odense has had a baby boy. Congratulations to her."
+      - user: "og ida har fået nyt job på syddansk universitet"
+        grace: "Nice, Ida works at SDU now."
+    expect:
+      facts_present:
+        - assert: Freja is Mikkel's cousin (not a sister) and has had a baby boy.
+          match: [[freja], [cousin, kusine]]
+        - assert: Ida works at the University of Southern Denmark (SDU).
+          match: [[ida], [sdu, syddansk, southern denmark]]
+        - assert: Ida still lives in Odense (not overwritten by Freja's Odense).
+          match: [[ida], [odense]]
+        - assert: Sofie still lives in Aarhus.
+          match: [[sofie], [aarhus, århus]]
+      facts_absent:
+        - assert: Freja is not a sister.
+          match: [[freja], [sister, søster]]
+      probe_at: "2026-10-21T09:00:00+02:00"
+      probes:
+        - question: "hvor mange søstre har jeg"
+          expect: [['re:\b(two|2|to)\b']]
+          must_not_contain: ['re:\b(three|3|tre)\b sisters']
+          rubric: Two sisters (Sofie, Ida). Freja is a cousin.
+        - question: "hvem af min familie bor i odense"
+          expect: [[ida], [freja]]

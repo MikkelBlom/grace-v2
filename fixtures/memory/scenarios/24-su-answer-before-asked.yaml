@@ -1,0 +1,45 @@
+id: 24-su-answer-before-asked
+title: Follow-up resolved by the user before Grace asks
+categories: [commitment, knowledge_update]
+persona: >
+  Mikkel is waiting for an answer on his SU (student grant) application and asks Grace to check
+  with him tomorrow; he brings it up himself first.
+sessions:
+  - start: "2026-10-20T21:00:00+02:00"
+    turns:
+      - user: "spørg mig i morgen om jeg har fået svar fra su"
+        grace: "Will do, I'll ask tomorrow."
+      - user: "det er min ansøgning om su lån"
+        grace: "The SU loan application, got it."
+    expect:
+      commitments_open:
+        - assert: Tomorrow (21 October) Grace asks whether Mikkel has heard back about his SU loan application.
+          match: [['re:\bsu\b']]
+          due: "2026-10-21"
+      facts_present:
+        - assert: Mikkel has applied for an SU loan and awaits an answer.
+          match: [['re:\bsu\b'], [loan, lån, application, ansøg]]
+  - start: "2026-10-21T08:15:00+02:00"
+    turns:
+      - user: "godmorgen jeg har fået svar fra su det er godkendt"
+        grace: "Good morning, and congratulations, the SU loan is approved!"
+      - user: "ja det er en lettelse"
+        grace: "I bet."
+    expect:
+      commitments_done:
+        - assert: The follow-up is closed without Grace having to ask.
+          match: [['re:\bsu\b']]
+      facts_present:
+        - assert: The SU loan was approved.
+          match: [['re:\bsu\b'], [approved, godkendt, granted]]
+      facts_invalidated:
+        - assert: Waiting for an answer is no longer current.
+          match: [['re:\bsu\b'], [await, waiting, venter, pending, "re:hasn't heard|not yet"]]
+      probe_at: "2026-10-22T08:00:00+02:00"
+      probes:
+        - question: "godmorgen grace"
+          proactive: true
+          must_not_contain: ['re:(heard|answer|svar) (back )?(from|about) (the )?su']
+          rubric: Grace must not ask about the SU answer again.
+        - question: "blev min su godkendt"
+          expect: [[approved, godkendt, "yes"]]

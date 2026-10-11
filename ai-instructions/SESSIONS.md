@@ -47,3 +47,10 @@ engine; silent self-test passes, startup 0.1 s.
 Windows Audio service stopped once (system issue, WSL memory pressure); huggingface_hub upgrade
 broke transformers in bench venv (pinned).
 **Next steps:** first live conversation (Mikkel), read its traces, tune turn-taking and latency.
+
+## 2026-10-11 — Claude Code (Opus 5.5): foundations research
+**Summary:** Mikkel asked whether the memory/listening fixes treat causes or symptoms. Three
+literature reviews (memory systems, Danish far-field STT, local fine-tuning) recorded in
+`docs/research/2026-10-11-foundations.md`. Found v1's personality spec in `config/personality.json`.
+**Issues encountered:** none; no code changed.
+**Next steps:** Mikkel decides on the proposed order (eval sets first). See WORKING_NOTES.

@@ -21,6 +21,16 @@
 - Piper ≈ 90 ms per sentence on CPU; quality is the known weak point.
 
 ## Open questions
+- **Foundations rethink pending Mikkel's go (2026-10-11).** Research in
+  `docs/research/2026-10-11-foundations.md` says several post-live-session fixes are symptom
+  patches: the "no longer true" prompt list, followup-as-fact-kind, distance dedupe deciding
+  merges, the avg_logprob -0.55 cutoff (calibrated on read speech), the hanging-word rule. Proposed
+  order: (1) labelled eval sets for STT (own turns) and memory (scripted multi-session), (2) STT
+  input fixes (linear AEC output for STT, VAD-trim, fp16 beam 5 temp 0, ekko cross-check),
+  (3) memory rebuilt as episode log = truth, facts = derived cache, commitments table, profile
+  rendered by code, (4) Smart Turn Danish fine-tune, (5) Røst v3 Chatterbox Danish TTS bake-off.
+- System prompt personality was written from live feedback, not v1's `config/personality.json`
+  (witty + warm, sharp friend, kind pushback). Merge both.
 - AEC option A (Windows comms AEC with render-endpoint reference) may not be exposed by this
   laptop's audio driver; check before building option B.
 - E4B (Tau2 42) vs 12B (Tau2 69): published agentic scores favour 12B strongly; decide on our

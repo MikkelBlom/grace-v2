@@ -84,3 +84,22 @@ fn backdate_shifts_start_and_extends_duration() {
     assert!(r.dur_us.unwrap() >= 250_000);
     assert!(!r.fields.contains_key("backdate_us"));
 }
+
+#[test]
+fn own_targets_keeps_dependency_warnings_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let (layer, guard) = JsonlLayer::new("test", dir.path(), "s4").unwrap();
+    let layer = layer.own_targets(&["layer"]);
+    tracing::subscriber::with_default(Registry::default().with(layer), || {
+        info!("ours");
+        tracing::trace!(target: "ort", "noise");
+        tracing::warn!(target: "ort", "dependency warning");
+    });
+    guard.flush();
+    let names: Vec<String> = read_session(&guard.path)
+        .unwrap()
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+    assert_eq!(names, vec!["ours", "dependency warning"]);
+}

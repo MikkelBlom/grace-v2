@@ -129,6 +129,7 @@ pub fn spawn_render(
             let mut started = false;
             let mut scratch = Vec::new();
             let mut last_busy = 0.0f64;
+            let mut drain_at: Option<f64> = None;
             while !stop.load(Ordering::Relaxed) {
                 while let Ok(cmd) = cmds.try_recv() {
                     match cmd {
@@ -182,16 +183,23 @@ pub fn spawn_render(
                     busy || crate::clock::now() - last_busy < 0.5,
                     Ordering::Relaxed,
                 );
-                if !busy
-                    && let Some(turn) = current
+                // The device buffer is kept full of silence (see module docs), so "drained" means:
+                // the turn's last sample was written, plus the time the buffer ahead of it takes.
+                if busy {
+                    drain_at = None;
+                } else if let Some(turn) = current
                     && started
-                    && out.queued()? < (RATE as usize / 100)
                 {
-                    let _ = events.send(RenderEvent::Drained {
-                        turn,
-                        time: crate::clock::now(),
-                    });
-                    current = None;
+                    let now = crate::clock::now();
+                    match drain_at {
+                        None => drain_at = Some(now + out.queued()? as f64 / RATE as f64),
+                        Some(at) if now >= at => {
+                            let _ = events.send(RenderEvent::Drained { turn, time: now });
+                            current = None;
+                            drain_at = None;
+                        }
+                        Some(_) => {}
+                    }
                 }
                 thread::sleep(Duration::from_millis(4));
             }

@@ -53,7 +53,7 @@ class Stt:
 
 
 class Tts:
-    def __init__(self, voice="alba"):
+    def __init__(self, voice):
         from pocket_tts import TTSModel
 
         self.model = TTSModel.load_model()
@@ -153,8 +153,11 @@ def main():
     started = time.perf_counter()
     log("loading STT (edda-v0.2) ...")
     stt = Stt()
-    log("loading TTS (Pocket TTS) ...")
-    tts = Tts()
+    cfg_path = ROOT / "config" / "speech.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+    voice = cfg.get("tts_voice", "jane")
+    log(f"loading TTS (Pocket TTS, voice {voice}) ...")
+    tts = Tts(voice)
     servers = []
     for port, handler, attr, model in [(STT_PORT, SttHandler, "stt", stt), (TTS_PORT, TtsHandler, "tts", tts)]:
         srv = Server(("127.0.0.1", port), handler)

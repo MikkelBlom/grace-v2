@@ -93,3 +93,16 @@
   conversation logic is still inside the engine (conductor); ADR 0002's separate harness process
   is deferred until there is enough harness to warrant it.
 - Selftest: `./scripts/grace.ps1 -SelfTest` (silent). Engine-only restart: `cargo run --release -p grace`.
+- First live run (2026-10-11, traces/engine-1791683793518.jsonl): speech end → first audio
+  0.65–0.75 s (+~0.15 s Bluetooth). Bugs found and fixed: (1) "reply finished" never fired
+  because the always-on render keeps the device buffer full → every next utterance counted as
+  barge-in; now drained = last sample written + queued buffer time. (2) Phantom turn: a 224 ms
+  echo blip passed barge-in (hangover counted as speech) and the comms path turned Grace's
+  English echo into Danish words → gate needs 320 ms while Grace talks, and STT uses the AEC path
+  whenever the speakers played during the turn (also fixes YouTube leaking into transcripts).
+  (3) TTFT rose 60→500 ms from a sliding 20-message window → history grows, pruned in halves at
+  5000 tokens. (4) Engine survived Ctrl+C under `cargo run` → launcher runs the exe, q+Enter /
+  close / Ctrl+C all stop it, 2 s forced exit, single-instance lock. (5) ort TRACE flood → trace
+  layer keeps only grace* targets below WARN.
+- Voice: `config/speech.json` tts_voice (default jane); samples in bench-results/voices/tts/listen.html.
+  `./scripts/grace.ps1 -Restart` restarts the speech server to apply it.

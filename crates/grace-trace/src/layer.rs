@@ -43,6 +43,8 @@ pub struct JsonlLayer {
     service: String,
     tx: SyncSender<Msg>,
     dropped: Arc<AtomicU64>,
+    /// If set, records from other targets are kept only at WARN and above.
+    own_targets: Option<Vec<String>>,
 }
 
 /// Flushes and closes the trace file when dropped. Keep it alive for the life of the process.
@@ -91,6 +93,7 @@ impl JsonlLayer {
             service: service.to_owned(),
             tx: tx.clone(),
             dropped: dropped.clone(),
+            own_targets: None,
         };
         let guard = TraceGuard {
             tx,
@@ -99,6 +102,13 @@ impl JsonlLayer {
             path,
         };
         Ok((layer, guard))
+    }
+
+    /// Keeps everything from targets starting with these prefixes, and only warnings and errors
+    /// from the rest (dependencies such as ONNX Runtime log thousands of TRACE lines a second).
+    pub fn own_targets(mut self, prefixes: &[&str]) -> Self {
+        self.own_targets = Some(prefixes.iter().map(|p| (*p).to_owned()).collect());
+        self
     }
 
     fn send(&self, record: Record) {
@@ -117,6 +127,7 @@ impl JsonlLayer {
 pub fn init(service: &str, dir: &Path) -> anyhow::Result<TraceGuard> {
     let session = format!("{service}-{}", now_us() / 1000);
     let (layer, guard) = JsonlLayer::new(service, dir, &session)?;
+    let layer = layer.own_targets(&["grace", "aec_lab", "demo_turns"]);
     Registry::default().with(layer).try_init()?;
     Ok(guard)
 }
@@ -155,6 +166,16 @@ impl<S> Layer<S> for JsonlLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
+    fn enabled(&self, meta: &tracing::Metadata<'_>, _ctx: Context<'_, S>) -> bool {
+        match &self.own_targets {
+            None => true,
+            Some(own) => {
+                own.iter().any(|p| meta.target().starts_with(p.as_str()))
+                    || *meta.level() <= tracing::Level::WARN
+            }
+        }
+    }
+
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
         let Some(span) = ctx.span(id) else { return };
         let mut fields = Map::new();

@@ -22,7 +22,6 @@ use std::{
     time::Instant,
 };
 
-use anyhow::Context;
 use grace_audio::wasapi::{self, CaptureMode, DevicePrefs};
 use grace_core::vad_gate::VadGateConfig;
 use grace_llm::client::LlmClient;
@@ -39,6 +38,23 @@ const STT_ADDR: &str = "127.0.0.1:7810";
 const TTS_ADDR: &str = "127.0.0.1:7811";
 const LEAD_MS: f64 = 30.0;
 
+/// Refuses to start a second engine: two would fight over the mic and both answer.
+fn single_instance() -> anyhow::Result<std::fs::File> {
+    std::fs::create_dir_all("data")?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open("data/engine.lock")?;
+    if file.try_lock().is_err() {
+        let pid = std::fs::read_to_string("data/engine.pid").unwrap_or_default();
+        let pid = pid.trim();
+        anyhow::bail!("Grace is already running (pid {pid}). Stop it with: taskkill /PID {pid} /F");
+    }
+    std::fs::write("data/engine.pid", std::process::id().to_string())?;
+    Ok(file)
+}
+
 fn calibrated_delay(speakers: &str) -> Option<f64> {
     let text = std::fs::read_to_string("data/calibration.json").ok()?;
     let all: BTreeMap<String, serde_json::Value> = serde_json::from_str(&text).ok()?;
@@ -48,6 +64,7 @@ fn calibrated_delay(speakers: &str) -> Option<f64> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let started = Instant::now();
+    let _instance = single_instance()?;
     let trace = grace_trace::init("engine", Path::new("traces"))?;
 
     let llm = LlmClient::new(LLM_URL);
@@ -76,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
     let shared = Arc::new(Mutex::new(Shared {
         aec16: TimedRing::new(16_000, 30.0),
         comms16: TimedRing::new(16_000, 30.0),
+        speakers16: TimedRing::new(16_000, 30.0),
     }));
 
     let threads = vec![
@@ -125,14 +143,51 @@ async fn main() -> anyhow::Result<()> {
     ];
 
     {
+        // Ctrl+C, closing the window, or q + Enter all stop Grace; if a thread hangs on the way
+        // out, the process exits anyway after 2 s (the first live run kept talking after Ctrl+C).
         let stop = stop.clone();
         tokio::spawn(async move {
-            let _ = tokio::signal::ctrl_c().await;
+            let mut close = tokio::signal::windows::ctrl_close().ok();
+            // A plain thread, not spawn_blocking: a pending console read must never keep the
+            // runtime from shutting down.
+            let (quit_tx, quit_rx) = tokio::sync::oneshot::channel::<()>();
+            std::thread::spawn(move || {
+                let mut line = String::new();
+                while std::io::stdin().read_line(&mut line).is_ok_and(|n| n > 0) {
+                    if line.trim().eq_ignore_ascii_case("q") {
+                        let _ = quit_tx.send(());
+                        return;
+                    }
+                    line.clear();
+                }
+            });
+            let closed = async {
+                match close.as_mut() {
+                    Some(c) => {
+                        c.recv().await;
+                    }
+                    None => std::future::pending::<()>().await,
+                }
+            };
+            let typed_q = async {
+                if quit_rx.await.is_err() {
+                    std::future::pending::<()>().await // stdin closed: not a quit
+                }
+            };
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = closed => {}
+                _ = typed_q => {}
+            }
+            println!("stopping ...");
             stop.store(true, Ordering::Relaxed);
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            eprintln!("forced exit");
+            std::process::exit(0);
         });
     }
     println!(
-        "Grace is listening ({} → {}), ready in {:.1} s. Ctrl+C to stop.",
+        "Grace is listening ({} → {}), ready in {:.1} s. Ctrl+C (or q + Enter) to stop.",
         mic.name,
         speakers.name,
         started.elapsed().as_secs_f64()
@@ -172,7 +227,7 @@ async fn main() -> anyhow::Result<()> {
         );
         stop.store(true, Ordering::Relaxed);
         trace.flush();
-        return Ok(());
+        std::process::exit(if ok { 0 } else { 1 });
     }
     let services = conductor::Services {
         llm,
@@ -201,7 +256,11 @@ async fn main() -> anyhow::Result<()> {
     };
     let result = conductor::run(services, front_rx, render_ev_rx, stop.clone()).await;
     stop.store(true, Ordering::Relaxed);
-    let _ = watchdog.await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), watchdog).await;
     trace.flush();
-    result.context("conductor")
+    if let Err(e) = result {
+        eprintln!("conductor: {e:#}");
+        std::process::exit(1);
+    }
+    std::process::exit(0);
 }

@@ -3,7 +3,8 @@
 #
 #   ./scripts/grace.ps1            # run Grace
 #   ./scripts/grace.ps1 -SelfTest  # silent startup check
-param([switch]$SelfTest)
+#   ./scripts/grace.ps1 -Restart   # restart the speech server first (new voice, code changes)
+param([switch]$SelfTest, [switch]$Restart)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -24,6 +25,11 @@ if (-not (Test-Port 8080)) {
         -ArgumentList '-m','.runtime\models\gemma-4-12b-it-qat-q4_0.gguf','-ngl','99','-c','16384','-np','2','-fa','on','-ctk','q8_0','-ctv','q8_0','--reasoning','off','--swa-full','--host','127.0.0.1','--port','8080' `
         -RedirectStandardError logs\llama-server.log -RedirectStandardOutput logs\llama-server.out.log
 }
+# Restart the speech server with -Restart (e.g. after changing config/speech.json).
+if ($Restart -and (Test-Port 7810)) {
+    Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -like '*speech_server.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+    Start-Sleep -Seconds 1
+}
 if (-not (Test-Port 7810)) {
     Write-Host 'starting speech server (edda STT + Pocket TTS) ...'
     Start-Process -WindowStyle Hidden -FilePath bench\.venv\Scripts\python.exe -ArgumentList 'services\speech_server.py' `
@@ -34,6 +40,9 @@ Wait-Port 7811 'speech server' 120
 # llama-server opens its port before the model is loaded; wait for /health.
 while ($true) { try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/health).StatusCode -eq 200) { break } } catch {} ; Start-Sleep -Milliseconds 500 }
 
-$engineArgs = @('run', '--release', '-q', '-p', 'grace', '--')
+# Build, then run the engine directly (not via `cargo run`): Ctrl+C must reach Grace herself.
+cargo build --release -q -p grace
+if ($LASTEXITCODE -ne 0) { throw 'engine build failed' }
+$engineArgs = @()
 if ($SelfTest) { $engineArgs += '--selftest' }
-cargo @engineArgs
+& ./target/release/grace.exe @engineArgs

@@ -133,6 +133,7 @@ pub async fn run(
                 Done::Silent { turn } => (Some(Input::ReplyFinished { turn }), clock::now()),
                 Done::Spoken { text } => {
                     if !text.is_empty() { history.push(("assistant", text)); }
+                    prune_history(&mut history);
                     (None, clock::now())
                 }
             },
@@ -242,12 +243,28 @@ fn spawn_pause_work(
     stop: f64,
     span: Span,
 ) {
-    let (aec, comms) = {
+    // ADR 0012, refined after the first live run: the Windows-processed path keeps the cleanest
+    // voice but also keeps whatever the speakers play (Grace's echo became Danish nonsense once,
+    // YouTube leaked into transcripts). So transcribe it only when the speakers were quiet during
+    // the turn; otherwise use our echo-cancelled path.
+    let (aec, stt_audio, source) = {
         let shared = svc.shared.lock().expect("shared poisoned");
-        (
-            shared.aec16.read_span(start - 0.5, stop + 0.2),
-            shared.comms16.read_span(start - 0.3, stop + 0.15),
-        )
+        let aec = shared.aec16.read_span(start - 0.5, stop + 0.2);
+        let played = shared.speakers16.read_span(start - 0.5, stop + 0.2);
+        let rms = (played.iter().map(|v| v * v).sum::<f32>() / played.len().max(1) as f32).sqrt();
+        if rms > 0.002 {
+            (
+                aec.clone(),
+                shared.aec16.read_span(start - 0.3, stop + 0.15),
+                "aec",
+            )
+        } else {
+            (
+                aec,
+                shared.comms16.read_span(start - 0.3, stop + 0.15),
+                "comms",
+            )
+        }
     };
     let (svc2, done2, span2) = (svc.clone(), done.clone(), span.clone());
     tokio::task::spawn_blocking(move || {
@@ -272,8 +289,9 @@ fn spawn_pause_work(
         }
     });
     tokio::spawn(async move {
-        let stage = info_span!(parent: &span, "stage", stage = "stt", model = "edda-v0.2");
-        let result = svc.stt.transcribe(&comms).await;
+        let stage =
+            info_span!(parent: &span, "stage", stage = "stt", model = "edda-v0.2", source = source);
+        let result = svc.stt.transcribe(&stt_audio).await;
         drop(stage);
         match result {
             Ok((text, ms)) => {
@@ -290,6 +308,24 @@ fn spawn_pause_work(
             }
         }
     });
+}
+
+/// Keeps the conversation within the context budget without invalidating the LLM's prompt cache
+/// every turn: history only grows until it passes ~5000 tokens, then the oldest half goes at once.
+/// (Sliding a fixed window by one message per turn changed the prefix every turn and pushed
+/// time-to-first-token from ~60 ms to ~500 ms in the first live run.)
+fn prune_history(history: &mut Vec<(&'static str, String)>) {
+    let tokens = |h: &[(&str, String)]| h.iter().map(|(_, t)| t.len() / 3 + 4).sum::<usize>();
+    if tokens(history) <= 5000 {
+        return;
+    }
+    while tokens(history) > 2500 && history.len() > 2 {
+        history.remove(0);
+    }
+    // Start on a user turn so roles keep alternating.
+    while history.first().is_some_and(|(r, _)| *r != "user") {
+        history.remove(0);
+    }
 }
 
 fn system_prompt(path: &PathBuf) -> String {
@@ -317,12 +353,10 @@ async fn speak_reply(
 ) {
     let mut messages =
         vec![json!({ "role": "system", "content": system_prompt(&svc.system_prompt) })];
+    // Full history (bounded by `prune_history`): a stable prefix keeps llama-server's cache valid.
     messages.extend(
         history
             .iter()
-            .rev()
-            .take(20)
-            .rev()
             .map(|(r, t)| json!({ "role": r, "content": t })),
     );
     let mut req = ChatRequest::new(messages);

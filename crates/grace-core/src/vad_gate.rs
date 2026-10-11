@@ -15,6 +15,9 @@ pub struct VadGateConfig {
     pub hangover_frames: u32,
     /// Added to `start_threshold` while Grace is talking.
     pub talking_boost: f32,
+    /// `min_speech_frames` while Grace is talking: residual echo comes in short blips, a real
+    /// interruption lasts.
+    pub talking_min_speech_frames: u32,
 }
 
 impl Default for VadGateConfig {
@@ -26,6 +29,7 @@ impl Default for VadGateConfig {
             min_speech_frames: 5,
             hangover_frames: 8,
             talking_boost: 0.3,
+            talking_min_speech_frames: 10,
         }
     }
 }
@@ -90,11 +94,16 @@ impl VadGate {
             };
             if probability >= (self.cfg.start_threshold + boost).min(0.99) {
                 self.run += 1;
-                if self.run >= self.cfg.min_speech_frames {
+                let needed = if self.grace_talking {
+                    self.cfg.talking_min_speech_frames
+                } else {
+                    self.cfg.min_speech_frames
+                };
+                if self.run >= needed {
                     self.speaking = true;
                     self.run = 0;
                     return Some(VadEdge::Started {
-                        frame: frame + 1 - u64::from(self.cfg.min_speech_frames),
+                        frame: frame + 1 - u64::from(needed),
                     });
                 }
             } else {
@@ -151,9 +160,14 @@ mod tests {
         let mut g = VadGate::new(VadGateConfig::default());
         g.set_grace_talking(true);
         assert!(run(&mut g, &[0.7; 20]).is_empty(), "0.7 < 0.5 + 0.3");
+        assert!(
+            run(&mut g, &[0.95; 9]).is_empty(),
+            "a 288 ms blip is not an interruption"
+        );
+        assert!(run(&mut g, &[0.1; 1]).is_empty());
         assert_eq!(
-            run(&mut g, &[0.95; 5]),
-            vec![VadEdge::Started { frame: 20 }]
+            run(&mut g, &[0.95; 10]),
+            vec![VadEdge::Started { frame: 30 }]
         );
     }
 }

@@ -35,6 +35,8 @@ pub struct Shared {
     pub aec16: TimedRing,
     /// Windows-processed mic, 16 kHz.
     pub comms16: TimedRing,
+    /// What the speakers played, 16 kHz (to know whether a turn overlapped playback).
+    pub speakers16: TimedRing,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -113,6 +115,11 @@ fn run(
                 tmp.clear();
                 dec_lp.push(&chunk.samples, &mut tmp);
                 lp16.push(chunk.time, &tmp);
+                shared
+                    .lock()
+                    .expect("shared poisoned")
+                    .speakers16
+                    .push(chunk.time, &tmp);
             }
             Source::Comms => {
                 tmp.clear();

@@ -1,0 +1,4 @@
+{
+  "_comment": "Read by services/speech_server.py at startup. tts_voice: a Pocket TTS voice name (see bench-results/voices for samples).",
+  "tts_voice": "jane"
+}

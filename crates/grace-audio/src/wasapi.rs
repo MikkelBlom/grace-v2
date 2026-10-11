@@ -120,7 +120,9 @@ impl DevicePrefs {
 }
 
 fn resolve(flow: Flow, names: &[String], communications: bool) -> anyhow::Result<Endpoint> {
-    if names.is_empty() {
+    // "default" (or an empty list) means whatever Windows currently uses, so switching between
+    // headphones and speakers in Windows needs no config change.
+    if names.is_empty() || names.iter().any(|n| n.eq_ignore_ascii_case("default")) {
         return default_endpoint(flow, communications);
     }
     let needles: Vec<&str> = names.iter().map(String::as_str).collect();

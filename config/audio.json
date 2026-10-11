@@ -1,5 +1,5 @@
 {
-  "_comment": "Preferred audio devices, matched case-insensitively against Windows friendly names, first match wins. Used by the engine and the audio test tools.",
-  "speakers": ["Z337"],
+  "_comment": "Preferred audio devices, matched case-insensitively against Windows friendly names, first match wins. \"default\" = the current Windows default device. Used by the engine and the audio test tools.",
+  "speakers": ["default"],
   "microphone": ["Microphone Array"]
 }

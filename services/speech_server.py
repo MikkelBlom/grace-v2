@@ -74,6 +74,13 @@ def b64(pcm):
 
 
 class Handler(socketserver.StreamRequestHandler):
+    def finish(self):
+        # The engine closes its connections abruptly when it exits; that is normal.
+        try:
+            super().finish()
+        except OSError:
+            pass
+
     def send(self, obj):
         self.wfile.write((json.dumps(obj) + "\n").encode())
         self.wfile.flush()
@@ -147,6 +154,13 @@ class TtsHandler(Handler):
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+            log(f"client {client_address[1]} disconnected")
+            return
+        super().handle_error(request, client_address)
 
 
 def main():

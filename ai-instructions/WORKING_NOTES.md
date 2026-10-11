@@ -46,3 +46,7 @@
 - llama-server pick: `-ngl 99 -c 16384 -np 2 -fa on -ctk q8_0 -ctv q8_0 --reasoning off --swa-full`.
   Without `--swa-full` Gemma 4 pays ~180 ms fixed prefill per request (log warns "cache_reuse is not
   supported by this context"). Don't leave llama-server running after a session: ~10 GB VRAM.
+- Two Bluetooth audio devices (Z337 speakers + Buds4 Pro earbuds) fight: with the Buds connected
+  and default, opening the Z337 failed with AUDCLNT_E_ENDPOINT_CREATE_FAILED (0x8889000F). Opens
+  now retry transient errors and explain them. The engine must also follow device changes
+  (IMMNotificationClient) and re-open streams / re-calibrate when the output switches.

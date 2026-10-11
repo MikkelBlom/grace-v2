@@ -245,7 +245,12 @@ impl Timeline {
 }
 
 impl Capture {
+    /// Opens a capture stream, retrying while a (Bluetooth) device is waking or reconnecting.
     pub fn open(ep: &Endpoint, mode: &CaptureMode) -> anyhow::Result<Self> {
+        with_retry(ep, || Self::open_once(ep, mode))
+    }
+
+    fn open_once(ep: &Endpoint, mode: &CaptureMode) -> anyhow::Result<Self> {
         unsafe {
             let dev = device(ep)?;
             let client: IAudioClient2 = dev.Activate(CLSCTX_ALL, None)?;
@@ -371,7 +376,12 @@ pub struct Render {
 }
 
 impl Render {
+    /// Opens a render stream, retrying while a (Bluetooth) device is waking or reconnecting.
     pub fn open(ep: &Endpoint) -> anyhow::Result<Self> {
+        with_retry(ep, || Self::open_once(ep))
+    }
+
+    fn open_once(ep: &Endpoint) -> anyhow::Result<Self> {
         anyhow::ensure!(ep.flow == Flow::Render, "not a render endpoint");
         unsafe {
             let client: IAudioClient = device(ep)?.Activate(CLSCTX_ALL, None)?;
@@ -427,6 +437,42 @@ impl Render {
         }
         Ok(())
     }
+}
+
+const TRANSIENT: [windows::core::HRESULT; 3] = [
+    AUDCLNT_E_ENDPOINT_CREATE_FAILED,
+    AUDCLNT_E_DEVICE_INVALIDATED,
+    AUDCLNT_E_DEVICE_IN_USE,
+];
+
+/// Retries `open` on errors that a Bluetooth device produces while it wakes from standby,
+/// reconnects, or is momentarily busy, then explains the failure in plain words.
+fn with_retry<T>(ep: &Endpoint, mut open: impl FnMut() -> anyhow::Result<T>) -> anyhow::Result<T> {
+    let mut last = None;
+    for attempt in 0..5 {
+        match open() {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                let code = e
+                    .chain()
+                    .find_map(|c| c.downcast_ref::<windows::core::Error>())
+                    .map(|w| w.code());
+                if !code.is_some_and(|c| TRANSIENT.contains(&c)) {
+                    return Err(e);
+                }
+                last = Some((e, code));
+                std::thread::sleep(std::time::Duration::from_millis(300 * (attempt + 1)));
+            }
+        }
+    }
+    let (e, code) = last.expect("loop ran");
+    let hint = match code {
+        Some(c) if c == AUDCLNT_E_DEVICE_IN_USE => "another app holds it in exclusive mode",
+        _ => {
+            "it may be off, asleep, or crowded out by another Bluetooth audio device (e.g. earbuds);               turn it on, disconnect other Bluetooth audio, and try again"
+        }
+    };
+    Err(e.context(format!("could not open \"{}\": {hint}", ep.name)))
 }
 
 /// Linear-interpolation resampler; good enough for test signals, not for the voice path.

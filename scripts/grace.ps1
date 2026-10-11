@@ -4,7 +4,8 @@
 #   ./scripts/grace.ps1            # run Grace
 #   ./scripts/grace.ps1 -SelfTest  # silent startup check
 #   ./scripts/grace.ps1 -Restart   # restart the speech server first (new voice, code changes)
-param([switch]$SelfTest, [switch]$Restart)
+#   ./scripts/grace.ps1 -Memory data/replay-memory.db   # separate memory (unattended test runs)
+param([switch]$SelfTest, [switch]$Restart, [string]$Memory)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -55,4 +56,5 @@ cargo build --release -q -p grace
 if ($LASTEXITCODE -ne 0) { throw 'engine build failed' }
 $engineArgs = @()
 if ($SelfTest) { $engineArgs += '--selftest' }
+if ($Memory) { $engineArgs += '--memory', $Memory }
 & ./target/release/grace.exe @engineArgs

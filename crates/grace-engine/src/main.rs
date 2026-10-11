@@ -145,8 +145,15 @@ async fn main() -> anyhow::Result<()> {
     if std::env::args().any(|a| a == "--memory-lab") {
         return memory_lab(llm).await;
     }
-    let memory =
-        memory::MemoryService::open(Path::new("data/memory.db"), EMBED_ADDR, llm.clone()).await?;
+    // `--memory <path>`: a separate memory for unattended test runs (grace-sim replay), so test
+    // speech never lands in Mikkel's real memory.
+    let args: Vec<String> = std::env::args().collect();
+    let memory_path = args
+        .iter()
+        .position(|a| a == "--memory")
+        .and_then(|i| args.get(i + 1))
+        .map_or_else(|| PathBuf::from("data/memory.db"), PathBuf::from);
+    let memory = memory::MemoryService::open(&memory_path, EMBED_ADDR, llm.clone()).await?;
     let smart_turn = Arc::new(Mutex::new(SmartTurn::new(Path::new(
         ".runtime/models/smart-turn-v3.2-fp32.onnx",
     ))?));

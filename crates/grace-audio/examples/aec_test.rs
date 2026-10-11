@@ -3,6 +3,7 @@
 //!   cargo run --release -p grace-audio --example aec_test -- --play [--mic <name>] [--speakers <name>] [--clip <wav>]
 //!
 //! `--analyse <dir>` re-analyses a saved run without playing anything.
+//! `--script <file>` shows lines to read aloud during playback (double-talk test).
 //! Devices default to `config/audio.json`. Without `--play` it only prints which devices and
 //! clip it would use: this tool makes noise.
 //!
@@ -327,6 +328,33 @@ Dry run. Add --play to play the clip through the speakers and measure."
     let mut pcm = vec![0.0; pad(BASELINE)];
     pcm.extend(wasapi::resample_linear(&clip, clip_rate, render.rate()));
     pcm.extend(std::iter::repeat_n(0.0, pad(TAIL)));
+    // `--script <file>`: show one line every 3.5 s during playback for the user to read aloud,
+    // so the run records real double-talk with a known transcript.
+    let script: Vec<String> = match arg("--script") {
+        Some(p) => std::fs::read_to_string(&p)
+            .with_context(|| format!("reading {p}"))?
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(str::to_owned)
+            .collect(),
+        None => Vec::new(),
+    };
+    if !script.is_empty() {
+        println!(
+            "
+Read each line aloud at normal volume when it appears:
+"
+        );
+        let lines = script.clone();
+        thread::spawn(move || {
+            thread::sleep(BASELINE + Duration::from_millis(500));
+            for (i, line) in lines.iter().enumerate() {
+                println!("  {}. {line}", i + 1);
+                thread::sleep(Duration::from_millis(3500));
+            }
+        });
+    }
     let render_started = started.elapsed();
     println!("playing {:.1} s ...", pcm.len() as f64 / rate as f64);
     render.play_blocking(&pcm)?;
@@ -347,6 +375,15 @@ Dry run. Add --play to play the clip through the speakers and measure."
         dir.join("meta.json"),
         format!("{{\"render_started_ms\": {}}}", render_started.as_millis()),
     )?;
+    if !script.is_empty() {
+        std::fs::write(
+            dir.join("reference.txt"),
+            script.join(
+                "
+",
+            ),
+        )?;
+    }
     // Clock timelines + the speaker's calibration let aec-lab align this run exactly.
     std::fs::write(
         dir.join("timelines.json"),

@@ -84,7 +84,11 @@ fn main() -> anyhow::Result<()> {
         let clock_ms = (mic_tl.time_of(0.0).context("mic timeline")?
             - lp_tl.time_of(0.0).context("loopback timeline")?)
             * 1000.0;
-        let delay = cal["delay_ms"].as_f64().context("delay_ms")?;
+        // `--delay <ms>` overrides the calibration (Bluetooth delay changes between sessions).
+        let delay = match args.iter().position(|a| a == "--delay") {
+            Some(i) => args.get(i + 1).context("--delay <ms>")?.parse()?,
+            None => cal["delay_ms"].as_f64().context("delay_ms")?,
+        };
         let lead = args.get(2).map_or(Ok(30.0), |s| s.parse())?;
         println!("calibrated: clock offset {clock_ms:.1} ms, echo delay {delay:.1} ms");
         (clock_ms - delay, lead)

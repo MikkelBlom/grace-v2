@@ -66,3 +66,10 @@
 - AGC2 in the aec3 linear pipeline must stay off for VAD purposes? Mixed: it boosts residual
   (bad for level metrics) but VAD false speech was lower with it (1.7 s vs 3.7 s first pass).
   Decide with real double-talk data.
+- **Bluetooth echo delay is per-session and drifts** (bench/echo_delay_track.py): calibration
+  110 ms; speech run 113→137 ms within 14 s; YouTube run steady 165 ms. The engine must track
+  delay continuously from whatever plays (GCC-PHAT on loopback vs mic, feeding AEC3 a coarse
+  alignment and letting its own estimator do the fine part). Calibration = starting point only.
+- YouTube + Grace through the Z337: VAD false speech raw 18.8 s, Windows AEC 19.0 s, ours with
+  the session's true delay 0.4 s (one blip). TurnMachine's min_barge_in (350 ms) and empty-
+  transcript drop would absorb it, but aim for 0.

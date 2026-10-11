@@ -1,0 +1,7 @@
+# Lines Mikkel reads aloud while Grace talks (aec_test --script). Typical things he'd say to her,
+# including interruptions. One line is shown every 3.5 s during playback.
+Grace, hvad er klokken?
+Stop lige, det var ikke det jeg mente.
+Åbn Visual Studio Code og find budgetfilen fra i går.
+Hvordan bliver vejret i Aarhus i morgen?
+Tak, det var det hele.

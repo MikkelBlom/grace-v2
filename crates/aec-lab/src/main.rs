@@ -22,6 +22,39 @@ fn read(path: &Path) -> anyhow::Result<(Vec<f32>, u32)> {
     Ok((r.samples::<f32>().collect::<Result<_, _>>()?, rate))
 }
 
+/// Echo reduction on the frames where the mic hears echo (well above its quietest tenth), per
+/// third of the recording so convergence is visible.
+fn report(mic: &[f32], out: &[f32], rate: u32) {
+    let f = rate as usize / 100;
+    let n = mic.len().min(out.len()) / f;
+    let energy = |x: &[f32], i: usize| {
+        x[i * f..(i + 1) * f]
+            .iter()
+            .map(|&s| (s as f64).powi(2))
+            .sum::<f64>()
+    };
+    let mic_e: Vec<f64> = (0..n).map(|i| energy(mic, i)).collect();
+    let mut sorted = mic_e.clone();
+    sorted.sort_by(f64::total_cmp);
+    let floor = sorted[n / 10].max(1e-12);
+    for part in 0..3 {
+        let (from, to) = (part * n / 3, (part + 1) * n / 3);
+        let echo: Vec<usize> = (from..to).filter(|&i| mic_e[i] > floor * 30.0).collect();
+        if echo.is_empty() {
+            println!("third {}: no echo frames", part + 1);
+            continue;
+        }
+        let m: f64 = echo.iter().map(|&i| mic_e[i]).sum();
+        let o: f64 = echo.iter().map(|&i| energy(out, i)).sum();
+        println!(
+            "third {}: {} echo frames, reduction {:.1} dB",
+            part + 1,
+            echo.len(),
+            10.0 * (m / o.max(1e-12)).log10()
+        );
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let dir = PathBuf::from(
@@ -29,7 +62,13 @@ fn main() -> anyhow::Result<()> {
             .context("usage: aec-lab <dir> [offset ms] [lead ms]")?,
     );
     let calibrated = dir.join("timelines.json").exists();
-    let mic_file = if calibrated { "mic.wav" } else { "raw.wav" };
+    let calibrated = calibrated && dir.join("calibration.json").exists();
+    // Calibration runs record `mic.wav`; aec_test runs record `raw.wav` (plus Windows' `aec.wav`).
+    let mic_file = if dir.join("mic.wav").exists() {
+        "mic.wav"
+    } else {
+        "raw.wav"
+    };
     let (mic, rate) = read(&dir.join(mic_file))?;
     let (lp, lp_rate) = read(&dir.join("loopback.wav"))?;
     anyhow::ensure!(rate == lp_rate, "mic {rate} Hz vs loopback {lp_rate} Hz");
@@ -57,8 +96,9 @@ fn main() -> anyhow::Result<()> {
         (offset, args.get(3).map_or(Ok(60.0), |s| s.parse())?)
     };
 
-    // render[k] carries what the mic will hear `lead` later: render[k] = lp[k + offset - lead].
-    let shift = ((offset_ms - lead_ms) / 1000.0 * rate as f64).round() as i64;
+    // mic[k] holds the echo of lp[k + offset]. AEC3 needs the reference *before* the echo, so
+    // render[k] = what the mic will hear `lead` later = lp[k + lead + offset].
+    let shift = ((offset_ms + lead_ms) / 1000.0 * rate as f64).round() as i64;
     let render: Vec<f32> = (0..mic.len() as i64)
         .map(|k| {
             let j = k + shift;
@@ -71,8 +111,11 @@ fn main() -> anyhow::Result<()> {
         .collect();
 
     let format = AudioFormat::ten_ms(rate, 1);
+    let flag = |f: &str| args.iter().any(|a| a == f);
     let mut pipeline = linear::builder(format, format)
         .initial_delay_ms(lead_ms as i32)
+        .enable_gain_controller2(!flag("--no-agc"))
+        .enable_noise_suppression(!flag("--no-ns"))
         .export_metrics(true)
         .build()?;
     let frame = format.sample_count();
@@ -84,6 +127,17 @@ fn main() -> anyhow::Result<()> {
             out.extend_from_slice(&buf);
         }
     }
+    let mut metrics = None;
+    while let Some(m) = pipeline.try_pull_metrics()? {
+        metrics = Some(*m.payload());
+    }
+    if let Some(m) = metrics {
+        println!(
+            "aec3 metrics: ERL {:.1} dB, ERLE {:.1} dB, estimated delay {} ms",
+            m.echo_return_loss, m.echo_return_loss_enhancement, m.delay_ms
+        );
+    }
+    report(&mic, &out, rate);
 
     let spec = hound::WavSpec {
         channels: 1,

@@ -35,6 +35,7 @@ struct Take {
     name: &'static str,
     rate: u32,
     samples: Vec<f32>,
+    timeline: Option<wasapi::Timeline>,
 }
 
 fn arg(name: &str) -> Option<String> {
@@ -65,6 +66,7 @@ fn record(
             name,
             rate: cap.rate(),
             samples,
+            timeline: Some(cap.timeline().clone()),
         })
     })
 }
@@ -257,6 +259,7 @@ fn load_take(dir: &Path, name: &'static str) -> anyhow::Result<Take> {
         name,
         rate,
         samples,
+        timeline: None,
     })
 }
 
@@ -344,6 +347,28 @@ Dry run. Add --play to play the clip through the speakers and measure."
         dir.join("meta.json"),
         format!("{{\"render_started_ms\": {}}}", render_started.as_millis()),
     )?;
+    // Clock timelines + the speaker's calibration let aec-lab align this run exactly.
+    std::fs::write(
+        dir.join("timelines.json"),
+        serde_json::to_string(&serde_json::json!({
+            "mic": takes[0].timeline,
+            "loopback": takes[2].timeline,
+        }))?,
+    )?;
+    let calibrations: serde_json::Value = std::fs::read_to_string("data/calibration.json")
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    match calibrations.get(&speakers.name) {
+        Some(cal) => std::fs::write(
+            dir.join("calibration.json"),
+            serde_json::to_string_pretty(cal)?,
+        )?,
+        None => println!(
+            "note: no calibration for {}; run the calibrate example first for exact alignment",
+            speakers.name
+        ),
+    }
     analyse(&takes, Some(render_started.as_secs_f64() * 1000.0))?;
     println!("recordings: {}", dir.display());
     Ok(())

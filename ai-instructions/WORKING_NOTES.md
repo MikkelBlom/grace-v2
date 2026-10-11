@@ -50,3 +50,10 @@
   and default, opening the Z337 failed with AUDCLNT_E_ENDPOINT_CREATE_FAILED (0x8889000F). Opens
   now retry transient errors and explain them. The engine must also follow device changes
   (IMMNotificationClient) and re-open streams / re-calibrate when the output switches.
+- Calibration (2026-10-11, Z337 BT + laptop mic array): playback→mic **110 ms** (105/117/110),
+  echo +15.6 dB over room, sweep SNR 52 dB. Independent GCC-PHAT check: 105 ms. The first packet
+  of every WASAPI stream is flagged discontinuous; it is not a glitch.
+- aec-lab sign bug (fixed): the reference must be shifted so it arrives *before* the echo:
+  render[k] = lp[k + offset + lead]. With that, AEC3's estimated delay ≈ lead.
+- Pure-Rust aec3 works: synthetic speech echo (50 ms, small IR, noise) → 21–28 dB reduction.
+  Sweeps are a poor AEC adaptation signal (one band at a time): use speech runs for AEC tuning.

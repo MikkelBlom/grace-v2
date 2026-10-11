@@ -342,7 +342,11 @@ impl Capture {
                 self.capture
                     .GetBuffer(&mut data, &mut frames, &mut flags, None, Some(&mut qpc))?;
                 self.timeline.stamps.push((self.samples_read, qpc));
-                if flags & (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32) != 0 {
+                // WASAPI flags the first packet of every stream as discontinuous; only later
+                // ones mean lost samples.
+                if flags & (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32) != 0
+                    && self.samples_read > 0
+                {
                     self.timeline.discontinuities += 1;
                 }
                 self.samples_read += frames as u64;

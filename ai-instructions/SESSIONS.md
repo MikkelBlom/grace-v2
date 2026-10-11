@@ -71,3 +71,16 @@ MB/s; ESC-50 moved to an HF mirror); embedding-distance dedupe merged "15 Octobe
 "16 October" and lost a correction (fixed with specifics check); prompt edits mid-run
 contaminate a memory bench run (it reads the prompt live).
 **Next steps:** full STT scene sets once noise corpora land; barge-in; reconciliation pass.
+
+## 2026-10-11 — Claude Code (Opus 5.5): v0.2.5 foundations, second pass
+**Summary:** Full grace-sim STT sets (150/set, DEMAND noise) confirmed linear AEC for STT.
+Found edda hallucinates on 100 % of non-speech; replaced the logprob filter with an ekko
+cross-check (ADR 0016). Memory: number words, unknown-id updates, commitments+facts (216/246);
+reconciliation pass measured and left off. Smart Turn da1 live (60 → 75 % on CoRal). Danish TTS
+Røst 500m with CoRal Mic/Nic: ~150 ms on idle GPU. Replay tier built. Followup facts migrated
+into commitments in Mikkel's real DB.
+**Issues encountered:** GPU/RAM saturation from parallel tracks (latencies invalid while
+training); MUSAN mirror failed at 0.96/11 GB (dropped); DEMAND env names lost in the HF mirror;
+DEMAND licence may be CC BY-SA upstream (unverified).
+**Next steps:** live session with the new stack; replay tier when Mikkel is away; edda latency
+on idle GPU; Danish voice decision; barge-in.

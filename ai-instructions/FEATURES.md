@@ -9,7 +9,7 @@
 | `grace-bench` STT/TTS | Implemented | JSON-lines runner protocol, WER/CER, latency percentiles, blind listening page | 2026-10-10 | — | — |
 | Bench runners | Implemented | HF Whisper, CTranslate2 Whisper, sherpa transducer, Piper, Supertonic, Chatterbox | 2026-10-10 | bench venvs | — |
 | FLEURS-da fixtures | Implemented | 60 clips via `bench/fetch_fixtures.py` | 2026-10-10 | — | — |
-| CoRal v3 fixtures | Planned | Conversation + read-aloud clips | — | — | Mikkel must request HF access |
+| CoRal v3 fixtures | Implemented | Conversation test via `bench/fetch_corpora.py coral`; train splits for Smart Turn | 2026-10-11 | HF access | — |
 | Own-voice fixtures | Planned | Mikkel's recordings through speakers + mic | — | recorder script | — |
 | `grace-audio` WASAPI | Implemented | Capture (raw / communications+AEC reference / loopback), render, resample | 2026-10-10 | — | — |
 | AEC probe + test | Implemented | `aec_probe` (capabilities), `aec_test --play` (echo reduction) | 2026-10-10 | grace-audio | Mikkel runs --play |
@@ -20,6 +20,14 @@
 | Engine `grace` | Implemented, untested live | Dual-path capture, AEC3 + delay tracking, VAD gate, Smart Turn, conductor, sentence-streamed replies, barge-in, traces | 2026-10-11 | all crates | Mikkel's first live run |
 | Launcher | Implemented | `scripts/grace.ps1` (+ `-SelfTest`) | 2026-10-11 | — | — |
 | Harness split | Planned | Conversation logic in its own process (now inside the engine's conductor) | — | engine | — |
-| Memory | Implemented, untested live | `grace-memory` + engine `memory.rs`: session block, per-turn recall, background learning, summaries; `grace --memory-lab` | 2026-10-11 | embed server | Mikkel's two-session test |
+| Memory | Implemented (ADR 0015), not yet re-tested live | Code-rendered block, commitments table, quoted evidence, scope, calendar; 216-217/246 on the bench | 2026-10-11 | embed server | — |
 | Embed server | Implemented | `services/embed_server.py` (harrier-270m, CPU, :7812) | 2026-10-11 | bench/.venv-embed | — |
 | Tools | Planned (v0.3) | ADR 0010: web search, open program, file search | — | harness | — |
+| `grace-sim` | Implemented | Real frontend on simulated rooms (CoRal + Grace's voice + DEMAND/ESC-50), ~35× real time; VAD/gate/DTD switches | 2026-10-11 | corpora | — |
+| `grace-memory-bench` | Implemented | 40 Danish multi-session scenarios, fake clock, real answer path; `--reconcile` experimental | 2026-10-11 | llama + embed | — |
+| STT on linear AEC | Implemented (ADR 0014) | STT reads AEC3 linear output; turn audio saves lin/raw/aec | 2026-10-11 | — | — |
+| Hallucination check | Implemented (ADR 0016) | ekko-v1-tiny on CPU alongside edda; drop when ekko hears nothing | 2026-10-11 | speech server | — |
+| Smart Turn da1 | Implemented | Danish fine-tune, 60 → 75 % on CoRal conversation | 2026-10-11 | — | live check |
+| Danish TTS (Røst 500m) | Measured, not wired | ~150 ms first audio on idle GPU with CoRal Mic/Nic voices | 2026-10-11 | — | Mikkel's listening test, live GPU-contention test |
+| Synthetic Danish speech | Implemented | `bench/synth/tts_da.py`: 24 NST (CC0) voices via MIT Chatterbox | 2026-10-11 | .venv-roest | — |
+| Acoustic replay tier | Built, not run | `bench/sim/replay.py`: second speaker talks to live Grace | 2026-10-11 | — | Mikkel away from home |

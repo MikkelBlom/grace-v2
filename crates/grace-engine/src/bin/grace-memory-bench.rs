@@ -67,6 +67,9 @@ struct Args {
     no_stt_gate: bool,
     #[arg(long, default_value = "config/prompts/system.md")]
     system_prompt: PathBuf,
+    /// Run the end-of-session reconciliation pass (live: at the next start).
+    #[arg(long)]
+    reconcile: bool,
 }
 
 #[derive(Deserialize)]
@@ -275,6 +278,9 @@ impl Bench {
                     turn.grace.clone()
                 };
                 mem.clone().learn(user_turn, turn.user.clone(), reply).await;
+            }
+            if self.args.reconcile {
+                mem.reconcile_session(mem.session()).await?;
             }
             if let Some(expect) = &session.expect {
                 self.check_state(sc, i, &mem, expect)?;
@@ -539,6 +545,7 @@ async fn main() -> anyhow::Result<()> {
     let summary = json!({
         "label": bench.args.label,
         "stt_gate": !bench.args.no_stt_gate,
+        "reconcile": bench.args.reconcile,
         "scenarios": scenarios.len(),
         "checks": bench.checks.len(),
         "passed": passed,

@@ -197,6 +197,13 @@ impl Memory {
         conn.execute_batch(&format!(
             "CREATE VIRTUAL TABLE IF NOT EXISTS facts_vec USING vec0(embedding float[{dim}] distance_metric=cosine);"
         ))?;
+        // Sessions get a reconciliation mark (ADR 0015); older databases lack the column.
+        let has_col: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('sessions') WHERE name = 'reconciled_at'")?
+            .exists([])?;
+        if !has_col {
+            conn.execute_batch("ALTER TABLE sessions ADD COLUMN reconciled_at REAL;")?;
+        }
         // ADR 0015: reminders used to be `followup` facts; they are commitments now. Moves any
         // that are still current (runs once: the moved facts are closed).
         conn.execute_batch(
@@ -286,6 +293,38 @@ impl Memory {
         ids.into_iter()
             .map(|id| Ok((id, self.turns(id)?)))
             .collect()
+    }
+
+    /// Earlier sessions with turns that have not been reconciled yet, oldest first.
+    pub fn unreconciled_sessions(&self, except: i64) -> anyhow::Result<Vec<i64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id FROM sessions WHERE reconciled_at IS NULL AND id != ?1
+             AND EXISTS (SELECT 1 FROM turns WHERE session_id = sessions.id AND role = 'user')
+             ORDER BY id",
+        )?;
+        let ids = stmt
+            .query_map([except], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        Ok(ids)
+    }
+
+    pub fn set_reconciled(&self, session: i64, now: Time) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE sessions SET reconciled_at = ?2 WHERE id = ?1",
+            params![session, now],
+        )?;
+        Ok(())
+    }
+
+    /// A session's turns as (turn id, role, text), oldest first.
+    pub fn session_turns(&self, session: i64) -> anyhow::Result<Vec<(i64, String, String)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, role, text FROM turns WHERE session_id = ?1 ORDER BY id")?;
+        let rows = stmt
+            .query_map([session], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
     }
 
     pub fn turns(&self, session: i64) -> anyhow::Result<Transcript> {

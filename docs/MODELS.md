@@ -203,3 +203,7 @@ re-measured on an idle GPU.
 
 Memory run d (unknown-id updates kept as adds, number words in the duplicate check, commitments
 plus facts): 216/246 vs 217 (within noise); interrupted 24 → 28 of 30.
+
+Memory run e (end-of-session reconciliation pass on top of d): 214/246 — no gain; probes 55 → 50
+and self_echo 28 → 23 (the pass sees Grace's lines in the transcript). Kept off; code stays
+behind `grace-memory-bench --reconcile`. Run-to-run noise between c and d: ±1-4 per category.

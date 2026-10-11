@@ -110,6 +110,8 @@ pub struct MemoryService {
 impl MemoryService {
     /// Opens memory for a new live session.
     pub async fn open(path: &Path, embed_addr: &str, llm: LlmClient) -> anyhow::Result<Arc<Self>> {
+        // Not reconciled at start: grace-memory-bench measured 214/246 with the pass vs 216-217
+        // without, and Grace's own words crept back in (self_echo 28 -> 23). Kept for later work.
         Self::open_at(path, embed_addr, llm, system_clock()).await
     }
 
@@ -257,6 +259,95 @@ impl MemoryService {
             self.apply(&op, user_turn, user, &known, &open_ids).await?;
         }
         Ok(())
+    }
+
+    /// End-of-session pass: with the whole conversation in view, fix what per-turn learning got
+    /// wrong (a correction later in the session, a detail split over turns, something missed).
+    /// Experimental: off live (see `open`); `grace-memory-bench --reconcile` measures it.
+    pub async fn reconcile_session(&self, session: i64) -> anyhow::Result<()> {
+        let turns = self.db().session_turns(session)?;
+        let Some(last_user) = turns
+            .iter()
+            .rev()
+            .find(|(_, r, _)| r == "user")
+            .map(|t| t.0)
+        else {
+            return Ok(());
+        };
+        let said: Vec<&str> = turns
+            .iter()
+            .filter(|(_, r, _)| r == "user")
+            .map(|(_, _, t)| t.as_str())
+            .collect();
+        let transcript = turns
+            .iter()
+            .map(|(_, r, t)| format!("{}: {t}", if r == "user" { "Mikkel" } else { "Grace" }))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let facts = self.db().current_facts(60)?;
+        let open: Vec<Commitment> = self
+            .db()
+            .commitments()?
+            .into_iter()
+            .filter(|c| c.open)
+            .collect();
+        let list = |v: Vec<String>| {
+            if v.is_empty() {
+                "(none)".to_owned()
+            } else {
+                v.join("\n")
+            }
+        };
+        let prompt = format!(
+            "{}\n\nThe whole conversation (Mikkel's words are machine-transcribed Danish; Grace's are context only):\n{transcript}\n\n\
+             Current memories:\n{}\n\nOpen commitments:\n{}",
+            calendar(self.now()),
+            list(
+                facts
+                    .iter()
+                    .map(|f| format!("[{}] {}", f.id, f.text))
+                    .collect()
+            ),
+            list(
+                open.iter()
+                    .map(|c| format!("[{}] {}", c.id, c.text))
+                    .collect()
+            ),
+        );
+        let mut req = ChatRequest::new(vec![
+            json!({ "role": "system", "content": format!("{EXTRACT_SYSTEM}\n\n{RECONCILE_EXTRA}") }),
+            json!({ "role": "user", "content": prompt }),
+        ]);
+        req.max_tokens = 700;
+        req.temperature = 0.2;
+        let out = self.llm.complete_json(&req, &extract_schema()).await?;
+        let known: HashSet<i64> = facts.iter().map(|f| f.id).collect();
+        let open_ids: HashSet<i64> = open.iter().map(|c| c.id).collect();
+        let said = said.join("\n");
+        for op in out["ops"].as_array().cloned().unwrap_or_default() {
+            self.apply(&op, last_user, &said, &known, &open_ids).await?;
+        }
+        self.db().set_reconciled(session, self.now())?;
+        info!(session, "memory: session reconciled");
+        Ok(())
+    }
+
+    /// Reconciles earlier sessions that ended without it (Grace was stopped). Background work.
+    pub async fn reconcile_pending(self: Arc<Self>) {
+        let pending = match self.db().unreconciled_sessions(self.session) {
+            Ok(p) => p,
+            Err(e) => return warn!(error = %e, "memory: listing sessions failed"),
+        };
+        for session in pending {
+            if let Err(e) = self.reconcile_session(session).await {
+                warn!(error = %e, session, "memory: reconciliation failed");
+            }
+        }
+    }
+
+    /// This session's id (the benchmark reconciles it when a scripted session ends).
+    pub fn session(&self) -> i64 {
+        self.session
     }
 
     async fn apply(
@@ -532,6 +623,8 @@ Operations on memories: 'add' (id 0) for a new memory. 'update' with an existing
 Operations on commitments (things Grace should bring up later): 'commit' only when Mikkel explicitly asks Grace to remind him, ask him, or check on something later (never on your own initiative); 'text' says what Grace should do ('Ask Mikkel for the details of his 16 November assignment'); 'due' (only this field uses YYYY-MM-DD) is the first day to bring it up, or '' for the next conversation. 'done' with an open commitment's id when this exchange fulfils it: he gave the details, did the thing, or acknowledged the reminder. 'cancel' with an open commitment's id when he no longer wants it. A commitment never replaces facts: also add the facts he stated (a reminder to renew a passport that expires in February is a commitment plus the fact about the expiry).
 Confidence: 0.9 when Mikkel stated it plainly, 0.6 when inferred.
 Most exchanges contain nothing worth remembering: then return an empty list.";
+
+const RECONCILE_EXTRA: &str = "This time you see a whole conversation at once, after per-exchange learning already ran. Make the memories match what Mikkel said by the END of the conversation: a later statement overrides an earlier one ('on Thursday ... no wait, Friday' leaves only Friday). Fix memories that are wrong, split, or missing; invalidate memories the conversation shows are no longer true; mark commitments done or cancelled when the conversation settled them. Evidence may quote any of Mikkel's lines. If the memories already match, return an empty list.";
 
 const SUMMARY_SYSTEM: &str = "Summarise this conversation between Mikkel and Grace (his voice assistant) for \
 Grace's memory in two to four short English sentences: what was discussed, what was decided, and anything \

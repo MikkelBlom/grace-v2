@@ -1,0 +1,22 @@
+# 20 more typical Grace sentences, so the Danish TTS bake-off has 30 with fixtures/tts/sentences.da.txt.
+# Same style: short replies, numbers and dates, names, English tech words, questions.
+Godmorgen, Mikkel.
+Det er gjort.
+Din næste aftale er klokken halv elleve med tandlægen.
+Jeg har sat en påmindelse til i morgen klokken otte.
+Toget til Aarhus kører fra perron fem om tolv minutter.
+Der er tre ulæste mails, og den ene er fra din vejleder.
+Vil du have, at jeg gemmer det som en note?
+Batteriet er på toogtyve procent, så du bør nok sætte laderen i.
+Jeg kan desværre ikke finde noget om det på nettet.
+Pull requesten er merget, og alle tests er grønne.
+Det tager cirka femogtyve minutter at cykle derhen.
+Hvad vil du gerne have, at jeg skal kalde filen?
+Temperaturen i stuen er enogtyve komma fem grader.
+Okay, jeg slukker lyset i køkkenet.
+Der skete en fejl, da jeg prøvede at åbne Spotify.
+Københavns Kommune har åbent fra ni til femten i dag.
+Jeg tror, du mener Grace Hopper, ikke Grace Kelly.
+Det var så lidt.
+Skal jeg læse den op for dig, eller vil du hellere se den på skærmen?
+Mødet er flyttet til torsdag den fjortende november.

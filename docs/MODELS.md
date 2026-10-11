@@ -62,6 +62,76 @@ but at 2–3 s per sentence they need streaming or an ONNX/compiled path before 
 reply. A Supertonic 3 run with 4 steps / 8 threads overlapped the Chatterbox download and was
 discarded as noisy.
 
+## TTS Danish — Røst v3 Chatterbox, streamed, 30 sentences × 2, 2026-10-11
+
+`bench/synth/roest_bakeoff.py` (venv `bench/.venv-roest`, torch 2.11 cu128 from the global
+Python). `fast` = `bench/synth/roest_fast.py`: same weights and sampling, but static KV cache,
+every T3 decode step and the S3Gen chunk windows as CUDA graphs (kernel launches cost ~20–50 µs
+each on this Windows box, so stock is launch-bound), bf16, sentence streamed with a 16-token
+(0.64 s) first chunk. Stability = edda-v0.2 transcript vs text (CER, numbers normalised).
+Voice: the repos' `conds.pt`, which is Resemble AI's default speaker, not CoRal's Mic/Nic.
+**The GPU was 50–98 % busy with other work during every run**, so absolute times are inflated.
+
+| Config | ttfa p50 | ttfa p95 | RTF p50 | CER | clips > 20 % CER | VRAM |
+|---|---|---|---|---|---|---|
+| 350m stock `generate()` | 6864 ms* | 11432 ms* | 1.72 | 4.5 % | 3/60 | 3.3 GB |
+| **350m fast, streamed** | **236 ms** | 295 ms | 0.29 | 5.7 % | 8/60 | 4.4 GB |
+| 350m fast, whole utterance | – | – | 0.42 | 3.8 % | 4/60 | 4.5 GB |
+| 500m stock `generate()` | 11163 ms* | 21288 ms* | 3.14 | **2.3 %** | 0/60 | 3.6 GB |
+| 500m fast, streamed, 2-step S3Gen | 300 ms | 361 ms | 0.37 | 3.3 % | 3/60 | 5.6 GB |
+| 500m fast, streamed, 2-step, no CFG | 324 ms | 375 ms | 0.38 | 2.6 % | 0/60 | 5.3 GB |
+| 500m fast, whole utterance, 10-step S3Gen | – | – | 1.29 | 3.3 % | 3/60 | 5.5 GB |
+| 500m fast, whole utterance, 2-step S3Gen | – | – | 0.69 | 3.3 % | 2/60 | 5.5 GB |
+
+\* non-streaming: ttfa = whole sentence. Same configs on the quieter GPU of 2026-10-10: 2.0 s / 3.3 s.
+
+Single-round runs show how much the shared GPU moves the result: 350m streamed 163 ms (p95 177)
+with the GPU 62 % busy, 144 ms with a 12-token first chunk; 500m 200 ms. **With llama-server
+decoding at the same time** (what happens while Grace speaks her first sentence): 350m 304 ms
+(p95 316); with a 12-token first chunk 271 ms but 27/30 sentences had audible gaps (1.7 s total).
+Stage floors (`roest_parts.py`, best of many repeats): 350m prefill ~15 ms + 3.8–4.4 ms/token +
+first S3Gen window 37–59 ms ≈ **136 ms**; 500m 17–31 ms + 7.7–9 ms/token (CFG doubles the rows,
+30 layers) + ~50 ms ≈ **242 ms**. The 500m's own 10-step S3Gen costs ~480 ms per window; it only
+works live with the 350m's 2-step "meanflow" decoder (same S3 tokens; same CER here). Shorter voice
+prompt for S3Gen (4 s instead of 10 s) saves ~20 ms per window. torch.compile was not tried
+(needs Triton, not installed); the CUDA graphs remove the launch overhead it would target.
+fp16 vs bf16 not separated (same bytes moved; contention noise is larger than the difference).
+
+Read: the fast path makes Røst streamable (stock is 10–40× too slow), but first audio is
+~140–170 ms only when the GPU is otherwise quiet and ~270–300 ms while the LLM decodes — over the
+≲ 250 ms budget, with gaps unless chunks grow gradually. The 500m is the clearer speaker
+(lower CER) and ~40–60 ms slower to first audio. Neither has been judged by ear yet:
+`bench-results/tts-da/listen/` (5 clips each: 350m, 500m, 500m stock reference).
+
+Licence (both repos, `LICENSE`, read 2026-10-11): Alexandra Institute "Software – license to use",
+AI Pubs OpenRAIL-M text plus Danish law and arbitration in Aarhus. Commercial use allowed, but
+the Attachment A use restrictions travel with the model, its derivatives and its output; among
+them: no synthesising or modifying a natural person's voice without that person's prior informed
+consent (4b); no autonomous audio interaction with a person unless they were told beforehand it is
+not a human (4c); no medical advice without accreditation (6); the licensor may restrict use
+remotely or by update (7). Watermarking is not a licence term: the Perth watermark is a
+`chatterbox-tts` default (`roest_fast` skips it for live use, `tts_da.py` keeps it).
+Weights: only T3 is fine-tuned; `s3gen`, `ve` and `conds.pt` are byte-identical to Resemble AI's
+MIT releases. CoRal's Mic and Nic (the voices behind MOS 4.01/4.23) are not shipped; using them
+needs reference clips from `CoRal-project/coral-tts` (CC0, two professional speakers, made for
+speech synthesis; not the OpenRAIL-D CoRal ASR set). Not fetched: needs Mikkel's go-ahead.
+
+## Synthetic Danish speech — `bench/synth/tts_da.py`, 2026-10-11
+
+For other tracks' training/test data: `synthesize(text, voice_id) -> (float32, 16000)` and a CLI
+(JSONL in, 16 kHz WAVs plus a manifest out, `--check` re-synthesises clips edda can't transcribe).
+Voices: 24 cloning prompts (12 F / 12 M, ages 18–61, 7 dialect regions, 10–19 s, SNR 33–45 dB) from
+NST Danish (CC0, Språkbanken; read from the `alexandrainst/nst-da` mirror), built by
+`build_voice_bank.py` into `fixtures/corpora/voices/` with source and licence per voice. Common
+Voice da was skipped (Mozilla Data Collective needs an account); CoRal audio is never used.
+
+Engine: **Resemble AI's multilingual Chatterbox (MIT) + the 2-step meanflow S3Gen**, not Røst:
+cloning NST speakers would breach Røst's rule 4b (they never consented to voice synthesis).
+Bake-off on the same 30 sentences: CER 2.7 % (2/60 > 20 %), RTF 0.34 on the busy GPU (10-step
+S3Gen: RTF 0.66, CER 5.7 % with another voice). 24/24 bank voices came out intelligible (mean CER
+1.2 %, max 9 %), and a speaker-embedding check put every clip nearest its own prompt (24/24; cosine
+0.84 to own prompt vs 0.75 to the nearest other).
+
 ## TTS English — 10 typical Grace sentences, 2026-10-10
 
 Grace may answer in English while Mikkel speaks Danish ([0011](adr/0011-reply-language.md)).

@@ -197,6 +197,17 @@ impl Memory {
         conn.execute_batch(&format!(
             "CREATE VIRTUAL TABLE IF NOT EXISTS facts_vec USING vec0(embedding float[{dim}] distance_metric=cosine);"
         ))?;
+        // ADR 0015: reminders used to be `followup` facts; they are commitments now. Moves any
+        // that are still current (runs once: the moved facts are closed).
+        conn.execute_batch(
+            "BEGIN;
+             INSERT INTO commitments(text, source_turn, created_at)
+                 SELECT text, source_turn, recorded_at FROM facts
+                 WHERE kind = 'followup' AND invalidated_at IS NULL;
+             UPDATE facts SET invalidated_at = recorded_at, valid_to = recorded_at
+                 WHERE kind = 'followup' AND invalidated_at IS NULL;
+             COMMIT;",
+        )?;
         Ok(Self { conn, dim })
     }
 
@@ -510,6 +521,48 @@ mod tests {
         }
         let n = v.iter().map(|x| x * x).sum::<f32>().sqrt();
         v.iter().map(|x| x / n).collect()
+    }
+
+    #[test]
+    fn followup_facts_become_commitments_on_open() {
+        let path = std::env::temp_dir().join(format!("grace-mig-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut m = Memory::open(&path, "test", 8).unwrap();
+            m.add_fact(
+                "Ask Mikkel about the project",
+                FactKind::Followup,
+                0.9,
+                None,
+                &emb(&[1]),
+                5.0,
+            )
+            .unwrap();
+            m.add_fact(
+                "Mikkel likes tea",
+                FactKind::User,
+                0.9,
+                None,
+                &emb(&[2]),
+                5.0,
+            )
+            .unwrap();
+        }
+        let m = Memory::open(&path, "test", 8).unwrap();
+        let c = m.commitments().unwrap();
+        assert_eq!(c.len(), 1);
+        assert!(c[0].open && c[0].text.contains("project"));
+        let facts = m.current_facts(10).unwrap();
+        assert_eq!(
+            facts.len(),
+            1,
+            "the followup fact is closed, the tea fact stays"
+        );
+        drop(m);
+        let m = Memory::open(&path, "test", 8).unwrap();
+        assert_eq!(m.commitments().unwrap().len(), 1, "runs once");
+        drop(m);
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

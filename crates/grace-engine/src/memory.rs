@@ -29,6 +29,8 @@ const EMBEDDER: &str = "microsoft/harrier-oss-v1-270m";
 const DIM: usize = 640;
 /// Cosine distance above which a recalled fact is too unrelated to mention.
 const MAX_DISTANCE: f64 = 0.55;
+/// Cosine distance below which a new fact counts as a duplicate of an existing one.
+const DUPLICATE_DISTANCE: f64 = 0.08;
 
 fn now_unix() -> f64 {
     std::time::SystemTime::now()
@@ -197,6 +199,18 @@ impl MemoryService {
             match op["op"].as_str() {
                 Some("add") if !text.is_empty() => {
                     let e = self.embedder.embed("document", &[&text]).await?.remove(0);
+                    // Near-duplicates of a current fact are dropped (a live run stored
+                    // "Sofie lives in Copenhagen" twice).
+                    let dup = self
+                        .db()
+                        .search(&text, &e, 1)?
+                        .into_iter()
+                        .next()
+                        .filter(|h| h.distance.is_some_and(|d| d < DUPLICATE_DISTANCE));
+                    if let Some(h) = dup {
+                        info!(existing = h.fact.id, text = %text, "memory: duplicate skipped");
+                        continue;
+                    }
                     let new =
                         self.db()
                             .add_fact(&text, kind, confidence, Some(user_turn), &e, now)?;
@@ -295,7 +309,7 @@ pub fn with_recall(user: &str, recalled: &[Fact]) -> String {
 
 const EXTRACT_SYSTEM: &str = "You maintain Grace's long-term memory about Mikkel, the person she talks to. From the latest exchange, decide what is worth remembering beyond today.
 Remember: facts about Mikkel and the people in his life, his projects, plans and dates, preferences, how he wants Grace to behave, and corrections of what Grace believed.
-Do not remember: small talk, greetings, questions he asked, things only Grace said, tests of the system, or anything already covered by an existing memory.
+Do not remember: small talk, greetings, questions he asked, things only Grace said, tests of the system, vague impressions, or anything already covered by an existing memory. Momentary commands are not preferences: 'be quiet', 'stop', 'say that again', 'hold din kæft' apply to that moment only; store a preference only when he states a lasting wish ('I always want short answers').
 Write each memory in English, third person ('Mikkel ...'), short and self-contained. Turn relative dates ('next Tuesday') into absolute dates using today's date.
 Kinds: 'user' = about Mikkel's life, people, plans, projects and circumstances; 'preference' = how Mikkel wants Grace to talk or behave; 'grace' = about Grace herself (her name, origin, abilities); 'environment' = Mikkel's computer, devices and setup.
 Operations: 'add' (id 0) for a new memory. 'update' with an existing id when the exchange changes that memory (a new value, a corrected detail). 'invalidate' with an existing id when it is simply no longer true: something cancelled, finished, sold, ended. Example: existing [7] 'Mikkel has a dentist appointment on 14 October' and Mikkel says the appointment was cancelled -> invalidate 7 (do not add a 'was cancelled' memory). Never leave two memories that contradict each other.

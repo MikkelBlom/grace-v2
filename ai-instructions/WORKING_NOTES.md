@@ -127,3 +127,7 @@
   watchdog (sequential joins) never reported the dead capture thread. Now: self-healing audio
   threads, concurrent watchdog, EndOfTurn so a reply isn't "drained" while TTS is still behind.
   Memory itself worked in that run: sister Aarhus → København corrected and recalled.
+- Memory from the live run, cleaned by hand in Mikkel's local data/memory.db (2026-10-11): closed
+  fact 7 "Mikkel wants Grace to be quiet" (from a momentary "hold din kæft"), 10 (vague
+  inference) and 9 (duplicate of 8). Learning now skips near-duplicates (cosine < 0.08) and the
+  prompt says momentary commands are not preferences; memory-lab covers both.

@@ -74,6 +74,11 @@ async fn memory_lab(llm: LlmClient) -> anyhow::Result<()> {
             "Sorry to hear the exam was cancelled.",
         ),
         ("Hvad er klokken?", "It's around three."),
+        ("Hold din kæft", "Okay, I'll be quiet."),
+        (
+            "Min søster bor i København",
+            "Yes, Sofie lives in Copenhagen.",
+        ),
     ];
     for (user, reply) in exchanges {
         let turn = mem.add_turn("user", user)?;

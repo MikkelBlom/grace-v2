@@ -489,6 +489,7 @@ dependencies = [
  "grace-core",
  "hound",
  "ort",
+ "rustfft",
  "serde_json",
 ]
 

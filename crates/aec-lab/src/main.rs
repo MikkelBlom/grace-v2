@@ -168,7 +168,10 @@ fn main() -> anyhow::Result<()> {
         let linear_rate = (linear_frame * 100) as u32;
         let mut w = hound::WavWriter::create(
             dir.join("ours_linear.wav"),
-            hound::WavSpec { sample_rate: linear_rate, ..spec },
+            hound::WavSpec {
+                sample_rate: linear_rate,
+                ..spec
+            },
         )?;
         for s in &linear {
             w.write_sample(*s)?;

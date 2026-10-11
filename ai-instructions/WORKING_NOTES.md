@@ -77,3 +77,11 @@
   (~0.5-1 s after each was shown); STT WER raw 18 %, Windows comms 9 %, ours 32-35 %, AEC3 linear
   68 %; Grace's English never appears in the Danish-forced transcript. → ADR 0012 dual path.
   Echo delay this session: ~158 ms (one outlier window at 398 ms during double-talk).
+- Smart Turn v3.2: use the **fp32** model (`smart-turn-v3.2-gpu.onnx`, saved as -fp32; runs on CPU
+  ~43 ms with 2 threads). The int8 `-cpu` model is numerically unstable near 0.5 (0.26–0.55 on one
+  clip across ORT settings). Rust features == HF WhisperFeatureExtractor (1.7e-5); predictions
+  identical to Python. Our complete-vs-cut FLEURS test: 70 % at 0.5 (published Danish 92.8 %).
+  Tuning idea for TurnMachine: trust a "complete" verdict only after a minimum silence (~300 ms),
+  and re-score as silence grows, to cut premature replies (25/60 cut-offs scored "complete").
+- bench/.venv: something pulled huggingface_hub 2.2 (breaks transformers 4.57); pinned back to
+  0.36. Pin it if installing anything new there.

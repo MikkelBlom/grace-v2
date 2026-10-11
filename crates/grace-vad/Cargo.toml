@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 anyhow = "1.0.104"
 ort = "=2.0.0-rc.13"
+rustfft = "6.4.1"
 
 [lints]
 workspace = true

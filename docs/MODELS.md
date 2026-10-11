@@ -11,7 +11,7 @@ Landscape researched 2026-10-10.
 | STT (final) | **edda-v0.2** (Whisper turbo FT, Apache 2.0) | Brage v1 (gated), Røst-v3 | Measured, see below |
 | STT (fast/partials) | **ekko-v1-tiny** (Parakeet 110M, sherpa-onnx) | — | Measured; licence is custom, check before shipping |
 | VAD | **Silero VAD v6.2.3** (ONNX, 1 CPU thread, ~0.1 ms per 32 ms frame) | TEN VAD | Speech found in 60/60 FLEURS clips |
-| End of turn | Pipecat Smart Turn v3.2 (Danish listed) | silence timeout | Not measured yet |
+| End of turn | **Smart Turn v3.2 fp32** (CPU, ~43 ms) + silence timeout | int8 build rejected (unstable near 0.5) | 70 % on our harsh complete-vs-cut FLEURS test; published Danish 92.8 % |
 | LLM | **Gemma 4 12B** (decided 2026-10-10; Tau2 69 vs E4B's 42) | E4B as fast router, Qwen3.5-9B (Tau2 79, Danish unproven) | v0.3 bake-off on our tool traces |
 | LLM runtime | llama.cpp `llama-server` (child process) | mistral.rs embedded (Rust, needs own CUDA build on Windows) | — |
 | TTS (reply voice) | **English** for now ([0011](adr/0011-reply-language.md)): Pocket TTS (CPU, streaming) vs Kokoro (CUDA) | Danish voices below | Blind listening test pending |
@@ -119,5 +119,19 @@ Double-talk (a FLEURS Danish speaker mixed in while Grace talks, adapted AEC + b
 the echo's level detected (starts ~1 s late); 6 dB quieter, patchy; 12 dB quieter (below room
 noise), missed. AEC3's suppressor dampens near-end speech during double-talk: tune it, and
 confirm with Mikkel's real voice over playback.
+
+## End of turn — Smart Turn v3.2, 2026-10-11
+
+Our Rust features match Hugging Face's `WhisperFeatureExtractor` to 1.7e-5; Rust and Python
+predictions on the same files are identical. The int8 `-cpu` model gives 0.26–0.55 on one
+borderline clip depending only on ONNX Runtime optimization level and threads; the fp32 model
+gives 0.1004 under every setting, so fp32 it is (~43 ms per prediction, 2 threads).
+
+Test: 60 FLEURS Danish clips, each complete and cut off at a random 40–70 % point
+(`bench/make_turn_fixtures.py`). At threshold 0.5: 49/60 complete and 35/60 cut-off recognised,
+70 %. Random cuts often land on clause boundaries where a pause is natural, so this undersells
+real use; the published Danish figure is 92.8 %. The silence timeout in `TurnMachine` catches
+"complete" turns the model misses (cost: up to 1.6 s extra wait). Premature "complete" verdicts
+on cut-offs (25/60) are the risk: Grace answering too early. Measure on Mikkel's real speech.
 
 Quality is judged by ear: `grace-bench listen bench-results/tts` (Danish) and `grace-bench listen bench-results/en/tts` (English) build blind A/B pages.

@@ -26,6 +26,9 @@ FILES = [
 MODELS = [
     # (repo, file): Google's quantization-aware-trained Q4_0, better than post-hoc Q4 at the same size.
     ("google/gemma-4-12B-it-qat-q4_0-gguf", "gemma-4-12b-it-qat-q4_0.gguf"),
+    # Smart Turn v3.2 full precision: the int8 "-cpu" build swings ±0.3 near the decision
+    # threshold depending on ONNX Runtime settings (2026-10-11).
+    ("pipecat-ai/smart-turn-v3", "smart-turn-v3.2-gpu.onnx"),
 ]
 
 
@@ -55,7 +58,13 @@ def fetch_files():
 
 def fetch_models():
     for repo, name in MODELS:
-        path = hf_hub_download(repo, name, local_dir=ROOT / "models")
+        path = Path(hf_hub_download(repo, name, local_dir=ROOT / "models"))
+        if name == "smart-turn-v3.2-gpu.onnx":
+            # The "gpu" file is the fp32 model; it runs on CPU too. Give it an honest name.
+            target = path.with_name("smart-turn-v3.2-fp32.onnx")
+            if not target.exists():
+                target.write_bytes(path.read_bytes())
+            path = target
         print(f"model: {path}")
 
 

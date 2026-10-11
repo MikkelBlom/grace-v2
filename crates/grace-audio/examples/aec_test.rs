@@ -353,8 +353,10 @@ Read each line aloud at normal volume when it appears:
                 println!("  {}. {line}", i + 1);
                 thread::sleep(Duration::from_millis(3500));
             }
-            println!("
-  That's all. Stay quiet; Grace is finishing her last sentence ...");
+            println!(
+                "
+  That's all. Stay quiet; Grace is finishing her last sentence ..."
+            );
         });
     }
     let render_started = started.elapsed();
@@ -410,7 +412,10 @@ Read each line aloud at normal volume when it appears:
         ),
     }
     analyse(&takes, Some(render_started.as_secs_f64() * 1000.0))?;
-    println!("recordings: {}
-Done.", dir.display());
+    println!(
+        "recordings: {}
+Done.",
+        dir.display()
+    );
     Ok(())
 }

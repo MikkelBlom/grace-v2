@@ -1,7 +1,11 @@
-//! Voice activity detection: Silero VAD v6 on ONNX Runtime, plus a 48→16 kHz decimator.
+//! Speech-model wrappers on ONNX Runtime: Silero VAD v6 (is someone speaking?), Smart Turn
+//! v3.2 (have they finished?), plus a 48→16 kHz decimator and Whisper log-mel features.
 //!
 //! [`SileroVad`] returns a speech probability per 32 ms frame. Turning probabilities into
 //! "speech started / stopped" edges is policy, and lives in `grace_core::vad_gate`.
+
+pub mod mel;
+pub mod smart_turn;
 
 use std::path::Path;
 

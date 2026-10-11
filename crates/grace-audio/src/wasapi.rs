@@ -214,6 +214,34 @@ pub struct Capture {
     client: IAudioClient,
     capture: IAudioCaptureClient,
     fmt: Format,
+    timeline: Timeline,
+    samples_read: u64,
+}
+
+/// Maps sample indices of one stream to the system performance clock, so streams from
+/// different devices (mic, loopback) can be aligned exactly.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct Timeline {
+    pub rate: u32,
+    /// (index of the packet's first sample, its capture time in 100 ns QPC units).
+    pub stamps: Vec<(u64, u64)>,
+    /// Packets the driver flagged as discontinuous (glitches): non-zero means samples were lost.
+    pub discontinuities: u32,
+}
+
+impl Timeline {
+    /// Capture time of sample `index`, in seconds on the QPC clock. Interpolates between packet
+    /// stamps; extrapolates at the sample rate outside them.
+    pub fn time_of(&self, index: f64) -> Option<f64> {
+        let first = self.stamps.first()?;
+        let pos = self.stamps.partition_point(|(i, _)| (*i as f64) <= index);
+        let (i0, t0) = if pos == 0 {
+            *first
+        } else {
+            self.stamps[pos - 1]
+        };
+        Some(t0 as f64 * 1e-7 + (index - i0 as f64) / self.rate as f64)
+    }
 }
 
 impl Capture {
@@ -275,12 +303,21 @@ impl Capture {
                 client: client.cast()?,
                 capture,
                 fmt,
+                timeline: Timeline {
+                    rate: fmt.rate,
+                    ..Timeline::default()
+                },
+                samples_read: 0,
             })
         }
     }
 
     pub fn rate(&self) -> u32 {
         self.fmt.rate
+    }
+
+    pub fn timeline(&self) -> &Timeline {
+        &self.timeline
     }
 
     pub fn start(&self) -> anyhow::Result<()> {
@@ -296,8 +333,14 @@ impl Capture {
                 let mut data = std::ptr::null_mut();
                 let mut frames = 0u32;
                 let mut flags = 0u32;
+                let mut qpc = 0u64;
                 self.capture
-                    .GetBuffer(&mut data, &mut frames, &mut flags, None, None)?;
+                    .GetBuffer(&mut data, &mut frames, &mut flags, None, Some(&mut qpc))?;
+                self.timeline.stamps.push((self.samples_read, qpc));
+                if flags & (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32) != 0 {
+                    self.timeline.discontinuities += 1;
+                }
+                self.samples_read += frames as u64;
                 let block = self.fmt.channels as usize * (self.fmt.bits as usize / 8);
                 if flags & (AUDCLNT_BUFFERFLAGS_SILENT.0 as u32) != 0 {
                     out.extend(std::iter::repeat_n(0.0, frames as usize));

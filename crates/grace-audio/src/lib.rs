@@ -4,4 +4,5 @@
 //! construction. That unsafety is confined to this crate; everything it exposes is safe.
 #![allow(unsafe_code)]
 
+pub mod calibrate;
 pub mod wasapi;

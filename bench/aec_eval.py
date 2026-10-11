@@ -13,7 +13,8 @@ d = Path(sys.argv[1])
 sr = 48000
 lp = sf.read(d / "loopback.wav")[0]
 # Experimental: alignment is estimated, not measured; trust the echo peak more than the levels.
-names = ["raw.wav", "aec.wav"] + [a for a in sys.argv[2:]] + (["ours.wav"] if (d / "ours.wav").exists() else [])
+first = ["mic.wav"] if (d / "mic.wav").exists() else ["raw.wav", "aec.wav"]
+names = first + [a for a in sys.argv[2:]] + (["ours.wav"] if (d / "ours.wav").exists() else [])
 
 
 def gcc(ref, sig, maxlag):
@@ -26,14 +27,17 @@ def gcc(ref, sig, maxlag):
     return (k - maxlag) / sr * 1000, abs(cc[k]) / np.std(cc)
 
 
-seg = lp[int(1.6 * sr): int(12 * sr)]
+# The part of the loopback where something plays (skip leading silence).
+loud_idx = np.nonzero(np.abs(lp) > 1e-3)[0]
+start = int(loud_idx[0]) if len(loud_idx) else 0
+seg = lp[start: start + 10 * sr]
 loud = None
 for name in dict.fromkeys(names):
     m = sf.read(d / name)[0]
-    off, peak = gcc(seg, m[int(1.6 * sr): int(1.6 * sr) + len(seg) + 4 * sr], 4 * sr)
+    off, peak = gcc(seg, m[max(start - sr, 0): max(start - sr, 0) + len(seg) + 4 * sr], 4 * sr)
     # Levels while the (aligned) clip is loud vs. paused, 10 ms frames, medians.
     f = sr // 100
-    shift = int(-off / 1000 * sr)
+    shift = int(-off / 1000 * sr) + start - max(start - sr, 0)
     n = min(len(lp) - max(shift, 0), len(m)) // f
     e_lp = np.array([np.mean(lp[i * f + shift: (i + 1) * f + shift] ** 2) if 0 <= i * f + shift < len(lp) - f else 0 for i in range(n)])
     e_m = np.array([np.mean(m[i * f:(i + 1) * f] ** 2) for i in range(n)])

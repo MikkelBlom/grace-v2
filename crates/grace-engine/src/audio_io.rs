@@ -36,6 +36,8 @@ pub struct Chunk {
 }
 
 pub const RATE: u32 = 48_000;
+/// Samples quieter than this (about -54 dBFS) count as silence for "is Grace still talking".
+const AUDIBLE: f32 = 0.002;
 
 pub fn spawn_capture(
     source: Source,
@@ -130,6 +132,7 @@ pub fn spawn_render(
             let mut scratch = Vec::new();
             let mut last_busy = 0.0f64;
             let mut drain_at: Option<f64> = None;
+            let mut audible_left = 0usize;
             while !stop.load(Ordering::Relaxed) {
                 while let Ok(cmd) = cmds.try_recv() {
                     match cmd {
@@ -137,6 +140,11 @@ pub fn spawn_render(
                             if current != Some(turn) {
                                 current = Some(turn);
                                 started = false;
+                            }
+                            // Track where the last audible sample is: TTS ends replies with ~0.5 s
+                            // of silence, and a reply is over once its voice is, not its padding.
+                            if let Some(last) = samples.iter().rposition(|s| s.abs() > AUDIBLE) {
+                                audible_left = queue.len() + last + 1;
                             }
                             queue.extend(samples.into_iter().map(|s| (turn, s)));
                         }
@@ -148,7 +156,10 @@ pub fn spawn_render(
                 scratch.clear();
                 for _ in 0..n {
                     gain += (target - gain) * 0.002; // ~10 ms smoothing at 48 kHz
-                    let s = match queue.pop_front() {
+                    let s = match queue
+                        .pop_front()
+                        .inspect(|_| audible_left = audible_left.saturating_sub(1))
+                    {
                         Some((turn, s)) => {
                             if !started && Some(turn) == current {
                                 started = true;
@@ -159,6 +170,7 @@ pub fn spawn_render(
                                 let f = fade_out as f32 / (RATE / 50) as f32;
                                 if fade_out == 0 {
                                     queue.clear();
+                                    audible_left = 0;
                                 }
                                 s * gain * f
                             } else {
@@ -173,7 +185,7 @@ pub fn spawn_render(
                     scratch.push(s);
                 }
                 out.write(&scratch)?;
-                let busy = !queue.is_empty();
+                let busy = audible_left > 0;
                 // Her voice is still in the room for the device buffer + speaker delay (Bluetooth
                 // ~150 ms) after the last sample leaves the queue.
                 if busy {

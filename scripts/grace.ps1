@@ -10,7 +10,11 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 New-Item -ItemType Directory -Force logs | Out-Null
 
-function Test-Port($port) { (Test-NetConnection 127.0.0.1 -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded }
+# Fast local port check (Test-NetConnection takes ~10 s per closed port).
+function Test-Port($port) {
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try { return $client.ConnectAsync('127.0.0.1', $port).Wait(200) } catch { return $false } finally { $client.Dispose() }
+}
 function Wait-Port($port, $what, $seconds) {
     $deadline = (Get-Date).AddSeconds($seconds)
     while (-not (Test-Port $port)) {

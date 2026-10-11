@@ -106,3 +106,9 @@
   layer keeps only grace* targets below WARN.
 - Voice: `config/speech.json` tts_voice (default jane); samples in bench-results/voices/tts/listen.html.
   `./scripts/grace.ps1 -Restart` restarts the speech server to apply it.
+- Headset run (2026-10-11, traces/engine-1791685410782.jsonl, JBL Tune 777NC): speech end → first
+  audio 0.66–0.79 s. Fixes: TurnMachine waits 3 s (not 1.6 s) when Smart Turn scores < 0.1
+  ("jeg tænker på at øh" scored 0.005 but was cut off by the fallback); render counts a reply as
+  done after its last audible sample (Pocket TTS pads ~0.5 s of silence, so Mikkel's next words
+  landed in the padding and showed as "(interrupted)"); launcher port check 200 ms instead of
+  Test-NetConnection's ~10 s.

@@ -21,6 +21,11 @@ pub struct Config {
     pub turn_end_threshold: f32,
     /// Silence after which the turn ends even if the turn-end model disagrees.
     pub max_trailing_silence: Duration,
+    /// Below this turn-end probability the model is confident the user is mid-thought...
+    pub unfinished_threshold: f32,
+    /// ...so the silence fallback waits this long instead (live run: a deliberate 2 s pause
+    /// after "jeg tænker på at øh" scored 0.005 but was cut off by the 1.6 s fallback).
+    pub max_trailing_silence_unfinished: Duration,
     /// Speech during a reply must last this long to count as an interruption.
     pub min_barge_in: Duration,
 }
@@ -30,6 +35,8 @@ impl Default for Config {
         Self {
             turn_end_threshold: 0.5,
             max_trailing_silence: Duration::from_millis(1600),
+            unfinished_threshold: 0.1,
+            max_trailing_silence_unfinished: Duration::from_millis(3000),
             min_barge_in: Duration::from_millis(350),
         }
     }
@@ -90,6 +97,8 @@ pub enum Phase {
         since: Duration,
         committed: bool,
         transcript: Option<String>,
+        /// Silence after which this pause ends the turn regardless of the model.
+        wait: Duration,
     },
     Replying {
         turn: TurnId,
@@ -132,6 +141,7 @@ impl TurnMachine {
                     since: now,
                     committed: false,
                     transcript: None,
+                    wait: self.cfg.max_trailing_silence,
                 }
             }
 
@@ -146,6 +156,7 @@ impl TurnMachine {
                     since,
                     committed,
                     transcript,
+                    wait,
                 },
                 Input::TurnEndScore {
                     turn: scored,
@@ -153,7 +164,12 @@ impl TurnMachine {
                 },
             ) if scored == turn => {
                 let committed = committed || probability >= self.cfg.turn_end_threshold;
-                self.settle(turn, since, committed, transcript, &mut out)
+                let wait = if probability < self.cfg.unfinished_threshold {
+                    self.cfg.max_trailing_silence_unfinished
+                } else {
+                    wait
+                };
+                self.settle(turn, since, committed, transcript, wait, &mut out)
             }
 
             (
@@ -161,21 +177,23 @@ impl TurnMachine {
                     turn,
                     since,
                     committed,
+                    wait,
                     ..
                 },
                 Input::Transcript { turn: heard, text },
-            ) if heard == turn => self.settle(turn, since, committed, Some(text), &mut out),
+            ) if heard == turn => self.settle(turn, since, committed, Some(text), wait, &mut out),
 
             (
                 Phase::Paused {
                     turn,
                     since,
                     transcript,
+                    wait,
                     ..
                 },
                 Input::Tick,
-            ) if now.saturating_sub(since) >= self.cfg.max_trailing_silence => {
-                self.settle(turn, since, true, transcript, &mut out)
+            ) if now.saturating_sub(since) >= wait => {
+                self.settle(turn, since, true, transcript, wait, &mut out)
             }
 
             (
@@ -253,6 +271,7 @@ impl TurnMachine {
         since: Duration,
         committed: bool,
         transcript: Option<String>,
+        wait: Duration,
         out: &mut Vec<Command>,
     ) -> Phase {
         match (committed, transcript) {
@@ -272,6 +291,7 @@ impl TurnMachine {
                 since,
                 committed,
                 transcript,
+                wait,
             },
         }
     }
@@ -492,5 +512,43 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn confident_unfinished_score_waits_longer() {
+        let mut m = machine();
+        m.step(Input::SpeechStarted, ms(0));
+        m.step(Input::SpeechStopped, ms(1000));
+        m.step(
+            Input::Transcript {
+                turn: 1,
+                text: "jeg tænker på at øh".into(),
+            },
+            ms(1100),
+        );
+        m.step(
+            Input::TurnEndScore {
+                turn: 1,
+                probability: 0.005,
+            },
+            ms(1150),
+        );
+        assert_eq!(
+            m.step(Input::Tick, ms(2700)),
+            vec![],
+            "1.7 s: still waiting"
+        );
+        assert_eq!(
+            m.step(Input::Tick, ms(3900)),
+            vec![],
+            "2.9 s: still waiting"
+        );
+        assert_eq!(
+            m.step(Input::Tick, ms(4000)),
+            vec![Command::Respond {
+                turn: 1,
+                text: "jeg tænker på at øh".into()
+            }]
+        );
     }
 }

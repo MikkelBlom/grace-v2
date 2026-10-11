@@ -3,6 +3,13 @@
 Parked so they don't derail the current milestone. Promote to a GitHub issue when it's time.
 
 ## Speech
+- **Neural residual-echo suppressor for barge-in** (high): AEC3 can't separate a person 1-2 m
+  away from Grace's louder echo (grace-sim: barge-in ~1.2-1.5 s late, 5-7/40 missed). A small
+  model taking (linear AEC output, loopback) → near-end mask, trained on grace-sim scenes
+  (CoRal + Grace's voice + room simulation), is a known approach (DTLN-aec class). Measure with
+  grace-sim double-talk/echo sets.
+- **Cold-start double-talk detector**: `double_talk_db = 0` removes the first-reply false
+  triggers in grace-sim at no detection cost; consider enabling once validated live.
 - **[high]** Two-pass STT: ekko-v1-tiny partials every ~300 ms for early LLM prefill, edda for
   the final transcript. Needs measurement of how often partial == final.
 - **[high]** Stream Chatterbox at token level (emit audio per chunk of speech tokens) or export

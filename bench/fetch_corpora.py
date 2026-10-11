@@ -68,20 +68,37 @@ def demand():
 
 
 def esc50():
-    import zipfile
+    """ESC-50 from its Hugging Face mirror (resumable; the GitHub zip stalled), laid out like the
+    original: audio/<filename> and meta/esc50.csv."""
+    import csv
+    import io
+
+    import pyarrow.parquet as pq
+    import soundfile as sf
+    from huggingface_hub import HfApi, hf_hub_download
 
     out = CORPORA / "esc50"
-    if out.exists():
+    if (out / "meta" / "esc50.csv").exists():
         print("esc50 already there")
         return
-    CORPORA.mkdir(parents=True, exist_ok=True)
-    z = CORPORA / "esc50.zip"
-    urllib.request.urlretrieve("https://github.com/karoldvl/ESC-50/archive/master.zip", z)
-    with zipfile.ZipFile(z) as f:
-        f.extractall(CORPORA)
-    (CORPORA / "ESC-50-master").rename(out)
-    z.unlink()
-    print("esc50 ready:", out)
+    (out / "audio").mkdir(parents=True, exist_ok=True)
+    (out / "meta").mkdir(parents=True, exist_ok=True)
+    rows = []
+    files = [s.rfilename for s in HfApi().dataset_info("ashraq/esc50").siblings
+             if s.rfilename.endswith(".parquet")]
+    for name in files:
+        p = Path(hf_hub_download("ashraq/esc50", name, repo_type="dataset", local_dir=out / "parquet"))
+        t = pq.read_table(p)
+        for r in t.to_pylist():
+            a, rate = sf.read(io.BytesIO(r["audio"]["bytes"]), dtype="float32")
+            sf.write(out / "audio" / r["filename"], a, rate)
+            rows.append({"filename": r["filename"], "category": r["category"]})
+        p.unlink()
+    with open(out / "meta" / "esc50.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["filename", "category"])
+        w.writeheader()
+        w.writerows(rows)
+    print("esc50 ready:", out, len(rows))
 
 
 if __name__ == "__main__":

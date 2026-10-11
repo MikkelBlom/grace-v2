@@ -95,11 +95,22 @@ impl LlmClient {
     /// llama-server), parsed as JSON. For background work such as memory extraction.
     pub async fn complete_json(&self, req: &ChatRequest, schema: &Value) -> anyhow::Result<Value> {
         let mut body = req.body();
-        body["stream"] = json!(false);
         body["response_format"] = json!({
             "type": "json_schema",
             "json_schema": { "name": "result", "schema": schema, "strict": true },
         });
+        let content = self.complete_body(body).await?;
+        serde_json::from_str(&content)
+            .with_context(|| format!("completion is not valid JSON: {content}"))
+    }
+
+    /// The whole reply at once, as plain text (benchmarks, background work).
+    pub async fn complete(&self, req: &ChatRequest) -> anyhow::Result<String> {
+        self.complete_body(req.body()).await
+    }
+
+    async fn complete_body(&self, mut body: Value) -> anyhow::Result<String> {
+        body["stream"] = json!(false);
         let resp = self
             .http
             .post(format!("{}/v1/chat/completions", self.base))
@@ -113,11 +124,10 @@ impl LlmClient {
             bail!("llama-server returned {status}: {text}");
         }
         let v: Value = resp.json().await?;
-        let content = v["choices"][0]["message"]["content"]
+        Ok(v["choices"][0]["message"]["content"]
             .as_str()
-            .context("completion has no content")?;
-        serde_json::from_str(content)
-            .with_context(|| format!("completion is not valid JSON: {content}"))
+            .context("completion has no content")?
+            .to_owned())
     }
 
     pub async fn stream(&self, req: &ChatRequest) -> anyhow::Result<DeltaStream> {

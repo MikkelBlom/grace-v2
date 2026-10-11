@@ -85,6 +85,12 @@ pub struct FrontendConfig {
     pub gate: VadGateConfig,
     /// AEC3's noise suppressor in the full chain (VAD and Smart Turn input).
     pub noise_suppression: bool,
+    /// Run VAD on AEC3's linear output instead of the full chain (residual echo suppression
+    /// also mutes a person talking over Grace).
+    pub vad_on_linear: bool,
+    /// Double-talk detector, used with `vad_on_linear`: while Grace talks, speech only counts
+    /// when the linear output is at least this many dB above the echo AEC3 removed. `None` = off.
+    pub double_talk_db: Option<f32>,
 }
 
 /// What one chunk produced: timestamped 16 kHz pieces for the rings, plus speech/delay events.
@@ -116,6 +122,10 @@ pub struct Frontend {
     vad_t0: Option<f64>,
     out: Vec<f32>,
     next_delay_check: f64,
+    vad_on_linear: bool,
+    double_talk_db: Option<f32>,
+    /// Linear output level relative to the removed echo, dB, held over ~100 ms.
+    near_vs_echo_db: f32,
 }
 
 impl Frontend {
@@ -146,6 +156,9 @@ impl Frontend {
             vad_t0: None,
             out: vec![0.0; FRAME],
             next_delay_check: 0.0,
+            vad_on_linear: cfg.vad_on_linear,
+            double_talk_db: cfg.double_talk_db,
+            near_vs_echo_db: -60.0,
         })
     }
 
@@ -219,22 +232,44 @@ impl Frontend {
             .try_pull_linear_output()
             .map_err(|e| anyhow::anyhow!("AEC3 linear: {e}"))?
         {
-            out.lin16.push((t, p.payload().samples().to_vec()));
+            let lin = p.payload().samples().to_vec();
+            if self.double_talk_db.is_some() {
+                // Echo removed = raw mic - linear output (both 16 kHz, same 10 ms).
+                let raw = self.mic16.read(t, lin.len());
+                let (mut near, mut echo) = (1e-9f32, 1e-9f32);
+                for (l, r) in lin.iter().zip(&raw) {
+                    near += l * l;
+                    echo += (r - l) * (r - l);
+                }
+                let db = 10.0 * (near / echo).log10();
+                // Fast attack, ~100 ms release: a syllable keeps the gate open between frames.
+                self.near_vs_echo_db = db.max(self.near_vs_echo_db - 1.5);
+            }
+            if self.vad_on_linear {
+                self.vad_t0.get_or_insert(t);
+                self.vad_buf.extend_from_slice(&lin);
+            }
+            out.lin16.push((t, lin));
         }
-        if !ready {
-            return Ok(());
+        if ready {
+            let mut tmp = Vec::new();
+            self.dec_aec.push(&self.out, &mut tmp);
+            if !self.vad_on_linear {
+                self.vad_t0.get_or_insert(t);
+                self.vad_buf.extend_from_slice(&tmp);
+            }
+            out.aec16.push((t, tmp));
         }
-        let mut tmp = Vec::new();
-        self.dec_aec.push(&self.out, &mut tmp);
-        if self.vad_t0.is_none() {
-            self.vad_t0 = Some(t);
-        }
-        self.vad_buf.extend_from_slice(&tmp);
-        out.aec16.push((t, tmp));
         self.gate.set_grace_talking(talking);
         while self.vad_buf.len() >= VAD_FRAME {
             let f: Vec<f32> = self.vad_buf.drain(..VAD_FRAME).collect();
-            let p = self.vad.process(&f)?;
+            let mut p = self.vad.process(&f)?;
+            if let Some(min_db) = self.double_talk_db
+                && talking
+                && self.near_vs_echo_db < min_db
+            {
+                p = 0.0; // what VAD hears is Grace's leftover echo, not a person
+            }
             let t0 = self.vad_t0.unwrap_or(t);
             let at = |frame: u64| t0 + frame as f64 * VAD_SECS;
             match self.gate.push(p) {

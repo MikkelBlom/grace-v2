@@ -152,3 +152,42 @@ Typical misses are indirect phrasings ("hvem er du opkaldt efter" → "named aft
 hybrid keyword search and a reranker are the next levers.
 
 Quality is judged by ear: `grace-bench listen bench-results/tts` (Danish) and `grace-bench listen bench-results/en/tts` (English) build blind A/B pages.
+
+## STT in simulated rooms — grace-sim pilot, CoRal v3 conversation test, 2026-10-11
+
+40 scenes per set; people from CoRal (24 test speakers), rooms simulated (RT60 0.25-0.6 s),
+Grace's echo calibrated to real Z337 recordings; cut at the true speech edges. Pilot noise was a
+synthetic fallback (DEMAND/ESC-50 still downloading), so far-field numbers are pessimistic.
+
+| edda-v0.2 int8, greedy + fallback (prod) | raw mic | AEC3 linear | AEC3 full chain |
+|---|---|---|---|
+| clean (corpus as recorded) | 14.3 % | — | — |
+| far (1.5-3 m, SNR 10-20 dB) | 43.8 % | 46.0 % | 48.8 % |
+| double-talk (Grace talking, 0.8-2 m) | 41.3 % | 40.3 % | 47.4 % |
+
+Decoding on the linear signal: fp16 beam 5, temperature 0 → clean 16.6 / far 42.9 / double-talk
+38.6 %; int8 greedy, temperature 0 → 15.0 / 46.3 / 40.1 %. Within noise at n = 40; latencies
+were inflated by a concurrent benchmark. Decision: [ADR 0014](adr/0014-stt-reads-linear-aec.md).
+
+## Memory — grace-memory-bench, 40 Danish multi-session scenarios, 2026-10-11
+
+Gemma 4 12B extractor (temperature 0.2), probes answered at temperature 0. 246 checks.
+
+| Category | v0.2 | v0.2.5 ([ADR 0015](adr/0015-memory-facts-and-commitments.md)) |
+|---|---|---|
+| **all checks** | **206 (84 %)** | **217 (88 %)** |
+| self_echo | 23/28 | 28/28 |
+| abstention | 25/28 | 28/28 |
+| commitment | 32/49 | 39/49 |
+| proactive reminder raised | 6/10 | 9/10 |
+| commitment closed when done | 2/7 | 4/7 |
+| multi_session | 67/78 | 73/78 |
+| temporal | 58/80 | 65/80 |
+| knowledge_update | 62/71 | 64/71 |
+| same_session_correction | 34/37 | 32/37 |
+| interrupted | 24/30 | 24/30 |
+| dialect | 29/35 | 28/35 |
+
+Remaining failures: renames/updates said mid-session in an interrupted turn, Danish number
+words ("femoghalvfems" stored as ninety), commitments not closed after being acted on. Run-to-run
+noise of the extractor is a few checks; compare categories, not single checks.

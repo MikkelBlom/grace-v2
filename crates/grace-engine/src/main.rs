@@ -194,6 +194,8 @@ async fn main() -> anyhow::Result<()> {
                 lead_ms: LEAD_MS,
                 gate: VadGateConfig::default(),
                 noise_suppression: true,
+                vad_on_linear: false,
+                double_talk_db: None,
             },
             chunk_rx,
             shared.clone(),

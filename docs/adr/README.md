@@ -19,5 +19,7 @@ edit history.
 | [0011](0011-reply-language.md) | Danish in, English out is acceptable | Accepted |
 | [0012](0012-dual-path-capture.md) | Two capture paths: AEC3 for *when*, Windows processing for *what* | Superseded by 0013 (STT part) |
 | [0013](0013-single-capture-path.md) | One capture path: STT reads the echo-cancelled signal | Accepted |
+| [0014](0014-stt-reads-linear-aec.md) | STT reads AEC3's linear output; test on simulated rooms | Accepted |
+| [0015](0015-memory-facts-and-commitments.md) | Memory: facts rendered by code, commitments table, quoted evidence | Accepted |
 
 Template: [0000-template.md](0000-template.md).

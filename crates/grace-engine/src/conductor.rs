@@ -251,26 +251,26 @@ fn spawn_pause_work(
     stop: f64,
     span: Span,
 ) {
-    // ADR 0013: Smart Turn and STT both read our echo-cancelled signal. (The Windows-processed
-    // path of ADR 0012 returned near-silence with a Bluetooth headset, and its stream is the
-    // prime suspect for two Windows Audio service hangs.)
-    let (aec, stt_audio, raw, lin, source) = {
+    // Smart Turn reads the full AEC3 chain (ADR 0013); STT reads AEC3's linear output, without
+    // residual-echo and noise suppression, whose artifacts cost 5-7 WER points in grace-sim
+    // (ADR 0014).
+    let (aec, stt_audio, raw, full, source) = {
         let shared = svc.shared.lock().expect("shared poisoned");
         (
             shared.aec16.read_span(start - 0.5, stop + 0.2),
-            shared.aec16.read_span(start - 0.3, stop + 0.15),
-            shared.raw16.read_span(start - 0.3, stop + 0.15),
             shared.lin16.read_span(start - 0.3, stop + 0.15),
-            "aec",
+            shared.raw16.read_span(start - 0.3, stop + 0.15),
+            shared.aec16.read_span(start - 0.3, stop + 0.15),
+            "lin",
         )
     };
-    // Keep what STT heard (and the raw mic) next to the trace: a misheard turn can be listened
-    // to and re-transcribed offline. Local only; traces/ is gitignored.
+    // Keep what STT heard (and the raw mic and full chain) next to the trace: a misheard turn can
+    // be listened to and re-transcribed offline. Local only; traces/ is gitignored.
     if let Some(dir) = &svc.turn_audio_dir {
-        let (a, r) = (stt_audio.clone(), raw);
+        let (l, r) = (stt_audio.clone(), raw);
         let base = dir.join(format!("t{turn}-{epoch}"));
         tokio::task::spawn_blocking(move || {
-            for (suffix, pcm) in [("aec", a), ("raw", r), ("lin", lin)] {
+            for (suffix, pcm) in [("lin", l), ("raw", r), ("aec", full)] {
                 let _ = crate::speech::write_wav(
                     &base.with_extension(format!("{suffix}.wav")),
                     &pcm,
@@ -345,14 +345,19 @@ fn prune_history(history: &mut Vec<(&'static str, String)>) {
     }
 }
 
-fn system_prompt(path: &PathBuf) -> String {
+/// The whole system message: the prompt file, the date, and this session's memory block.
+/// Shared with the memory benchmark, so its probes are asked exactly as Grace is asked.
+pub fn system_message(
+    path: &std::path::Path,
+    now: chrono::DateTime<chrono::Local>,
+    memory_block: &str,
+) -> String {
     // Read every turn: editing the file changes Grace's behaviour immediately (ADR 0002).
     let base = std::fs::read_to_string(path)
         .unwrap_or_else(|_| "You are Grace, a helpful voice assistant.".into());
     // Hour granularity keeps the cached prompt prefix valid for an hour at a time.
-    let now = chrono::Local::now();
     format!(
-        "{base}\n\nToday is {}, around {}:00 local time (Denmark).",
+        "{base}\n\nToday is {}, around {}:00 local time (Denmark).\n\n{memory_block}",
         now.format("%A %-d %B %Y"),
         now.format("%H")
     )
@@ -372,12 +377,10 @@ async fn speak_reply(
 ) {
     // The system prompt (live file + this session's memory block) is fixed for the session, so
     // llama-server's prompt cache stays valid across turns.
-    let system = format!(
-        "{}
-
-{}",
-        system_prompt(&svc.system_prompt),
-        svc.memory.session_block()
+    let system = system_message(
+        &svc.system_prompt,
+        chrono::Local::now(),
+        svc.memory.session_block(),
     );
     let mut messages = vec![json!({ "role": "system", "content": system })];
     // Full history (bounded by `prune_history`): a stable prefix keeps llama-server's cache valid.

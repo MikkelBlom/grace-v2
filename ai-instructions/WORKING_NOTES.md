@@ -31,8 +31,29 @@
   rendered by code, (4) Smart Turn Danish fine-tune, (5) Røst v3 Chatterbox Danish TTS bake-off.
 - **Decided 2026-10-11:** v0.3 paused for v0.2.5 Foundations (ROADMAP). Rule: Mikkel is not
   the test set (CLAUDE.md). Fast fact gate = Gemma logprob classification first, not a new model.
-- Needs Mikkel: accept CoRal v3 terms on HF (earlier 403); a second speaker device for the
-  acoustic replay tier.
+- CoRal v3 access works (2026-10-11). Acoustic replay tier: Grace on one output (Z337), the
+  "person" on the other (laptop speakers); only while Mikkel is out of the house, never at night.
+- **grace-sim findings (pilot, 40 scenes/set, 2026-10-11):**
+  - Echo after warm-up: 0 false triggers (matches live). Cold start (AEC3 unconverged, first
+    ~3 s of Grace's first reply): ~12 % of scenes trigger. Scenes now carry a 6 s warm-up.
+  - Barge-in while Grace talks: onset median ~1.2 s late, 7/40 not detected at all (talking
+    boost + gate). People 1.5-3 m away: 4/40 never trigger VAD.
+  - STT (edda int8, prod settings), oracle cuts: clean CoRal 14.3 % WER (matches leaderboard);
+    far: raw 43.8 / linear AEC 46.0 / full AEC chain 48.8; double-talk: raw 41.3 / linear 40.3 /
+    full 47.4. The full chain (NS + residual suppression) costs 5-7 points. Pilot noise was a
+    white-noise fallback (DEMAND not yet downloaded), so absolute far numbers are pessimistic.
+  - Sim echo level calibrated to real Z337 recordings in bench-results/aec (mic ≈ loopback −3 dB).
+- **Barge-in sweep (grace-sim, 40 double-talk + 40 echo scenes):** the VAD gate's talking boost
+  is not the bottleneck (boost 0 → still 0.7 s late, 6/40 missed). VAD on AEC3's linear output
+  catches 40/40 but residual echo triggers 104 times per 40 echo scenes. A double-talk detector
+  (linear output vs removed echo, ≥ 0 dB while Grace talks) removes cold-start false triggers
+  (5 → 0) at the same detection (35/40) but onset stays ~1.5 s. Root cause: a person 0.8-2 m
+  away is 5-10 dB quieter at the mic than Grace's echo from speakers 0.3-0.8 m away; AEC3's
+  ERLE isn't enough to separate them. Options: lower playback level / speaker placement,
+  ducking on any linear-VAD hint, or a neural residual-echo suppressor (trainable; see FUTURE_IDEAS).
+- **Memory bench** (`grace-memory-bench`): scenario 01 passes on v0.2 code but the extractor
+  invented a "14 December" deadline for the hand-in (matchers can't see compound/invented
+  details; rubric/LLM-judge needed for that class).
 - System prompt personality was written from live feedback, not v1's `config/personality.json`
   (witty + warm, sharp friend, kind pushback). Merge both.
 - AEC option A (Windows comms AEC with render-endpoint reference) may not be exposed by this

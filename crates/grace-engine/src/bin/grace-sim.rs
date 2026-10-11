@@ -49,6 +49,31 @@ struct Args {
     delay_ms: Option<f64>,
     #[arg(long)]
     limit: Option<usize>,
+    /// VAD gate: start threshold added while Grace talks (default from VadGateConfig).
+    #[arg(long)]
+    talking_boost: Option<f32>,
+    /// VAD gate: frames of speech needed to start while Grace talks.
+    #[arg(long)]
+    talking_min_frames: Option<u32>,
+    /// Run VAD on AEC3's linear output instead of the full chain.
+    #[arg(long)]
+    vad_linear: bool,
+    /// Double-talk detector threshold in dB (implies --vad-linear).
+    #[arg(long)]
+    double_talk_db: Option<f32>,
+}
+
+impl Args {
+    fn gate(&self) -> VadGateConfig {
+        let mut g = VadGateConfig::default();
+        if let Some(b) = self.talking_boost {
+            g.talking_boost = b;
+        }
+        if let Some(f) = self.talking_min_frames {
+            g.talking_min_speech_frames = f;
+        }
+        g
+    }
 }
 
 #[derive(Deserialize)]
@@ -112,8 +137,10 @@ fn run_scene(args: &Args, dir: &Path, scene: &Scene) -> anyhow::Result<Outcome> 
         vad_model: PathBuf::from(".runtime/models/silero_vad_v6.2.3.onnx"),
         initial_delay_ms: args.delay_ms.unwrap_or(scene.delay_ms),
         lead_ms: 30.0,
-        gate: VadGateConfig::default(),
+        gate: args.gate(),
         noise_suppression: !args.no_ns,
+        vad_on_linear: args.vad_linear || args.double_talk_db.is_some(),
+        double_talk_db: args.double_talk_db,
     })?;
     let mut shared = Shared::new(secs + 2.0);
     let mut out = Produced::default();
@@ -331,6 +358,9 @@ fn main() -> anyhow::Result<()> {
         "scenes": args.scenes,
         "noise_suppression": !args.no_ns,
         "delay_ms": args.delay_ms,
+        "gate": format!("{:?}", args.gate()),
+        "vad_linear": args.vad_linear,
+        "double_talk_db": args.double_talk_db,
         "audio_s": audio_s,
         "wall_s": wall,
         "speedup": audio_s / wall,

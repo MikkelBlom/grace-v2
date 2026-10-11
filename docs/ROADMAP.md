@@ -41,14 +41,17 @@ Talk to Grace in Danish through the speakers and interrupt her.
 ## v0.2.5 — Foundations (v0.3 paused until this is done)
 Research: [docs/research/2026-10-11-foundations.md](research/2026-10-11-foundations.md).
 Rule: no tuning or testing on Mikkel; public corpora, synthetic data and automated harnesses.
-- [ ] `grace-sim` injection tier: WAVs + loopback reference fed into the frontend faster than
-      real time; RIR/noise/echo mixing; WER, end-of-turn F1, false triggers, latency
-- [ ] STT eval sets: CoRal v3 conversation test, Common Voice da, FLEURS da, non-speech (MUSAN)
+- [x] `grace-sim` injection tier: scenes fed into the real frontend ~35× real time; room/noise/
+      echo simulation; detection, false triggers, onset; manifests for `grace-bench stt`
+- [ ] STT eval sets: CoRal v3 conversation test (pilot done), DEMAND/ESC-50 noise, media
+- [x] STT reads AEC3's linear output ([0014](adr/0014-stt-reads-linear-aec.md))
 - [ ] STT input fixes measured on those sets (linear AEC output, VAD trim, decoding settings,
       ekko cross-check)
-- [ ] Memory benchmark: synthetic Danish multi-session scripts (persona + dated timeline with
-      updates and commitments), deterministic DB assertions + probe questions
-- [ ] Memory redesign: episode log = truth, facts = derived cache, commitments table, per-turn gate
+- [x] Memory benchmark: 40 Danish multi-session scenarios, `grace-memory-bench` (84 % baseline)
+- [x] Memory redesign: block rendered by code, commitments table, quoted evidence, scope,
+      calendar ([0015](adr/0015-memory-facts-and-commitments.md)): 88 %
+- [ ] Memory: session-end reconciliation, Danish number words, commitment closing
+- [ ] Barge-in while Grace talks (grace-sim: ~1.2 s late, 5-7/40 missed): see FUTURE_IDEAS
 - [ ] Smart Turn Danish fine-tune (v3.2 data + Danish synthetic + CoRal cuts)
 - [ ] Danish TTS bake-off: Røst v3 Chatterbox 350M/500M
 - [ ] Acoustic replay tier (second speaker in the room) and simulated-user tier (nightly)

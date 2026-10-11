@@ -5,6 +5,9 @@
 //!   confidence, the turn it came from (provenance), and bitemporal validity. A fact that stops
 //!   being true is closed (`valid_to`, `invalidated_at`, `superseded_by`), never deleted, so
 //!   "what did we believe in June?" stays answerable and a bad write can be traced and undone.
+//! - **Commitments**: things Grace was asked to bring up later ("remind me", "ask me about it").
+//!   They have a lifecycle (open → done/cancelled) and an earliest date to raise them, run by code
+//!   rather than left for the model to notice in a list of facts (ADR 0015).
 //! - **Search**: FTS5 keyword ranking and sqlite-vec nearest neighbours, merged with reciprocal
 //!   rank fusion. Only currently valid facts are returned.
 //!
@@ -68,6 +71,16 @@ pub struct Fact {
     pub confidence: f64,
     pub source_turn: Option<i64>,
     pub recorded_at: Time,
+}
+
+/// Something Grace should bring up: `due_at` is the earliest time to raise it (None = next chance).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Commitment {
+    pub id: i64,
+    pub text: String,
+    pub due_at: Option<Time>,
+    pub open: bool,
+    pub source_turn: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -134,6 +147,15 @@ CREATE TABLE IF NOT EXISTS facts(
     superseded_by INTEGER REFERENCES facts(id)
 );
 CREATE INDEX IF NOT EXISTS facts_current ON facts(invalidated_at);
+CREATE TABLE IF NOT EXISTS commitments(
+    id INTEGER PRIMARY KEY,
+    text TEXT NOT NULL,
+    due_at REAL,
+    status TEXT NOT NULL DEFAULT 'open',
+    source_turn INTEGER REFERENCES turns(id),
+    created_at REAL NOT NULL,
+    closed_at REAL
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(text, content='facts', content_rowid='id', tokenize='unicode61');
 ";
 
@@ -176,6 +198,49 @@ impl Memory {
             "CREATE VIRTUAL TABLE IF NOT EXISTS facts_vec USING vec0(embedding float[{dim}] distance_metric=cosine);"
         ))?;
         Ok(Self { conn, dim })
+    }
+
+    // ── commitments ─────────────────────────────────────────────────────────────────────────
+
+    pub fn add_commitment(
+        &self,
+        text: &str,
+        due_at: Option<Time>,
+        source_turn: Option<i64>,
+        now: Time,
+    ) -> anyhow::Result<i64> {
+        self.conn.execute(
+            "INSERT INTO commitments(text, due_at, source_turn, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![text, due_at, source_turn, now],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Marks a commitment done (`done`) or no longer wanted (`!done`).
+    pub fn close_commitment(&self, id: i64, done: bool, now: Time) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE commitments SET status = ?2, closed_at = ?3 WHERE id = ?1 AND status = 'open'",
+            params![id, if done { "done" } else { "cancelled" }, now],
+        )?;
+        Ok(())
+    }
+
+    /// Commitments, open ones first, then closed newest first.
+    pub fn commitments(&self) -> anyhow::Result<Vec<Commitment>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, text, due_at, status, source_turn FROM commitments
+             ORDER BY status != 'open', COALESCE(closed_at, created_at) DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(Commitment {
+                id: r.get(0)?,
+                text: r.get(1)?,
+                due_at: r.get(2)?,
+                open: r.get::<_, String>(3)? == "open",
+                source_turn: r.get(4)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     // ── sessions and turns ──────────────────────────────────────────────────────────────────
@@ -445,6 +510,23 @@ mod tests {
         }
         let n = v.iter().map(|x| x * x).sum::<f32>().sqrt();
         v.iter().map(|x| x / n).collect()
+    }
+
+    #[test]
+    fn commitments_open_then_close_once() {
+        let m = Memory::open_in_memory("test", 8).unwrap();
+        let a = m
+            .add_commitment("Ask about the hand-in", None, None, 1.0)
+            .unwrap();
+        let b = m
+            .add_commitment("Remind him to renew the passport", Some(100.0), None, 2.0)
+            .unwrap();
+        m.close_commitment(a, true, 3.0).unwrap();
+        m.close_commitment(a, false, 4.0).unwrap(); // already closed: stays done
+        let all = m.commitments().unwrap();
+        assert_eq!(all[0].id, b, "open first");
+        assert!(all[0].open && all[0].due_at == Some(100.0));
+        assert!(!all[1].open);
     }
 
     fn mem() -> Memory {

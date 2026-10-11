@@ -59,3 +59,15 @@ literature reviews (memory systems, Danish far-field STT, local fine-tuning) rec
 **Summary:** Researched "Jev"-style fast fact gates and data sources that don't need Mikkel.
 Added v0.2.5 Foundations to the roadmap (v0.3 paused) and the "not the test set" rule to CLAUDE.md.
 **Next steps:** build `grace-sim` injection tier and the STT eval sets first.
+
+## 2026-10-11 — Claude Code (Opus 5.5): v0.2.5 foundations, first pass
+**Summary:** Built `grace-sim` (real frontend on simulated rooms from CoRal + Grace's voice,
+echo calibrated to real Z337 recordings, AEC warm-up) and `grace-memory-bench` (40 Danish
+multi-session scenarios, fake clock, real answer path). STT now reads AEC3's linear output
+(ADR 0014). Memory redesign (ADR 0015): 84 % → 88 %. Merged v1's personality spec into the
+prompt. Parallel agents: Smart Turn Danish fine-tune and Danish TTS bake-off (running).
+**Issues encountered:** network saturated by the 41 GB Smart Turn dataset (MUSAN mirror ~0.3
+MB/s; ESC-50 moved to an HF mirror); embedding-distance dedupe merged "15 October" with
+"16 October" and lost a correction (fixed with specifics check); prompt edits mid-run
+contaminate a memory bench run (it reads the prompt live).
+**Next steps:** full STT scene sets once noise corpora land; barge-in; reconciliation pass.

@@ -166,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
 
     let stop = Arc::new(AtomicBool::new(false));
     let talking = Arc::new(AtomicBool::new(false));
+    let played = audio_io::Played::default();
     let (chunk_tx, chunk_rx) = mpsc::channel();
     let (front_tx, front_rx) = tokio::sync::mpsc::unbounded_channel();
     let (render_tx, render_rx) = mpsc::channel();
@@ -179,6 +180,7 @@ async fn main() -> anyhow::Result<()> {
             render_rx,
             render_ev_tx,
             talking.clone(),
+            played.clone(),
             stop.clone(),
         ),
         audio_io::spawn_capture(
@@ -303,6 +305,7 @@ async fn main() -> anyhow::Result<()> {
         smart_turn,
         shared,
         render: render_tx,
+        played,
         system_prompt: PathBuf::from("config/prompts/system.md"),
         memory,
         turn_audio_dir: {

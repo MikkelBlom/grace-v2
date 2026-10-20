@@ -115,7 +115,10 @@
   invent the reference examples for taste; get his words. Round 2
   (`bench/style_pick.py`, `fixtures/chat/pick/`): 16 new hand-written exchanges, each with two
   hand-written candidates (plain / tease) and Grace's reply, blind, with a box for his own
-  reply. Waiting on his picks. His pizza example ("Should I open Wolt in your browser?") needs
+  reply. Round 2 done (plain 4, tease 7, Grace 5, none 0) and folded in; his
+  notes beat the picked reply where they give wording. The page shuffles A/B/C on each load, so
+  his "it should be C" on r05 couldn't be traced; both candidates were yes-replies, the plain one
+  is used. Next pick page: show stable labels, not letters. His pizza example ("Should I open Wolt in your browser?") needs
   tools (v0.3); the prompt forbids offering actions she can't do until then. His p20 note "Five
   hundred and ten" is the wrong answer the candidates gave (17 x 23 = 391); never use it.
 - **Reply language (2026-10-20):** main's prompt answered casual Danish openers in Danish

@@ -142,4 +142,6 @@ stale binary (clippy doesn't rebuild), re-run. The bench loaded the candidates Y
 scenario (moved to fixtures/chat/pick-handwritten.yaml).
 **Next steps:** Mikkel does round 2; fold his picks and written replies in; small talk still
 interviews him; known-fact questions; live check.
+**Round 2 folded in (same day):** 16 more of his picks/notes as examples in system.md and the
+spec; scenario 15 (memory-aware opinions, from his "I hate python" note). Bench 0.909.
 

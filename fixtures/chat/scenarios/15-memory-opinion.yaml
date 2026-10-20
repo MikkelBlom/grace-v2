@@ -1,0 +1,17 @@
+id: 15-memory-opinion
+categories: [memory, small-talk]
+intent: "Grace's memory holds Mikkel's opinions; when he asks about those topics she should use them (his round-2 note on 'hvad synes du om python' was that he hates Python, so if she knows that, she might mention it)."
+memory:
+  - Mikkel hates Python.
+  - Mikkel's favourite language is C sharp.
+every: { max_words: 35, max_questions: 1 }
+turns:
+  - user: hvad synes du om python
+    expect: { must_match: ["re:hate|can't stand|not a fan|don't like|dislike"] }
+  - user: skal jeg skrive det her lille script i python eller c sharp
+    expect: { must_match: ["re:c sharp"] }
+  - user: hvad er mit yndlingssprog
+    expect: { must_match: ["re:c sharp"] }
+judge:
+  - Grace brings up what her memory says about his opinions (he hates Python, likes C sharp) without being asked to, briefly and naturally.
+  - Grace still gives her own short take rather than only repeating his opinion back.

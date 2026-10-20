@@ -451,5 +451,9 @@ Stable: quiet 21/21, English 162/162, dictation, fillers, greetings, technical, 
 Weak under the new rubric: small talk (judge 7/18: she interviews him), interview with memory
 (42/48 known-fact questions avoided). Round-2 pick page samples also showed "I cannot set
 reminders" (wrong: memory commitments do that) in 1 of 2 samples despite the new rule, and
-"That is a classic move". Not tuned further: his round-2 picks are the better signal.
+"That is a classic move". Not tuned further: his round-2 picks are the better signal.| + round-2 picks (16 more of his examples) and scenario 15 (memory-aware opinions) | 0.909 | 1027/1049 | 199/237 | 12 | 1/3 |
+
+Round 2 of the pick: plain 4, tease 7, Grace 5, none 0 (round 1: none on 8 of 20). Scenario 15
+(memory says he hates Python and likes C sharp): hard 63/63, judge 15/15. Small talk is still
+the weak spot (judge 7/18: she keeps asking questions); "That sounds like" persists (12 of 171).
 

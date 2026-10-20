@@ -83,6 +83,19 @@
   documentation phase is 07-18 Dec (DigitalExam). Not a test fact; the wording is imprecise.
   STT quality in run 4 is not representative: Mikkel walked around, faced away, even closed a
   door, believing the (absent) DJI clip mic was on.
+- **Recoverable turn ends (2026-10-20, ADR 0018, branch claude/turn-taking-b1ffdc, not merged):**
+  merge continuations + prepared replies + bolder thresholds; grace-turn-sim: halves 63 → 3 %,
+  p90 3.7 → 2.1 s, p50 1.44 → 1.24 s (single turns). Cost: Grace starts and stops in 43 % of
+  paused turns. p50 floor is now the pipeline (STT + recall + TTFT + Pocket TTS 500 ms live vs
+  94 bench), not the policy. Design notes: reopened turns keep their id and start, so the next
+  pause re-reads both parts; the user message is stashed out of history while reopened; replies
+  have render ids separate from turn ids (a retracted reply and its replacement share a turn);
+  render Cancel now drops only the current reply's samples (a released prepared reply is
+  enqueued right after); memory add_turn/learn happen in `Conductor::finish` (after playback).
+  VAD hangover 4 frames also shortens overlap during barge-in: watch live. grace-turn-sim needs
+  the speech server; its cache (bench-results/turn-sim/cache.jsonl) is keyed by audio span, so
+  sweeps re-run in ~1 min. Worktree has junctions to the main checkout's fixtures/.runtime/
+  bench-results (gitignored).
 - **Turn length (2026-10-20):** rings stay 30 s between turns, but the conductor pins an open
   turn (`Shared::keep_from`) so it is kept whole (hard cap 30 min). Next limit for long turns is
   STT: every pause re-transcribes the whole turn (~0.2 s per 30 s window), so a 10 min monologue

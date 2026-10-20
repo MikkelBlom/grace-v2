@@ -67,9 +67,15 @@ impl Config {
     }
 }
 
+/// Tuned in grace-turn-sim (ADR 0018) for the new costs: an early commit is undone by merging
+/// (98 % of them), so waits can be shorter. On 250 CoRal turns: p90 speech end → first audio
+/// 3.6 → 2.0 s, turns answered in halves 63 → 3 % of paused turns. A 2.5 s merge window removes
+/// the last audible splits but would also swallow a real "stop" 2.5 s into a reply.
 impl Default for Config {
     fn default() -> Self {
         Self {
+            max_trailing_silence: Duration::from_millis(1000),
+            max_trailing_silence_unfinished: Duration::from_millis(2000),
             merge_window: Some(Duration::from_millis(1500)),
             speculate: true,
             ..Self::without_recovery()

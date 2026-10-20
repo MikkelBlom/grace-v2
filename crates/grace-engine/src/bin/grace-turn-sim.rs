@@ -68,7 +68,7 @@ struct Args {
     speculate: Option<bool>,
     #[arg(long)]
     min_commit_ms: Option<u64>,
-    /// VAD gate: quiet frames (32 ms) before a pause is reported (default 8).
+    /// VAD gate: quiet frames (32 ms) before a pause is reported (default 4).
     #[arg(long)]
     hangover_frames: Option<u32>,
     /// Commit → first audio when nothing was prepared (LLM first sentence + TTS first audio).

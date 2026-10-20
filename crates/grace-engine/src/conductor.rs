@@ -8,7 +8,7 @@
 //!
 //! The conversation history and memory only ever hold what Mikkel heard: a reply is written
 //! down when it is final (played to the end, or interrupted: only the part that played), and a
-//! reply retracted because he hadn't finished (ADR 0017) is never written down at all.
+//! reply retracted because he hadn't finished (ADR 0018) is never written down at all.
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},

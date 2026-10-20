@@ -10,7 +10,7 @@ edit history.
 | [0002](0002-process-split-and-hot-reload.md) | Split processes by how often they change | Accepted |
 | [0003](0003-observability-first.md) | Trace every stage of every turn from day one | Accepted |
 | [0004](0004-testing-strategy.md) | Pure core, recorded fixtures, measured budgets | Accepted |
-| [0005](0005-turn-taking.md) | VAD + turn-end model + speculative STT | Accepted |
+| [0005](0005-turn-taking.md) | VAD + turn-end model + speculative STT | Accepted (thresholds superseded by 0018) |
 | [0006](0006-echo-cancellation.md) | Cancel all PC audio via loopback reference | Accepted |
 | [0007](0007-memory-model.md) | Remembered vs observed memory, SQLite as truth | Accepted |
 | [0008](0008-conversation-and-tasks.md) | Conversation and tasks are separate actors | Accepted |
@@ -22,5 +22,6 @@ edit history.
 | [0014](0014-stt-reads-linear-aec.md) | STT reads AEC3's linear output; test on simulated rooms | Accepted |
 | [0015](0015-memory-facts-and-commitments.md) | Memory: facts rendered by code, commitments table, quoted evidence | Accepted |
 | [0016](0016-hallucination-check-by-transducer.md) | Drop invented transcripts when ekko hears nothing | Accepted |
+| [0018](0018-recoverable-turn-ends.md) | Recoverable turn ends: merge continuations, prepare replies early | Proposed |
 
 Template: [0000-template.md](0000-template.md).

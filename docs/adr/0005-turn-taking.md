@@ -1,6 +1,6 @@
 # 0005 — VAD + turn-end model + speculative STT
 
-- **Status:** Accepted
+- **Status:** Accepted; turn-end thresholds and speculative replies superseded by [0018](0018-recoverable-turn-ends.md)
 - **Date:** 2026-10-10
 
 ## Context

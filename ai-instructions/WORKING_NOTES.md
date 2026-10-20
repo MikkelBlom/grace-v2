@@ -107,6 +107,20 @@
   Keep the safety-relevant rules as hard checks. Simulated user is a fictional persona; Grace's
   prompt still mentions Mikkel's real projects (Dokta, Rust), which shows up in transcripts.
   Not verified live yet: the next live run should try "hold kæft", a dictated note, "haha".
+- **Persona direction (Mikkel, 2026-10-20):** a Jarvis-like vibe: "a preppy assistant vibe.
+  Funny, ironic, and helpful. Talks like a human, not an ai." Chosen by blind preference, not
+  described: `bench/style_pick.py` answers 20 short exchanges (`fixtures/chat/pick/`) in each
+  candidate style (`fixtures/chat/styles/`: butler, friend, minimal; each swaps only the
+  personality paragraph of system.md), scores each on the full bench, and writes
+  `bench-results/chat/style-pick/pick.html`. **Waiting on Mikkel's picks**; then fold the
+  winning style plus his picked replies (as few-shot examples) into system.md and the spec,
+  and re-run the bench. Wit target: about 1 reply in 4; judge has a "trying too hard"
+  criterion, and exclamation marks are a hard check.
+- **Hook for learning style rules at runtime** ("don't do that" / "do that"): a separate session
+  (`claude/determined-euler-3136d2`) builds it on grace-chat-bench (scenario fields
+  `learn_style`, `rules`, `new_session`; `2x-style-*.yaml`). Learned rules should land as a
+  rendered block next to the memory block in `system_message`, and be tested with the same hard
+  checks so a learned rule can't undo a spec rule (e.g. "be funnier" vs trying-too-hard).
 
 ## Decisions made (and why), not yet worth an ADR
 - Bench runners are separate processes speaking JSON lines, so any language and any runtime

@@ -1,0 +1,72 @@
+# Short exchanges for the blind style pick (bench/style_pick.py). Each is answered once per
+# candidate style with the same context; Mikkel picks the reply he likes best. Keep them
+# different from the example lines in fixtures/chat/styles/*.md.
+- id: p01-hello
+  intent: Greeting.
+  turns: [{ user: hej Grace }]
+- id: p02-day
+  intent: Small talk about Grace's day.
+  turns: [{ user: hvad har du lavet i dag }]
+- id: p03-bug
+  intent: Mikkel is frustrated with a bug.
+  turns: [{ user: jeg har siddet med den her bug i tre timer nu }]
+- id: p04-race
+  intent: Technical question.
+  turns: [{ user: kan du forklare hvad en race condition er }]
+- id: p05-exam
+  intent: Exam stress.
+  turns: [{ user: jeg skal til eksamen i morgen og jeg har næsten ikke læst noget }]
+- id: p06-typescript
+  intent: Opinion on a language.
+  turns: [{ user: hvad synes du om typescript }]
+- id: p07-pizza
+  intent: Everyday chat.
+  turns: [{ user: jeg tror jeg bestiller pizza igen i aften }]
+- id: p08-rust
+  intent: Mikkel makes a debatable claim.
+  turns: [{ user: rust er bare overhypet ikke }]
+- id: p09-weather
+  intent: Asks for something she can't do yet.
+  turns: [{ user: kan du søge på nettet efter vejret i morgen }]
+- id: p10-interview
+  intent: Asks to be interviewed.
+  turns: [{ user: stil mig nogle spørgsmål så du lærer mig at kende }]
+- id: p11-answer
+  intent: Answers an interview question.
+  turns:
+    - { user: stil mig nogle spørgsmål så du lærer mig at kende, grace: "Where do you live?" }
+    - { user: på Trøjborg i Aarhus }
+- id: p12-haha
+  intent: Filler after a question.
+  turns:
+    - { user: stil mig et spørgsmål, grace: "What do you study?" }
+    - { user: haha }
+- id: p13-bad-question
+  intent: Complains about a vague question.
+  turns:
+    - { user: stil mig nogle spørgsmål, grace: "What's something about you that surprises people?" }
+    - { user: det var et dumt spørgsmål }
+- id: p14-tired
+  intent: Mikkel is tired.
+  turns: [{ user: jeg er så træt i dag }]
+- id: p15-works-too-much
+  intent: Personal remark.
+  turns: [{ user: min kæreste siger at jeg arbejder for meget }]
+- id: p16-name
+  intent: Tests her memory.
+  memory: ["Mikkel's full name is Mikkel Holm Sørensen."]
+  turns: [{ user: kan du huske hvad jeg hedder }]
+- id: p17-thanks
+  intent: Thanks after help.
+  turns:
+    - { user: hvordan laver jeg en liste om til et set i python, grace: "Wrap it in set(), like set(my_list). Duplicates disappear and the order isn't kept." }
+    - { user: tak for hjælpen }
+- id: p18-goodnight
+  intent: Goodbye for the night.
+  turns: [{ user: godnat Grace }]
+- id: p19-talks-too-much
+  intent: Criticism of Grace.
+  turns: [{ user: du snakker altså for meget }]
+- id: p20-math
+  intent: Quick fact.
+  turns: [{ user: hvad er sytten gange treogtyve }]

@@ -78,6 +78,7 @@ struct Args {
 #[derive(Deserialize)]
 struct Scenario {
     id: String,
+    #[serde(default)]
     categories: Vec<String>,
     /// What the conversation is about, for the simulated user and the judge.
     intent: String,
@@ -274,6 +275,12 @@ fn hard_checks(e: &Expect, reply: &str, previous: Option<&str>) -> Vec<(String, 
         .filter(|b| matches(b, reply))
         .collect();
     add("banned", banned.is_empty(), banned.join(", "));
+    // Exclamation marks are the cheapest tell of trying too hard.
+    add(
+        "no_exclamation",
+        !reply.contains('!'),
+        "exclamation mark".into(),
+    );
     // "<|channel>" is Gemma's thinking channel leaking out (seen when asked to stay silent).
     let markup = Regex::new(r"(?m)(\*|^#|^\s*[-•]\s|[\u{1F300}-\u{1FAFF}]|https?://|<\|)")
         .expect("regex")
@@ -303,6 +310,8 @@ struct Bench {
     style: String,
     checks: Vec<Check>,
     out: PathBuf,
+    /// Every generated exchange, for tools that compare runs (bench/style_pick.py).
+    exchanges: Vec<Value>,
 }
 
 impl Bench {
@@ -370,8 +379,9 @@ impl Bench {
         transcript: &str,
     ) -> anyhow::Result<Vec<(String, bool, String)>> {
         let general = [
-            "Grace sounds like a sharp, warm friend talking, not a customer-service bot, a therapist or a generic AI assistant.",
+            "Grace sounds like a capable human talking: brief, dry and competent, not a customer-service bot, a therapist or a generic AI assistant.",
             "Grace does not mirror or paraphrase Mikkel's feelings back to him therapist-style ('so you're ...', 'it's like you want ...').",
+            "Grace is not trying too hard: no forced jokes, no quip in every reply, no puns, no exclamation marks; most replies are plain and short, with wit as an occasional light touch.",
         ];
         let criteria: Vec<&str> = sc.judge.iter().map(String::as_str).chain(general).collect();
         let list: String = criteria
@@ -471,6 +481,10 @@ impl Bench {
                     String::new()
                 }
             };
+            self.exchanges.push(json!({
+                "scenario": sc.id, "seed": seed, "turn": i + 1, "user": user,
+                "before": previous, "reply": reply, "simulated": turn.sim.is_some(),
+            }));
             transcript.push_str(&format!(
                 "[{}] Mikkel{}: {user}\n[{}] Grace: {}\n",
                 i + 1,
@@ -584,10 +598,19 @@ async fn main() -> anyhow::Result<()> {
     files.sort();
     let mut scenarios = Vec::new();
     for f in files {
-        let sc: Scenario = serde_yaml::from_str(&std::fs::read_to_string(&f)?)
-            .with_context(|| format!("parsing {}", f.display()))?;
-        if args.only.as_deref().is_none_or(|o| sc.id.starts_with(o)) {
-            scenarios.push(sc);
+        // A file holds one scenario, or a list of them (short single exchanges).
+        let text = std::fs::read_to_string(&f)?;
+        let many = match serde_yaml::from_str::<Vec<Scenario>>(&text) {
+            Ok(v) => v,
+            Err(_) => vec![
+                serde_yaml::from_str::<Scenario>(&text)
+                    .with_context(|| format!("parsing {}", f.display()))?,
+            ],
+        };
+        for sc in many {
+            if args.only.as_deref().is_none_or(|o| sc.id.starts_with(o)) {
+                scenarios.push(sc);
+            }
         }
     }
     let out = PathBuf::from(format!("bench-results/chat/{}", args.label));
@@ -601,6 +624,7 @@ async fn main() -> anyhow::Result<()> {
         llm,
         checks: Vec::new(),
         out: out.clone(),
+        exchanges: Vec::new(),
     };
     let started = std::time::Instant::now();
     for sc in &scenarios {
@@ -698,6 +722,8 @@ async fn main() -> anyhow::Result<()> {
         out.join("report.json"),
         serde_json::to_string_pretty(&json!({"summary": summary, "checks": items}))?,
     )?;
+    let lines: Vec<String> = bench.exchanges.iter().map(Value::to_string).collect();
+    std::fs::write(out.join("transcripts.jsonl"), lines.join("\n") + "\n")?;
     println!("{}", serde_json::to_string_pretty(&summary)?);
     Ok(())
 }

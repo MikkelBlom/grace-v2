@@ -397,3 +397,23 @@ passed a reply that was only leaked `<|channel>` tokens as "silent", so the hard
 safety-relevant rules. Leftovers: "That sounds like…" as a reflex (5/147), asking for studies
 already in memory (2/9 runs), "haha" still re-asks the question in 1/3 seeds.
 
+### Candidate styles for the Jarvis-like persona, 13 scenarios × 2 seeds, 2026-10-20
+
+Same rules, only the personality paragraph swapped (`fixtures/chat/styles/`). Harness now also
+judges "not trying too hard" and hard-checks exclamation marks, so these scores don't compare
+with the table above. Judge rubric was still the "sharp friend" spec, which marks "sir" and
+formality down: butler's lower judge score is partly that rubric, not Mikkel's taste.
+
+| Style | score | hard | judge |
+|---|---|---|---|
+| current (tuned #36 prompt) | 0.979 | 505/508 | 133/138 |
+| friend (warm-sarcastic) | 0.973 | 500/513 | 134/138 |
+| minimal | 0.967 | 497/508 | 132/138 |
+| butler (Jarvis-like, occasional "sir") | 0.942 | 506/513 | 124/138 |
+
+All three new styles regressed on asking what memory already holds (4/32 vs 0/32) and on "That
+sounds like…"; minimal leaked `<|channel>` tokens on fillers twice. The pick is Mikkel's
+(blind page, `bench/style_pick.py`); fold the winner in, then fix those regressions.
+Also seen in the pick set: "sytten gange treogtyve" answered 510 and 51 (correct: 391) in three
+of four styles.
+

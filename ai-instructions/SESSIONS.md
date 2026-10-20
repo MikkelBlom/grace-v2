@@ -115,3 +115,15 @@ over-strong interview rules made Grace quiz on "tak" (fixed by scoping).
 **Next steps:** live check of quiet/dictation/fillers/interview; #38 in conductor.rs once the
 turn-taking work lands; add scenarios from each new live run's failures.
 
+## 2026-10-20 (later) — Claude Code (Opus 5.5): persona candidates and blind pick
+**Summary:** Persona direction from Mikkel ("preppy assistant vibe, funny, ironic, helpful,
+talks like a human"). Spec rewritten around example exchanges. Three candidate styles
+(butler, friend, minimal) + current as control, scored on the bench and answered on 20 short
+pick exchanges; blind pick page `bench-results/chat/style-pick/pick.html`. Bench: "trying too
+hard" judge criterion, exclamation-mark check, multi-scenario YAML files, transcripts.jsonl.
+**Issues encountered:** llama-server was shared with another session (theirs, left running);
+the judge's old rubric penalises "sir".
+**Next steps:** Mikkel picks; fold winning style and his picked replies into system.md as
+few-shot examples; re-run the bench; fix the memory-question and "That sounds like" regressions;
+"What is your name?" when she knows he's Mikkel (interview order should say full name).
+

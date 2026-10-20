@@ -6,6 +6,7 @@ clips come back every time.
 
   bench/.venv/Scripts/python bench/fetch_fixtures.py                  # FLEURS da (public)
   bench/.venv/Scripts/python bench/fetch_fixtures.py --source coral   # CoRal v3 (needs HF access)
+  bench/.venv/Scripts/python bench/fetch_fixtures.py --source fleurs-en  # FLEURS en_us (English input)
 
 Sources:
   fleurs  google/fleurs da_dk test: read Wikipedia sentences. Clean, public, not conversational.
@@ -47,13 +48,18 @@ def sample_rows(path: str, text_col: str, n: int, seed: int):
     return [(r, r[text_col]) for r in rows]
 
 
-def fleurs(n: int, seed: int):
+def fleurs(n: int, seed: int, config: str = "da_dk", prefix: str = "fleurs", tags=("fleurs", "read")):
     path = hf_hub_download(
-        "google/fleurs", "da_dk/test/0000.parquet", repo_type="dataset", revision="refs/convert/parquet"
+        "google/fleurs", f"{config}/test/0000.parquet", repo_type="dataset", revision="refs/convert/parquet"
     )
     # FLEURS ids identify the sentence, not the recording: several speakers share one id.
     for i, (row, text) in enumerate(sample_rows(path, "transcription", n, seed)):
-        yield f"fleurs-{row['id']}-{i:03}", row["audio"], row.get("raw_transcription") or text, ["fleurs", "read"]
+        yield f"{prefix}-{row['id']}-{i:03}", row["audio"], row.get("raw_transcription") or text, list(tags)
+
+
+def fleurs_en(n: int, seed: int):
+    # English speech: Mikkel talks to Grace in Danish or English (ADR 0017).
+    yield from fleurs(n, seed, "en_us", "fleurs-en", ("fleurs", "read", "en"))
 
 
 def coral(n: int, seed: int):
@@ -68,7 +74,7 @@ def coral(n: int, seed: int):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", choices=["fleurs", "coral"], default="fleurs")
+    ap.add_argument("--source", choices=["fleurs", "fleurs-en", "coral"], default="fleurs")
     ap.add_argument("--n", type=int, default=60, help="clips per subset")
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
@@ -83,7 +89,7 @@ def main():
                 clip = json.loads(line)
                 existing[clip["id"]] = clip
 
-    source = fleurs if args.source == "fleurs" else coral
+    source = {"fleurs": fleurs, "fleurs-en": fleurs_en, "coral": coral}[args.source]
     added = 0
     for clip_id, audio, text, tags in source(args.n, args.seed):
         rel = f"{args.source}/{clip_id}.wav"

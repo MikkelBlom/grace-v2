@@ -3,6 +3,11 @@
 Parked so they don't derail the current milestone. Promote to a GitHub issue when it's time.
 
 ## Speech
+- **Turn-taking follow-ups (ADR 0018):** Danish articles "en"/"et" as hanging words (a sim
+  miss committed on "Danmark er en"); a softer stop when a merge retracts audible speech (fade
+  + short "mm"?) if the stop-start feels abrupt live; keep the paused reply's LLM stream alive
+  only to the first sentence while reopened; grace-turn-sim scenes with simulated barge-ins
+  (person reacting to Grace) and the laptop-speaker echo path.
 - **edda LoRA on code-switched Danish** (high): English tech words and spelled letters are
   misheard (24 % WER on the code-switch set) and edda ignores vocabulary prompts. Generate a few
   thousand code-switched sentences (Gemma) × 24 NST voices with tts_da.py + room augmentation from

@@ -14,7 +14,7 @@ use std::{
     collections::VecDeque,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     thread,
@@ -123,29 +123,62 @@ pub fn spawn_capture(
         .expect("spawning capture thread")
 }
 
+/// Commands for the render thread. `reply` ids are the conductor's, one per reply (a turn can
+/// have several: a retracted one and its replacement).
 pub enum RenderCmd {
-    /// Mono samples at [`RATE`] for the given turn.
+    /// Mono samples at [`RATE`] for the given reply.
     Enqueue {
-        turn: u64,
+        reply: u64,
         samples: Vec<f32>,
     },
-    /// All of `turn`'s audio has been enqueued: once it has played, the reply is over.
+    /// All of `reply`'s audio has been enqueued: once it has played, the reply is over.
     EndOfTurn {
-        turn: u64,
+        reply: u64,
     },
     Duck(bool),
     /// Hold playback (silence) without dropping the queue; `false` carries on.
     Pause(bool),
-    /// Stop now: fade out over ~20 ms and drop everything queued.
+    /// Stop the current reply now: fade out over ~20 ms and drop the rest of it. Audio of a
+    /// reply enqueued after it is kept.
     Cancel,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum RenderEvent {
-    /// The first sample of `turn` reached the device buffer.
-    Started { turn: u64 },
-    /// `turn`'s last audible sample has played (its EndOfTurn was received first).
-    Drained { turn: u64, time: f64 },
+    /// The first sample of `reply` reached the device buffer.
+    Started { reply: u64 },
+    /// `reply`'s last audible sample has played (its EndOfTurn was received first).
+    Drained { reply: u64, time: f64 },
+}
+
+/// How many samples of which reply have been played (sent to the device), shared with the
+/// conductor so that a cut-off reply leaves in the conversation only what was heard.
+#[derive(Clone, Default)]
+pub struct Played(Arc<AtomicU64>);
+
+impl Played {
+    const MASK: u64 = (1 << 40) - 1;
+
+    /// (reply, samples). One word holds both, so the pair is always consistent.
+    pub fn get(&self) -> (u64, usize) {
+        let v = self.0.load(Ordering::Relaxed);
+        (v >> 40, (v & Self::MASK) as usize)
+    }
+
+    /// Samples of `reply` played so far (0 if another reply played since).
+    pub fn of(&self, reply: u64) -> usize {
+        match self.get() {
+            (r, n) if r == reply => n,
+            _ => 0,
+        }
+    }
+
+    fn set(&self, (reply, samples): (u64, usize)) {
+        self.0.store(
+            (reply << 40) | (samples as u64 & Self::MASK),
+            Ordering::Relaxed,
+        );
+    }
 }
 
 /// Playback state that survives a device reopen.
@@ -153,7 +186,6 @@ struct Playback {
     queue: VecDeque<(u64, f32)>,
     gain: f32,
     target: f32,
-    fade_out: usize,
     current: Option<u64>,
     started: bool,
     /// EndOfTurn received for `current`: until then a momentarily empty queue (TTS slower than
@@ -165,16 +197,20 @@ struct Playback {
     paused: bool,
     /// Samples left in the fade-out before a pause takes hold (cutting mid-waveform clicks).
     pausing: usize,
+    /// The reply whose samples were played last, and how many of them.
+    played: (u64, usize),
 }
 
 /// 10 ms: long enough not to click, short enough that Grace still stops at once.
 const PAUSE_FADE: usize = (RATE / 100) as usize;
+const CANCEL_FADE: usize = (RATE / 50) as usize;
 
 pub fn spawn_render(
     ep: Endpoint,
     cmds: mpsc::Receiver<RenderCmd>,
     events: tokio::sync::mpsc::UnboundedSender<RenderEvent>,
     talking: Arc<AtomicBool>,
+    played: Played,
     stop: Arc<AtomicBool>,
 ) -> thread::JoinHandle<()> {
     thread::Builder::new()
@@ -210,6 +246,7 @@ pub fn spawn_render(
                         scratch.push(p.next_sample(&events));
                     }
                     out.write(&scratch)?;
+                    played.set(p.played);
                     p.update_state(out.queued()?, &events, &talking);
                     thread::sleep(Duration::from_millis(4));
                 }
@@ -225,7 +262,6 @@ impl Playback {
             queue: VecDeque::new(),
             gain: 1.0,
             target: 1.0,
-            fade_out: 0,
             current: None,
             started: false,
             ended: false,
@@ -234,12 +270,16 @@ impl Playback {
             drain_at: None,
             paused: false,
             pausing: 0,
+            played: (0, 0),
         }
     }
 
     fn apply(&mut self, cmd: RenderCmd) {
         match cmd {
-            RenderCmd::Enqueue { turn, samples } => {
+            RenderCmd::Enqueue {
+                reply: turn,
+                samples,
+            } => {
                 if self.current != Some(turn) {
                     self.current = Some(turn);
                     self.started = false;
@@ -252,7 +292,7 @@ impl Playback {
                 }
                 self.queue.extend(samples.into_iter().map(|s| (turn, s)));
             }
-            RenderCmd::EndOfTurn { turn } => {
+            RenderCmd::EndOfTurn { reply: turn } => {
                 if self.current == Some(turn) {
                     self.ended = true;
                 }
@@ -273,9 +313,37 @@ impl Playback {
                 self.pausing = 0;
             }
             RenderCmd::Cancel => {
-                self.paused = false;
-                self.pausing = 0;
-                self.fade_out = (RATE / 50) as usize;
+                let Some(cut) = self.current.take() else {
+                    return;
+                };
+                (self.started, self.ended, self.drain_at) = (false, false, None);
+                // A paused reply is already silent; a playing one fades over its next 20 ms.
+                let fade = if self.paused || self.pausing > 0 {
+                    0
+                } else {
+                    CANCEL_FADE
+                };
+                (self.paused, self.pausing) = (false, 0);
+                let mut head = Vec::with_capacity(fade);
+                while head.len() < fade {
+                    match self.queue.front() {
+                        Some(&(r, s)) if r == cut => {
+                            self.queue.pop_front();
+                            head.push(s);
+                        }
+                        _ => break,
+                    }
+                }
+                self.queue.retain(|(r, _)| *r != cut);
+                let n = head.len() as f32;
+                for (i, s) in head.into_iter().enumerate().rev() {
+                    self.queue.push_front((cut, s * (n - i as f32) / n));
+                }
+                self.audible_left = self
+                    .queue
+                    .iter()
+                    .rposition(|(_, s)| s.abs() > AUDIBLE)
+                    .map_or(0, |i| i + 1);
             }
         }
     }
@@ -288,30 +356,26 @@ impl Playback {
         match self.queue.pop_front() {
             Some((turn, s)) => {
                 self.audible_left = self.audible_left.saturating_sub(1);
+                if self.played.0 == turn {
+                    self.played.1 += 1;
+                } else {
+                    self.played = (turn, 1);
+                }
                 if !self.started && Some(turn) == self.current {
                     self.started = true;
-                    let _ = events.send(RenderEvent::Started { turn });
+                    let _ = events.send(RenderEvent::Started { reply: turn });
                 }
-                if self.pausing > 0 && self.fade_out == 0 {
+                if self.pausing > 0 {
                     self.pausing -= 1;
                     if self.pausing == 0 {
                         self.paused = true;
                     }
                     s * self.gain * (self.pausing as f32 / PAUSE_FADE as f32)
-                } else if self.fade_out > 0 {
-                    self.fade_out -= 1;
-                    let f = self.fade_out as f32 / (RATE / 50) as f32;
-                    if self.fade_out == 0 {
-                        self.queue.clear();
-                        self.audible_left = 0;
-                    }
-                    s * self.gain * f
                 } else {
                     s * self.gain
                 }
             }
             None => {
-                self.fade_out = 0; // a cancel with nothing queued must not mute the next reply
                 if self.pausing > 0 {
                     self.pausing = 0;
                     self.paused = true;
@@ -346,7 +410,10 @@ impl Playback {
             match self.drain_at {
                 None => self.drain_at = Some(now + device_queued as f64 / RATE as f64),
                 Some(at) if now >= at => {
-                    let _ = events.send(RenderEvent::Drained { turn, time: now });
+                    let _ = events.send(RenderEvent::Drained {
+                        reply: turn,
+                        time: now,
+                    });
                     self.current = None;
                     self.drain_at = None;
                 }
@@ -375,7 +442,7 @@ mod tests {
     fn pause_and_resume_do_not_click() {
         let mut p = Playback::new();
         p.apply(RenderCmd::Enqueue {
-            turn: 1,
+            reply: 1,
             samples: vec![0.5; RATE as usize],
         });
         let mut out = play(&mut p, 100);
@@ -397,11 +464,61 @@ mod tests {
     fn pause_keeps_the_rest_of_the_reply() {
         let mut p = Playback::new();
         p.apply(RenderCmd::Enqueue {
-            turn: 1,
+            reply: 1,
             samples: vec![0.5; 1000],
         });
         p.apply(RenderCmd::Pause(true));
         play(&mut p, 5000);
         assert_eq!(p.queue.len(), 1000 - PAUSE_FADE);
+    }
+
+    #[test]
+    fn cancel_fades_the_current_reply_and_keeps_the_next() {
+        let mut p = Playback::new();
+        p.apply(RenderCmd::Enqueue {
+            reply: 1,
+            samples: vec![0.5; RATE as usize],
+        });
+        let mut out = play(&mut p, 100);
+        // Releasing a prepared reply sends its audio right after the cancel.
+        p.apply(RenderCmd::Cancel);
+        p.apply(RenderCmd::Enqueue {
+            reply: 2,
+            samples: vec![0.5; 1000],
+        });
+        assert_eq!(p.queue.len(), CANCEL_FADE + 1000);
+        out.extend(play(&mut p, CANCEL_FADE + 10));
+        assert!(
+            out[100..100 + CANCEL_FADE].windows(2).all(|w| w[1] <= w[0]),
+            "fades out"
+        );
+        assert_eq!(p.played, (2, 10));
+        assert_eq!(p.current, Some(2));
+    }
+
+    #[test]
+    fn cancelling_a_paused_reply_drops_it_silently() {
+        let mut p = Playback::new();
+        p.apply(RenderCmd::Enqueue {
+            reply: 1,
+            samples: vec![0.5; 1000],
+        });
+        play(&mut p, 100);
+        p.apply(RenderCmd::Pause(true));
+        play(&mut p, PAUSE_FADE + 50);
+        assert_eq!(p.played, (1, 100 + PAUSE_FADE));
+        p.apply(RenderCmd::Cancel);
+        assert!(p.queue.is_empty());
+        assert!(!p.paused);
+        assert_eq!(p.audible_left, 0);
+    }
+
+    #[test]
+    fn played_packs_reply_and_samples() {
+        let played = Played::default();
+        played.set((7, 123_456));
+        assert_eq!(played.get(), (7, 123_456));
+        assert_eq!(played.of(7), 123_456);
+        assert_eq!(played.of(8), 0);
     }
 }

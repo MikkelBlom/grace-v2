@@ -22,12 +22,15 @@ pub struct VadGateConfig {
 
 impl Default for VadGateConfig {
     fn default() -> Self {
-        // 32 ms frames: 5 frames = 160 ms of speech to start, 8 frames = 256 ms of quiet to stop.
+        // 32 ms frames: 5 frames = 160 ms of speech to start, 4 frames = 128 ms of quiet to stop.
+        // A short hangover starts the pause work (STT, Smart Turn, a prepared reply) sooner; a
+        // pause it reports too eagerly costs a discarded transcript, not a cut-off (ADR 0018:
+        // 8 → 4 frames took 160 ms off the median reply in grace-turn-sim).
         Self {
             start_threshold: 0.5,
             stop_threshold: 0.35,
             min_speech_frames: 5,
-            hangover_frames: 8,
+            hangover_frames: 4,
             talking_boost: 0.3,
             talking_min_speech_frames: 10,
         }
@@ -148,7 +151,7 @@ mod tests {
         let mut g = VadGate::new(VadGateConfig::default());
         let mut probs = vec![0.9; 6];
         probs.extend([0.4; 20]); // below start, above stop: still speech
-        probs.extend([0.1; 5]); // pause shorter than the hangover
+        probs.extend([0.1; 3]); // pause shorter than the hangover
         probs.extend([0.9; 3]);
         let edges = run(&mut g, &probs);
         assert_eq!(edges, vec![VadEdge::Started { frame: 0 }]);

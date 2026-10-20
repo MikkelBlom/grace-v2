@@ -102,3 +102,16 @@ enumerates as a USB drive. Mikkel's spoken note to "the other AI" was cut by the
 recovered from the trace's partial transcripts. `stt_lang.py en` crashes natively (skipped).
 **Next steps:** get the DJI to show up as an audio input; short live check of the click fix and
 long turns; then #35 latency (Smart Turn waits, Pocket TTS first audio, TTFT growth).
+
+## 2026-10-20 — Claude Code (Opus 5.5): recoverable turn ends (branch claude/turn-taking-b1ffdc)
+**Summary:** Jumping in early is now cheap: speech right after a commit reopens the same turn
+(re-transcribed whole, half-answer retracted), replies are prepared at uncommitted pauses with
+audio held, history/memory hold only what played (render counts samples per reply). New
+grace-turn-sim (real VAD/Smart Turn/STT on 250 CoRal turns, virtual time) reproduces live run 4
+and measured before/after; thresholds retuned (fallback 1.0 s, long wait 2.0 s, VAD hangover
+128 ms). ADR 0018, MODELS.md, live-check list in docs/research/2026-10-20-turn-taking-live-check.md.
+**Issues encountered:** ADR 0017 is taken by the style-learning branch; conductor.rs overlaps
+with it (one line in speak_reply). min_commit_silence measured no effect (kept at 0).
+**Next steps:** Mikkel's live check (DJI + JBL); then the pipeline latency (Pocket TTS first
+audio 500 ms live vs 94 bench, STT ~300 ms) since the policy is no longer the bottleneck.
+

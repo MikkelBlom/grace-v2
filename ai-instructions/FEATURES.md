@@ -6,6 +6,8 @@
 | `grace-trace` | Implemented | Non-blocking JSONL tracing, per-turn tagging, explicit flush | 2026-10-10 | — | — |
 | `grace-debug` | Implemented | Live per-turn waterfall, "speech end → first audio" KPI, process log | 2026-10-10 | grace-trace | — |
 | Turn machine | Implemented | `grace_core::turn::TurnMachine`: speculative STT, duck-before-cancel barge-in | 2026-10-10 | — | — |
+| Recoverable turn ends | Implemented, live check pending (ADR 0018) | Merge continuations (reopen + re-transcribe, retract half-answers), prepared replies held until commit, history = what was played, bolder thresholds | 2026-10-20 | turn machine | live check |
+| `grace-turn-sim` | Implemented | Turn-taking policy on CoRal turns in virtual time (real VAD/Smart Turn/STT); `bench/sim/make_turns.py`, `bench/sim/turn_sweep.py` | 2026-10-20 | speech server | — |
 | `grace-bench` STT/TTS | Implemented | JSON-lines runner protocol, WER/CER, latency percentiles, blind listening page | 2026-10-10 | — | — |
 | Bench runners | Implemented | HF Whisper, CTranslate2 Whisper, sherpa transducer, Piper, Supertonic, Chatterbox | 2026-10-10 | bench venvs | — |
 | FLEURS-da fixtures | Implemented | 60 clips via `bench/fetch_fixtures.py` | 2026-10-10 | — | — |

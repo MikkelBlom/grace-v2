@@ -366,3 +366,36 @@ Docta → "doktor". Real fix: LoRA fine-tune on synthetic code-switched speech (
 
 Live run 3 with da1 @ 0.5 waited 1.6-3 s on complete questions (scores 0.06-0.41). Unfinished
 threshold lowered 0.1 → 0.05 (fewer 3 s waits: 8 → 5 % of finished turns).
+
+## Turn-taking policy — grace-turn-sim, 250 CoRal turns, 2026-10-20
+
+`grace-turn-sim` drives the real `TurnMachine` in virtual time: real frontend (AEC3, Silero,
+gate), Smart Turn da1 and edda STT (results cached per span), LLM + TTS as a constant 620 ms
+(live run 4 medians: recall 94 + commit → first audio 522). Scenes (`bench/sim/make_turns.py`):
+150 "multi" turns, 2-3 consecutive segments by one CoRal test speaker joined by a 0.35-3 s pause
+(median 0.84 s), and 100 "single" finished turns; clip mic, DEMAND bed 25-35 dB down; the person
+doesn't react to Grace (headset). Latency = true end of speech → Grace's first audio queued
+(Bluetooth adds ~150 ms live). Decision: [ADR 0018](adr/0018-recoverable-turn-ends.md).
+
+| policy | set | answered in halves | ...Grace heard answering half | jumped in, then merged (heard) | p50 | p90 |
+|---|---|---|---|---|---|---|
+| before (live runs 1-4) | multi | 63 % | 44 % | — | 1.67 s | 3.66 s |
+| before | single | 3 % | 2 % | — | 1.44 s | 3.60 s |
+| new thresholds only (no merge, no prepare) | multi | 75 % | 59 % | — | 1.43 s | 2.67 s |
+| new thresholds only | single | 3 % | 2 % | — | 1.28 s | 2.61 s |
+| **after (merge + prepared replies + new thresholds)** | **multi** | **3 %** | **2 %** | 43 % (0.4 s avg) | 1.55 s | **2.07 s** |
+| **after** | **single** | **1 %** | **0 %** | 3 % | **1.24 s** | **2.04 s** |
+
+Early commits ("jumped in" before the true end): 63 % → 77 % of multi turns; 98 % of them are
+now merged (31 % before Grace was audible, 43 % after up to 1.5 s of her). LLM requests per
+multi turn 1.9 → 2.8 (0.7 prepared and discarded). Sweeps (bench/sim/turn_sweep.py): VAD
+hangover 8 → 4 frames −160 ms p50; long wait 3 → 2 s p90 3.0 → 2.1 s; fallback 1.6 → 1.0 s
+p50 −0.1 s on multi; 0.8 s / 1.5 s more heard merges (53 %) for p90 −0.1-0.4 s; threshold 0.2 or
+0.5 vs 0.3 within ±0.1 s; min_commit_silence 500/700 ms no effect; merge window 2.5 s removes
+the last heard splits (2 → 0 %) but would absorb real interruptions up to 2.5 s into a reply.
+
+Merged turns are transcribed again whole: edda WER 16.4 % on the whole paused turn vs 18.7 %
+for the parts' transcripts joined (150 turns, 4,238 words, oracle edges).
+
+Sim STT took 451 ms p50 (live run 4: 298 ms; llama-server and Pocket TTS were loaded, long
+turns), so absolute latencies are pessimistic; the comparison is like for like.

@@ -133,3 +133,49 @@ four python processes that were not mine (PIDs 37248, 56252, 29120, 70036); sibl
 **Next steps:** merge order (turn-taking, personality, this) is Mikkel's call; then a live run
 where he gives style feedback and checks it next session; first `grace-review export` review
 with him.
+
+## 2026-10-20 — Claude Code (Opus 5.5): conversation-style bench (#36)
+**Summary:** Style spec `docs/conversation-style.md` (do/don't pairs from live run 4).
+`grace-chat-bench` (grace-engine bin): 13 scenarios in `fixtures/chat/scenarios/`, simulated
+Danish user (fictional persona), hard checks + Gemma judge, transcripts in
+`bench-results/chat/<label>/`. `memory::session_block` made public so the bench renders memory
+exactly like the engine. Prompt tuned in 4 rounds: score 0.793 → 0.975 (repeat 0.980); quiet
+3/21 → 21/21. Issue #38 for engine-side silence and channel-token stripping.
+**Issues encountered:** Gemma emits `<|channel>thought` loops when asked for an empty reply;
+over-strong interview rules made Grace quiz on "tak" (fixed by scoping).
+**Next steps:** live check of quiet/dictation/fillers/interview; #38 in conductor.rs once the
+turn-taking work lands; add scenarios from each new live run's failures.
+
+## 2026-10-20 (later) — Claude Code (Opus 5.5): persona candidates and blind pick
+**Summary:** Persona direction from Mikkel ("preppy assistant vibe, funny, ironic, helpful,
+talks like a human"). Spec rewritten around example exchanges. Three candidate styles
+(butler, friend, minimal) + current as control, scored on the bench and answered on 20 short
+pick exchanges; blind pick page `bench-results/chat/style-pick/pick.html`. Bench: "trying too
+hard" judge criterion, exclamation-mark check, multi-scenario YAML files, transcripts.jsonl.
+**Issues encountered:** llama-server was shared with another session (theirs, left running);
+the judge's old rubric penalises "sir".
+**Next steps:** Mikkel picks; fold winning style and his picked replies into system.md as
+few-shot examples; re-run the bench; fix the memory-question and "That sounds like" regressions;
+"What is your name?" when she knows he's Mikkel (interview order should say full name).
+**Later the same day:** reply-language scenario 14 + English hard check (main's prompt: 0/15
+English on cold Danish openers; fixed: 15/15). Interview rule reworded (no example questions
+that memory usually answers, "full name, you know he's Mikkel").
+
+## 2026-10-20 (afternoon) — Claude Code (Opus 5.5): Mikkel's replies as ground truth
+**Summary:** Round-1 style pick rejected (generated candidates "VERY shit made"). His own
+replies became the few-shot block in system.md and the examples in docs/conversation-style.md;
+judge re-anchored on them. Prompt fixes: reminders are possible via memory, greetings get a
+greeting back, no "That sounds like" openers. Round-2 pick page: 16 hand-written exchanges,
+two hand-written candidates + Grace's reply, blind, with a box for his own reply
+(bench-results/chat/style-pick-2/pick.html). Bench 0.898 under the new rubric.
+**Issues encountered:** two Claude crashes mid-run; the first bench after the crash used a
+stale binary (clippy doesn't rebuild), re-run. The bench loaded the candidates YAML as a
+scenario (moved to fixtures/chat/pick-handwritten.yaml).
+**Next steps:** Mikkel does round 2; fold his picks and written replies in; small talk still
+interviews him; known-fact questions; live check.
+**Round 2 folded in (same day):** 16 more of his picks/notes as examples in system.md and the
+spec; scenario 15 (memory-aware opinions, from his "I hate python" note). Bench 0.909.
+**Principles instead of pairs (same day):** prompt's 24 example pairs → "Your manner" rules + 7
+illustrations. New held-out set (22 lines) + `bench/example_reuse.py` + `bench/reaction_openers.py`.
+Held-out 0.965 → 0.995, reuse 9 → 3 of 66; full bench 0.909 → 0.929.
+

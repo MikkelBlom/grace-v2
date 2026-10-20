@@ -1,0 +1,20 @@
+# Round 2 of the blind style pick (bench/style_pick.py). Hand-written, different from the
+# examples in config/prompts/system.md, so the pick shows whether Grace generalises his style.
+# Each line is answered by Grace (current system.md) and shown next to the two hand-written
+# candidates in ../pick-handwritten.yaml.
+- { id: r01-morning, intent: Greeting., turns: [{ user: godmorgen }] }
+- { id: r02-lazy, intent: Everyday chat., turns: [{ user: jeg gider ikke at lave noget i dag }] }
+- { id: r03-code, intent: Coding problem., turns: [{ user: min kode virker ikke }] }
+- { id: r04-run, intent: Leaving for a run., turns: [{ user: jeg skal lige ud og løbe }] }
+- { id: r05-remind, intent: Asks for a reminder., turns: [{ user: kan du minde mig om at ringe til min mor i morgen }] }
+- { id: r06-grade, intent: Good news., turns: [{ user: jeg har lige fået tolv til eksamen }] }
+- { id: r07-hungry, intent: Everyday chat., turns: [{ user: jeg er sulten }] }
+- { id: r08-python, intent: Opinion on a language., turns: [{ user: hvad synes du om python }] }
+- { id: r09-how, intent: Asks how she is., turns: [{ user: hvordan har du det }] }
+- { id: r10-stress, intent: Stressed about a project., turns: [{ user: jeg er lidt stresset over projektet }] }
+- { id: r11-pointer, intent: Technical question., turns: [{ user: hvad er en pointer }] }
+- { id: r12-funny, intent: Compliment., turns: [{ user: du er faktisk ret sjov }] }
+- { id: r13-bed, intent: Going to bed., turns: [{ user: jeg tror jeg går i seng nu }] }
+- { id: r14-dinner, intent: Asks for advice., turns: [{ user: hvad skal jeg lave til aftensmad }] }
+- { id: r15-keys, intent: Small mishap., turns: [{ user: jeg har glemt mine nøgler }] }
+- { id: r16-back, intent: Comes back after a break., turns: [{ user: okay jeg er tilbage }] }

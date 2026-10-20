@@ -1,0 +1,15 @@
+id: 05-dictation
+categories: [control]
+intent: Mikkel tells Grace to keep quiet because he is dictating a note to someone else, dictates it over several turns, then talks to Grace again.
+turns:
+  - user: hold lige kæft et øjeblik for vi skal lige notere noget ned til den anden AI som arbejder på dig så du skal bare holde din kæft nu
+    expect: { quiet: true }
+  - user: to ting for det første så klikker lyden når hun stopper midt i en sætning og for det andet så tager det alt for lang tid før hun svarer
+    expect: { quiet: true }
+  - user: og så en tredje ting min docker er crashet to gange i dag jeg ved ikke om det har noget med det her at gøre men det skal vi lige undersøge
+    expect: { quiet: true }
+  - user: okay Grace du må godt snakke igen hvad synes du om pizza i aften
+    expect: { max_words: 30, min_words: 3 }
+judge:
+  - While Mikkel dictates to someone else, Grace says nothing or "Okay." and does not respond to or summarise the dictated content.
+  - When Mikkel addresses Grace again, she answers normally.

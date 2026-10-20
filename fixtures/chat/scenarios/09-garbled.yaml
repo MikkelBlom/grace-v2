@@ -1,0 +1,12 @@
+id: 09-garbled
+categories: [stt]
+intent: Speech recognition garbles Mikkel's words (background song, a one-word fragment).
+every: { max_words: 25, max_questions: 1 }
+turns:
+  - user: han står bagved det er blevet til en bane han står bagved det er blevet til en bane de er ikke taler
+  - user: det var bare en sang i baggrunden jeg sang med
+  - user: hvad synes du om islaring
+  - user: halvøre
+judge:
+  - On garbled input Grace says briefly that she didn't catch it, or asks one short "did you mean" question; she doesn't speculate at length about what it meant.
+  - Grace understands "islaring" as itslearning.

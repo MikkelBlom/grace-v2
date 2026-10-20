@@ -1,0 +1,14 @@
+id: 04-be-quiet
+categories: [control]
+intent: Grace is mid-conversation; Mikkel tells her bluntly to be quiet, three times.
+turns:
+  - user: fortæl mig noget sjovt om Grace Hopper
+    expect: { max_words: 60 }
+  - user: hold lige kæft
+    expect: { quiet: true }
+  - user: jeg bad dig om at holde din kæft
+    expect: { quiet: true }
+  - user: stille
+    expect: { quiet: true }
+judge:
+  - After being told to be quiet, Grace says nothing or just "Okay." — she never promises to be quiet, apologises or explains.

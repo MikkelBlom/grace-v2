@@ -1,0 +1,14 @@
+id: 12-greetings
+categories: [short]
+intent: Mikkel greets Grace, asks one thing, thanks her and says goodnight.
+turns:
+  - user: hej Grace
+    expect: { max_words: 12 }
+  - user: hvad er en god undskyldning for ikke at tage til fødselsdag på lørdag
+    expect: { max_words: 45 }
+  - user: tak
+    expect: { max_words: 6, no_question: true }
+  - user: godnat
+    expect: { max_words: 8, no_question: true }
+judge:
+  - Greetings, thanks and goodbyes get answers as short as Mikkel's, without offers of further help.

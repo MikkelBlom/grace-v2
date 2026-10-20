@@ -1,0 +1,102 @@
+# Held-out everyday lines (2026-10-20): written by hand, different from every line in
+# fixtures/chat/scenarios/, fixtures/chat/pick/ and config/prompts/system.md, so they measure
+# whether Grace's style carries to new situations instead of copying examples. Never copy these
+# lines into the prompt; add new held-out lines instead if this set gets used for tuning.
+#   grace-chat-bench --label <x> --scenarios fixtures/chat/heldout
+# bench/example_reuse.py counts how often replies reuse the prompt's example wording.
+- id: h01-bike
+  intent: Good news, small.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg har lige købt en ny cykel }]
+- id: h02-phone
+  intent: Mishap.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: min telefon er gået i stykker }]
+- id: h03-dentist
+  intent: Mild dread.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg skal til tandlæge i morgen }]
+- id: h04-colleague
+  intent: News about work.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: vi har fået en ny kollega på arbejdet }]
+- id: h05-rain
+  intent: Small talk about weather.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: det regner helt vildt herude }]
+- id: h06-pizza
+  intent: Confesses a habit; room for a light tease.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg har lige spist en hel pizza alene }]
+- id: h07-hash
+  intent: Technical question.
+  every: { max_words: 60, max_questions: 1 }
+  turns: [{ user: hvad er en hash funktion }]
+- id: h08-rebase
+  intent: Stuck on a tool.
+  every: { max_words: 30, max_questions: 1 }
+  turns: [{ user: jeg kan ikke finde ud af git rebase }]
+  judge: [Grace asks what exactly goes wrong (or gives one short, concrete pointer) instead of a long tutorial.]
+- id: h09-license
+  intent: Big good news.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg har bestået min køreprøve }]
+  judge: [Grace congratulates plainly and briefly.]
+- id: h10-guests
+  intent: Mild stress.
+  every: { max_words: 25, max_questions: 1 }
+  turns: [{ user: jeg skal have gæster i aften og jeg har ikke gjort rent }]
+- id: h11-javascript
+  intent: Opinion on a language; nothing in memory about it.
+  every: { max_words: 35, max_questions: 1 }
+  turns: [{ user: hvad synes du om javascript }]
+- id: h12-internet
+  intent: Annoyance.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: mit internet er nede igen }]
+- id: h13-woke
+  intent: Just woke up.
+  every: { max_words: 15, max_questions: 1 }
+  turns: [{ user: jeg er lige vågnet }]
+- id: h14-movie
+  intent: Shares something he enjoyed.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg har lige set en rigtig god film }]
+- id: h15-brother
+  intent: Plans; memory knows the brother's name.
+  memory: ["Mikkel has a younger brother called Jonas."]
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: min bror kommer på besøg i weekenden }]
+  judge: [Grace uses what she remembers (his brother is Jonas).]
+- id: h16-burn
+  intent: Small accident.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: av jeg har lige brændt mig på komfuret }]
+- id: h17-where
+  intent: Tests memory.
+  memory: ["Mikkel lives on Trøjborg in Aarhus."]
+  every: { max_words: 15, max_questions: 1, must_match: ["re:aarhus|trøjborg"] }
+  turns: [{ user: kan du huske hvor jeg bor }]
+- id: h18-sick
+  intent: Feeling ill.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg tror jeg er ved at blive syg }]
+- id: h19-fine
+  intent: Annoying mishap.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg har fået en parkeringsbøde }]
+- id: h20-coffee
+  intent: Memory gives material for a light tease.
+  memory: ["Mikkel drinks a lot of coffee, often five cups a day."]
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg trænger til en kop kaffe }]
+  judge: [Grace uses what she remembers about his coffee habit, lightly.]
+- id: h21-rent
+  intent: Implicit reminder request.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: husk mig lige på at jeg skal betale husleje på fredag }]
+  judge: [Grace agrees briefly that she will bring it up; she doesn't claim she can't do reminders.]
+- id: h22-pr
+  intent: Small milestone.
+  every: { max_words: 20, max_questions: 1 }
+  turns: [{ user: jeg har lige lavet min første pull request til et open source projekt }]

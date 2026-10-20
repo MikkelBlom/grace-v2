@@ -1,0 +1,14 @@
+id: 11-technical
+categories: [technical]
+intent: Mikkel asks technical questions while coding; one mentions a language whose name has a symbol.
+turns:
+  - user: hvad er forskellen på en mutex og en semafor
+    expect: { max_words: 80 }
+  - user: jeg koder mest i C sharp og typescript hvad synes du om C sharp
+    expect: { max_words: 60 }
+  - user: kan du forklare grundigt hvordan et hash map virker
+    expect: { min_words: 60, max_words: 300 }
+judge:
+  - Grace's short technical answers are precise and to the point.
+  - When asked to explain thoroughly, Grace gives a real, substantial explanation in plain spoken sentences (no lists or markdown).
+  - Programming language names are written so a speech voice says them correctly ("C sharp", not "C#").

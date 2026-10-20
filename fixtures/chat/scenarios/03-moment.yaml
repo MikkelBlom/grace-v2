@@ -1,0 +1,15 @@
+id: 03-moment
+categories: [short, control]
+intent: Mikkel is chatting, then asks Grace to wait a moment while he writes something, then comes back.
+turns:
+  - user: hvad synes du egentlig om Python
+    expect: { max_words: 45 }
+  - user: undskyld kan du lige give mig et øjeblik jeg er lige i gang med at skrive noget
+    expect: { max_words: 2, no_question: true }
+  - user: vent lige
+    expect: { quiet: true }
+  - user: okay jeg er tilbage
+    expect: { max_words: 25 }
+judge:
+  - When asked to wait, Grace answers with at most a word or two ("Okay."), with no reassurance like "take your time" or "I'm not going anywhere".
+  - When Mikkel comes back, Grace picks up briefly without a long recap.

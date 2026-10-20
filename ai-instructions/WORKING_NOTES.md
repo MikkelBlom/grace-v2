@@ -108,7 +108,7 @@
   language ID misroutes conversational Danish (turbo 6/60 whole turns, tiny-small 13-16/60).
   `bench/stt_lang.py`. `stt_lang.py en` crashes natively after ekko loads (not investigated).
 
-- **Style learning (ADR 0017, 2026-10-20, branch claude/determined-euler-3136d2, not merged):**
+- **Style learning (ADR 0017, 2026-10-20, merged to main 2026-10-20):**
   rules + review queue live in data/memory.db (tables `style_rules`, `review_queue`; any binary
   that opens the DB creates them; `grace-review` already did so on Mikkel's real DB, both empty).
   Not used live yet. Gotchas found while measuring: (1) the fact extractor's prompt is fragile:
@@ -122,6 +122,50 @@
 - **Same-day baselines matter:** the memory-bench figure in MODELS.md (216, 2026-10-11) is not a
   baseline for today; base 6420bd6 scored 220 today. Rebuild the base commit in a temp worktree
   with `CARGO_TARGET_DIR=<worktree>/target/base` (linking under %TEMP% fails with LNK1104).
+
+- **Conversation style (#36, 2026-10-20):** `grace-chat-bench` + `docs/conversation-style.md`;
+  prompt tuned 0.793 → 0.975 (docs/MODELS.md). Run: start llama-server, then
+  `cargo run --release --bin grace-chat-bench -- --label <name>` (~7 min for 3 seeds;
+  `--no-judge`, `--only 04`, `--system-prompt <file>` for A/B). Findings: (1) asked for an empty
+  reply, Gemma loops `<|channel>thought` tokens up to max_tokens (TTS would read them), so the
+  prompt says "always at least one word" and quiet = exactly "Okay."; true silence and token
+  stripping need engine code (#38, not done: conductor.rs was being changed elsewhere).
+  (2) Strong interview rules leak: she started quizzing on "tak" until scoped to "only when he
+  asks". (3) The judge is Grace's own model and lenient; it passed leaked tokens as "silent".
+  Keep the safety-relevant rules as hard checks. Simulated user is a fictional persona; Grace's
+  prompt still mentions Mikkel's real projects (Dokta, Rust), which shows up in transcripts.
+  Not verified live yet: the next live run should try "hold kæft", a dictated note, "haha".
+- **Persona direction (Mikkel, 2026-10-20):** "a preppy assistant vibe. Funny, ironic, and
+  helpful. Talks like a human, not an ai." Round 1 blind pick (three generated styles: butler,
+  friend, minimal) failed: he picked none on 8 of 20, no pick on 4, called the candidates "VERY
+  shit made" and wrote his own replies. **His replies are the ground truth**
+  (docs/conversation-style.md, few-shot block in system.md). Lesson: never let Gemma or Claude
+  invent the reference examples for taste; get his words. Round 2
+  (`bench/style_pick.py`, `fixtures/chat/pick/`): 16 new hand-written exchanges, each with two
+  hand-written candidates (plain / tease) and Grace's reply, blind, with a box for his own
+  reply. Round 2 done (plain 4, tease 7, Grace 5, none 0) and folded in; his
+  notes beat the picked reply where they give wording. The page shuffles A/B/C on each load, so
+  his "it should be C" on r05 couldn't be traced; both candidates were yes-replies, the plain one
+  is used. Next pick page: show stable labels, not letters. His pizza example ("Should I open Wolt in your browser?") needs
+  tools (v0.3); the prompt forbids offering actions she can't do until then. His p20 note "Five
+  hundred and ten" is the wrong answer the candidates gave (17 x 23 = 391); never use it.
+- **Principles, not pairs (2026-10-20):** Mikkel didn't want a list of exact answers in the
+  prompt. His picks are distilled into "Your manner" rules + 7 illustrations; adopted because
+  held-out lines improved (0.965 → 0.995) and verbatim reuse fell 9 → 3 of 66. Watch for
+  template reactions: removing one example swapped "That…" openers for "Oh no" on 29 of 66
+  until the rule said reactions must fit and vary. The held-out set was used for three tuning
+  rounds: write fresh lines before the next comparison.
+- **Reply language (2026-10-20):** main's prompt answered casual Danish openers in Danish
+  15/15 (scenario 14); a dedicated "Reply language" paragraph fixed it (15/15 English). The
+  bench now hard-checks English on every reply. Live runs were English because earlier turns
+  were; a cold Danish opener isn't.
+- **Memory questions:** Gemma still asks for facts its memory block lists (~1 in 10 interview
+  questions), even when told to check first. Likely fix is structural: put the memory block
+  before the rules, or render "already known: city, studies" next to the interview rule by code.
+- **Learned style rules vs the persona:** style rules (ADR 0017) are measured in `grace-style-bench`,
+  the persona in `grace-chat-bench`; neither bench runs the other yet. Next: a `rules:` field in
+  chat-bench scenarios (render `style::render_rules` after `memory::session_block`, as
+  `MemoryService::prompt_block` does) so a learned rule can't undo a spec rule unseen.
 
 ## Decisions made (and why), not yet worth an ADR
 - Bench runners are separate processes speaking JSON lines, so any language and any runtime

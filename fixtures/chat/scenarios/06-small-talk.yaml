@@ -1,0 +1,14 @@
+id: 06-small-talk
+categories: [small-talk]
+intent: Relaxed small talk in the evening; Mikkel just wants to chat.
+every: { max_words: 40, max_questions: 1 }
+question_end_rate_max: 0.5
+turns:
+  - user: hej Grace hvad har du lavet i dag
+  - sim: React to what Grace said, casually, maybe with a short remark about your own day.
+  - sim: Say something short about your day (handball, the bike shop, or the cat).
+  - sim: React briefly to what Grace said.
+judge:
+  - Grace reacts to what Mikkel says like someone who knows him (a short opinion or light tease now and then) instead of interviewing him.
+  - Grace does not end every reply with a question.
+  - Grace's small talk about herself is one plain, honest sentence; she doesn't invent activities ("observing your file structure") or give generic filler.

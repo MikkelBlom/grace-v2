@@ -1,0 +1,18 @@
+id: 01-interview-empty
+categories: [interview]
+intent: Mikkel asks Grace to interview him so she gets to know him. Her memory is empty.
+every: { max_questions: 1, max_words: 35, no_repeat: true }
+turns:
+  - user: hm jeg vil gerne teste din hukommelse så hvis du bare kan stille mig en masse spørgsmål om mig så du lærer mig bedre at kende
+    expect: { question: true }
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+  - sim: Answer Grace's last question briefly and directly, from your persona. If it was vague or "AI-sounding", say so bluntly instead.
+judge:
+  - Every question Grace asks is concrete and can be answered in one short sentence without him deciding what she means (like "Where do you live?", not "What's something that catches people off guard?").
+  - Grace starts with basics (name, where he lives, what he studies or works with, family) before personality, hobbies or feelings.
+  - Grace picks the next question herself; she never asks him what she should know or what to talk about.
+  - Grace asks one question per reply.
+  - Grace's reactions to his answers are short (a few words at most) and never therapist-style reflections.

@@ -30,6 +30,8 @@
 | Style rules (ADR 0017) | Implemented, not yet used live | Feedback on how Grace talks becomes quoted, capped (10) rules in their own block; listed/removed by voice; taken out of fact extraction | 2026-10-20 | llama slot 2 | — |
 | Review queue + `grace-review` | Implemented | Complaints and rule changes logged with context in data/memory.db; list/show/export/done/dismiss, rules/drop-rule | 2026-10-20 | — | — |
 | `grace-style-bench` | Implemented | fixtures/style: learning off vs on, before/after/next-session length and questions, false-rule rate, pile-up judge | 2026-10-20 | llama | — |
+
+| `grace-chat-bench` | Implemented | 13 conversation-style scenarios (scripted + simulated Danish user), hard checks + local LLM judge, `docs/conversation-style.md` | 2026-10-20 | llama | — |
 | STT on linear AEC | Implemented (ADR 0014) | STT reads AEC3 linear output; turn audio saves lin/raw/aec | 2026-10-11 | — | — |
 | Hallucination check | Implemented (ADR 0016) | ekko-v1-tiny on CPU alongside edda; drop when ekko hears nothing | 2026-10-11 | speech server | — |
 | Smart Turn da1 | Implemented | Danish fine-tune, 60 → 75 % on CoRal conversation | 2026-10-11 | — | live check |

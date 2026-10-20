@@ -121,6 +121,12 @@
   is used. Next pick page: show stable labels, not letters. His pizza example ("Should I open Wolt in your browser?") needs
   tools (v0.3); the prompt forbids offering actions she can't do until then. His p20 note "Five
   hundred and ten" is the wrong answer the candidates gave (17 x 23 = 391); never use it.
+- **Principles, not pairs (2026-10-20):** Mikkel didn't want a list of exact answers in the
+  prompt. His picks are distilled into "Your manner" rules + 7 illustrations; adopted because
+  held-out lines improved (0.965 → 0.995) and verbatim reuse fell 9 → 3 of 66. Watch for
+  template reactions: removing one example swapped "That…" openers for "Oh no" on 29 of 66
+  until the rule said reactions must fit and vary. The held-out set was used for three tuning
+  rounds: write fresh lines before the next comparison.
 - **Reply language (2026-10-20):** main's prompt answered casual Danish openers in Danish
   15/15 (scenario 14); a dedicated "Reply language" paragraph fixed it (15/15 English). The
   bench now hard-checks English on every reply. Live runs were English because earlier turns

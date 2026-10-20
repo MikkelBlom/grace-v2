@@ -457,3 +457,23 @@ Round 2 of the pick: plain 4, tease 7, Grace 5, none 0 (round 1: none on 8 of 20
 (memory says he hates Python and likes C sharp): hard 63/63, judge 15/15. Small talk is still
 the weak spot (judge 7/18: she keeps asking questions); "That sounds like" persists (12 of 171).
 
+### Principles instead of a pair list, held-out lines, 2026-10-20
+
+Mikkel objected to 24 exact example pairs in system.md. The picks were distilled into general
+rules ("Your manner") plus 7 illustrations marked "never reuse their wording". Compared on 22
+fresh, hand-written everyday lines (`fixtures/chat/heldout/`, none in the prompt, bench or pick
+sets), 3 seeds = 66 replies each. Reuse = replies containing an example sentence of 4+ words
+verbatim (`bench/example_reuse.py`); openers from `bench/reaction_openers.py`.
+
+| Prompt | held-out score | hard | judge | verbatim reuse | top opener |
+|---|---|---|---|---|---|
+| pair list (52870dd) | 0.965 | 391/399 | 208/219 | 9/66 ("Nice. Congratulations, Mikkel!", "Good morning, Mikkel", "What is the issue?") | "That…" 24/66 |
+| principles v1 | 0.984 | 397/399 | 213/219 | 6/66 (all "Nice. Congratulations, Mikkel!") | "Oh no" 29/66 |
+| v2: congratulations example removed | 0.977 | 399/399 | 209/219 | 3/66 ("What is the issue?" on a git problem) | "Oh no" 26/66 |
+| **v3: reactions must fit and vary (adopted)** | **0.995** | **399/399** | **217/219** | **3/66** (same) | "Nice" 17, "Ugh" 12, "Oh no" 6 |
+
+Full bench (15 scenarios × 3 seeds): pair list 0.909 → principles 0.929, even though the pair
+list contained some bench lines word for word. Small talk is still weak (judge 6/18; every reply
+ends in a question). Caveat: v2 and v3 were tuned against this held-out set, so it is no longer
+held out; the next round needs new lines.
+

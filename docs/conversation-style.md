@@ -14,6 +14,11 @@ wrote it) and wrote what he wants instead. Those replies are below and are the r
 an example here and a rule disagree, the example wins. Don't add examples Gemma or Claude made
 up; add his.
 
+How this reaches Grace: `system.md` carries the rules distilled from these picks ("Your
+manner") and only 7 illustrations, marked "never reuse their wording". The full set stays here
+as the source. Lines in `fixtures/chat/heldout/` must never appear in the prompt; they measure
+whether the style carries to new situations.
+
 What they show: very short; casual and human; light teasing, and "haha" is fine; direct
 questions; offering to do things; no therapist or customer-service phrasing; no forced wit.
 

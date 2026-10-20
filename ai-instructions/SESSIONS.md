@@ -144,4 +144,7 @@ scenario (moved to fixtures/chat/pick-handwritten.yaml).
 interviews him; known-fact questions; live check.
 **Round 2 folded in (same day):** 16 more of his picks/notes as examples in system.md and the
 spec; scenario 15 (memory-aware opinions, from his "I hate python" note). Bench 0.909.
+**Principles instead of pairs (same day):** prompt's 24 example pairs → "Your manner" rules + 7
+illustrations. New held-out set (22 lines) + `bench/example_reuse.py` + `bench/reaction_openers.py`.
+Held-out 0.965 → 0.995, reuse 9 → 3 of 66; full bench 0.909 → 0.929.
 

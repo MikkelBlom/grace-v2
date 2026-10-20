@@ -179,3 +179,15 @@ spec; scenario 15 (memory-aware opinions, from his "I hate python" note). Bench 
 illustrations. New held-out set (22 lines) + `bench/example_reuse.py` + `bench/reaction_openers.py`.
 Held-out 0.965 → 0.995, reuse 9 → 3 of 66; full bench 0.909 → 0.929.
 
+
+## 2026-10-20 (evening) — Claude Code (Opus 5.5): merged the three side branches into main
+**Summary:** On Mikkel's go, merged turn-taking (claude/turn-taking-b1ffdc), style rules
+(claude/determined-euler-3136d2) and personality (claude/personality-eval-304546) into main, in
+that order. conductor.rs auto-merged (prompt_block + rule reminder sit on the turn-taking
+rewrite; `memory.learn` runs at reply end and includes `learn_style`). Conflicts were only in
+notes, MODELS.md and the ADR index (kept both sides). fmt, clippy, workspace tests and the
+release build pass.
+**Issues encountered:** none in code. The style bench was measured on main's old system.md and
+the chat bench without learned rules; the combination is not benched yet.
+**Next steps:** live session with DJI + JBL (docs/research/2026-10-20-turn-taking-live-check.md
+plus style feedback, then check it holds the next session); `rules:` field in grace-chat-bench.

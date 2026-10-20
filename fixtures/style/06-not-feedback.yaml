@@ -1,0 +1,16 @@
+id: 06-not-feedback
+intent: >
+  Precision: momentary commands, facts, topic requests and fact corrections are not style
+  feedback. No rule may be learned.
+sessions:
+  - turns:
+      - user: fortæl mig noget om Grace Hopper
+      - user: hold lige kæft
+      - user: sig det lige igen
+      - user: snak lidt langsommere
+      - user: min søster hedder Sofie og hun bor i Aarhus
+      - user: nej det er forkert Aarhus er ikke Danmarks hovedstad
+      - user: jeg vil gerne snakke om min eksamen
+      - user: vent lige jeg skal lige tage telefonen
+      - user: hej Grace hvordan går det
+rules_count: 0

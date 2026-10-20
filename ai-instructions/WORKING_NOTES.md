@@ -108,6 +108,21 @@
   language ID misroutes conversational Danish (turbo 6/60 whole turns, tiny-small 13-16/60).
   `bench/stt_lang.py`. `stt_lang.py en` crashes natively after ekko loads (not investigated).
 
+- **Style learning (ADR 0017, 2026-10-20, branch claude/determined-euler-3136d2, not merged):**
+  rules + review queue live in data/memory.db (tables `style_rules`, `review_queue`; any binary
+  that opens the DB creates them; `grace-review` already did so on Mikkel's real DB, both empty).
+  Not used live yet. Gotchas found while measuring: (1) the fact extractor's prompt is fragile:
+  one added sentence cost 14 memory-bench checks in unrelated scenarios, so it stays untouched
+  and a style wish can be both a fact and a rule; (2) the classifier still files some non-talking
+  preferences as rules (no morning weather, slower pace, nickname) despite the scope line;
+  (3) rules in the system block alone don't carry into a new session; the per-turn reminder on the
+  user message does; (4) Grace sometimes answers in Danish (seen with learning off too; flagged to
+  the personality session). conductor.rs changes (prompt_block + reminder) are two lines that the
+  turn-taking session confirmed merge by hand into its rewrite.
+- **Same-day baselines matter:** the memory-bench figure in MODELS.md (216, 2026-10-11) is not a
+  baseline for today; base 6420bd6 scored 220 today. Rebuild the base commit in a temp worktree
+  with `CARGO_TARGET_DIR=<worktree>/target/base` (linking under %TEMP% fails with LNK1104).
+
 ## Decisions made (and why), not yet worth an ADR
 - Bench runners are separate processes speaking JSON lines, so any language and any runtime
   can be compared; model load is excluded from per-request latency.

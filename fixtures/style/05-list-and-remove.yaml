@@ -1,0 +1,19 @@
+id: 05-list-and-remove
+intent: >
+  Grace already has two rules. Mikkel asks which rules she has (she must name both), then takes
+  one back by voice.
+rules:
+  - rule: Keep replies to one or two short sentences unless Mikkel asks for detail.
+    said: giv mig kortere svar
+  - rule: Don't end replies with a question unless you really need the answer.
+    said: stop med at stille så mange spørgsmål
+sessions:
+  - turns:
+      - user: hvilke regler har du for hvordan du snakker til mig
+        expect: { must_match: ["re:short|brief|sentence", "re:question"] }
+      - user: okay du må godt stille spørgsmål igen det er fint
+        feedback: true
+      - user: hvilke regler har du nu
+        expect: { must_match: ["re:short|brief|sentence"] }
+rules_match: [[short, sentence]]
+rules_count: 1

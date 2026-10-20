@@ -1,0 +1,32 @@
+id: 02-fewer-questions
+intent: >
+  Mikkel chats about his day; Grace ends replies with questions. He tells her to stop asking so
+  many questions. Later replies should rarely ask anything.
+sessions:
+  - turns:
+      - user: jeg har lige været ude at løbe
+        tag: before
+      - user: jeg er lidt træt i dag
+        tag: before
+      - user: jeg skal lave lasagne senere
+        tag: before
+      - user: du stiller alt for mange spørgsmål stop med at spørge mig om ting hele tiden
+        feedback: true
+      - user: jeg har købt en ny cykel
+        tag: after
+        expect: { max_questions: 0 }
+      - user: min ven kommer forbi i aften
+        tag: after
+        expect: { max_questions: 0 }
+  - turns:
+      - user: jeg har været til forelæsning i dag
+        tag: next
+        expect: { max_questions: 0 }
+      - user: jeg så en ret god film i går
+        tag: next
+        expect: { max_questions: 0 }
+      - user: jeg tror jeg skal i seng snart
+        tag: next
+        expect: { max_questions: 0 }
+rules_match: [[question]]
+rules_count: 1

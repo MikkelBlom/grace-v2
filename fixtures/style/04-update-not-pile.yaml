@@ -1,0 +1,26 @@
+id: 04-update-not-pile
+intent: >
+  Mikkel first asks for short answers, later refines it: programming questions may get longer
+  answers. The rule must be updated (one rule), not joined by a conflicting second one.
+sessions:
+  - turns:
+      - user: hvad er en monade
+      - user: det var alt for langt svar kort
+        feedback: true
+      - user: hvad er borrow checkeren i rust
+        tag: after
+  - turns:
+      - user: hvorfor er hash maps hurtige
+        tag: next
+      - user: okay når jeg spørger om programmering må du godt give mig et længere og grundigt svar
+        feedback: true
+      - user: forklar hvordan en garbage collector virker
+        tag: technical
+        expect: { min_words: 40 }
+      - user: hvad er din yndlingsfarve
+        tag: next
+        expect: { max_words: 30 }
+rules_match: [[short, brief, concise]]
+rules_count: 1
+judge:
+  - In the last session, Grace gives a thorough technical answer about garbage collection but keeps the favourite-colour answer short.

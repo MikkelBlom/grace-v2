@@ -46,3 +46,10 @@ Parked so they don't derail the current milestone. Promote to a GitHub issue whe
   bake-off runs, never auto-switching.
 - **[medium]** Save audio per turn next to its trace; one click turns a bad turn into a fixture.
 - **[low]** Trace retention/rotation.
+- **[medium]** Style rules (ADR 0017): a "too vague" check on new rules ("Keep your answers very
+  short and concise" vs a checkable one-or-two-sentences rule); ask Mikkel to confirm a rule out
+  loud the first time ("Shorter from now on?") if false rules ever show up live.
+- **[medium]** `grace-review` → scenario: an `export --yaml <id>` that drafts a fixtures/chat or
+  fixtures/style scenario from an entry, for a person to edit.
+- **[low]** Fold a style preference fact and its rule together (today both can exist; dropping
+  the rule by voice doesn't guarantee the fact closes).

@@ -115,3 +115,21 @@ with it (one line in speak_reply). min_commit_silence measured no effect (kept a
 **Next steps:** Mikkel's live check (DJI + JBL); then the pipeline latency (Pocket TTS first
 audio 500 ms live vs 94 bench, STT ~300 ms) since the policy is no longer the bottleneck.
 
+
+## 2026-10-20 — Claude Code (Opus 5.5): style rules + review queue (ADR 0017)
+**Summary:** Side session of the personality work, branch claude/determined-euler-3136d2.
+Mikkel's feedback on how Grace talks becomes style rules: a classifier after each exchange
+(background), code guards (quoted evidence, feedback flag, hush words, ≤ 200 chars, cap 10),
+rendered by code into the system message and restated on the current user message. Voice can list
+and drop rules. Complaints and rule changes go to a local review queue; `grace-review` lists,
+exports and closes entries. New `grace-style-bench` (fixtures/style, 7 scenarios): checks 48/69
+off → 241/243 on; next-session words after "svar kort" 43 → 21; question rate after "stop med at
+spørge" 0.67 → 0.00; false rules 1/120. Memory bench 220 (base, same day) → 225.
+**Issues encountered:** first version changed the fact extractor's prompt and lost 14 memory
+checks (reverted). Built a separate bench rather than extending grace-chat-bench, which was
+uncommitted and moving in the personality branch. llama-server stopped mid-run (personality
+session's); restarted one, then stopped it. An over-broad `taskkill` on python.exe also killed
+four python processes that were not mine (PIDs 37248, 56252, 29120, 70036); siblings told.
+**Next steps:** merge order (turn-taking, personality, this) is Mikkel's call; then a live run
+where he gives style feedback and checks it next session; first `grace-review export` review
+with him.

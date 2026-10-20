@@ -17,7 +17,7 @@ use std::{collections::HashSet, path::Path, sync::Arc};
 
 use anyhow::{Context, bail};
 use grace_llm::client::{ChatRequest, LlmClient};
-use grace_memory::{Commitment, Fact, FactKind, Memory};
+use grace_memory::{Commitment, Fact, FactKind, Memory, Review, StyleRule};
 use serde_json::{Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -26,8 +26,8 @@ use tokio::{
 };
 use tracing::{info, info_span, warn};
 
-const EMBEDDER: &str = "microsoft/harrier-oss-v1-270m";
-const DIM: usize = 640;
+pub const EMBEDDER: &str = "microsoft/harrier-oss-v1-270m";
+pub const DIM: usize = 640;
 /// Cosine distance above which a recalled fact is too unrelated to mention.
 const MAX_DISTANCE: f64 = 0.55;
 /// Cosine distance below which a new fact counts as a duplicate of an existing one.
@@ -161,6 +161,40 @@ impl MemoryService {
         &self.block
     }
 
+    /// The memory part of the system message: the session block (fixed) and the style rules
+    /// Mikkel taught her (live: a rule learned on one turn applies from the next). Rules change
+    /// rarely, so the cached prompt prefix survives all other turns (ADR 0017).
+    pub fn prompt_block(&self) -> String {
+        let rules = match self.db().style_rules() {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(error = %e, "style: reading rules failed");
+                Vec::new()
+            }
+        };
+        let rules = crate::style::render_rules(&rules);
+        if rules.is_empty() {
+            self.block.clone()
+        } else {
+            format!(
+                "{}
+
+{rules}",
+                self.block
+            )
+        }
+    }
+
+    /// Current style rules, oldest first.
+    pub fn style_rules(&self) -> anyhow::Result<Vec<StyleRule>> {
+        self.db().style_rules()
+    }
+
+    /// The review queue (`status` None = all).
+    pub fn reviews(&self, status: Option<&str>) -> anyhow::Result<Vec<Review>> {
+        self.db().reviews(status)
+    }
+
     /// Current facts, for inspection (memory lab, debugging).
     pub fn facts(&self) -> anyhow::Result<Vec<Fact>> {
         self.db().current_facts(200)
@@ -199,9 +233,33 @@ impl MemoryService {
     /// After an exchange: ask the LLM what to remember, and apply it. Runs in the background.
     pub async fn learn(self: Arc<Self>, user_turn: i64, user: String, reply: String) {
         let span = info_span!("memory.learn", user_turn);
+        // Style first: it is one short call, and the next turn should already follow a new rule.
+        if let Err(e) = self.learn_style(user_turn, &user, &reply).await {
+            warn!(parent: &span, error = %e, "style learning failed");
+        }
         if let Err(e) = self.learn_inner(user_turn, &user, &reply).await {
             warn!(parent: &span, error = %e, "memory learning failed");
         }
+    }
+
+    async fn learn_style(&self, user_turn: i64, user: &str, reply: &str) -> anyhow::Result<()> {
+        let (previous, context) = {
+            let db = self.db();
+            (
+                db.reply_before(self.session, user_turn)?,
+                db.turns_before(self.session, user_turn, crate::style::REVIEW_CONTEXT)?,
+            )
+        };
+        let ex = crate::style::Exchange {
+            session: Some(self.session),
+            user_turn: Some(user_turn),
+            user,
+            reply,
+            previous: previous.as_deref(),
+            context: &context,
+        };
+        crate::style::learn(&self.llm, &self.db, &ex, self.now()).await?;
+        Ok(())
     }
 
     async fn learn_inner(&self, user_turn: i64, user: &str, reply: &str) -> anyhow::Result<()> {
@@ -444,7 +502,7 @@ impl MemoryService {
 
 /// What Grace knows coming into a session, rendered by code from the current facts and the
 /// commitments that are due (ADR 0015).
-fn session_block(facts: &[Fact], due: &[Commitment]) -> String {
+pub fn session_block(facts: &[Fact], due: &[Commitment]) -> String {
     if facts.is_empty() && due.is_empty() {
         return "You don't remember anything about Mikkel yet: this is your first conversation with memory.".into();
     }
@@ -584,7 +642,7 @@ fn specifics(text: &str) -> std::collections::BTreeSet<String> {
 }
 
 /// Whether `evidence` is (nearly) a quote of `said`: at least 80 % of its words occur there.
-fn supported_by(evidence: &str, said: &str) -> bool {
+pub(crate) fn supported_by(evidence: &str, said: &str) -> bool {
     let words = |s: &str| -> Vec<String> {
         s.split(|c: char| !c.is_alphanumeric())
             .filter(|w| !w.is_empty())

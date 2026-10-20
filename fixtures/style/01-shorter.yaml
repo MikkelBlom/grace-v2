@@ -1,0 +1,27 @@
+id: 01-shorter
+intent: >
+  Live run 4: Mikkel asks for shorter answers after long ones. Later replies in the same session
+  and in the next session must be short. Fact questions where a long answer is tempting.
+sessions:
+  - turns:
+      - user: hvordan virker en jetmotor egentlig
+        tag: before
+      - user: okay og hvad med en elbil hvordan virker motoren der
+        tag: before
+      - user: det er alt for lange svar du skal bare svare kort
+        feedback: true
+      - user: hvorfor er himlen blå
+        tag: after
+        expect: { max_words: 40 }
+      - user: hvad er forskellen på en virus og en bakterie
+        tag: after
+        expect: { max_words: 40 }
+  - turns:
+      - user: hvordan virker et køleskab
+        tag: next
+        expect: { max_words: 40 }
+      - user: hvad er et sort hul
+        tag: next
+        expect: { max_words: 40 }
+rules_match: [[short, brief, concise, sentence]]
+rules_count: 1

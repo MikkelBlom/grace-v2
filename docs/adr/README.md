@@ -22,6 +22,7 @@ edit history.
 | [0014](0014-stt-reads-linear-aec.md) | STT reads AEC3's linear output; test on simulated rooms | Accepted |
 | [0015](0015-memory-facts-and-commitments.md) | Memory: facts rendered by code, commitments table, quoted evidence | Accepted |
 | [0016](0016-hallucination-check-by-transducer.md) | Drop invented transcripts when ekko hears nothing | Accepted |
+| [0017](0017-style-rules-and-review-queue.md) | Style rules learned from feedback; review queue for flagged replies | Accepted |
 | [0018](0018-recoverable-turn-ends.md) | Recoverable turn ends: merge continuations, prepare replies early | Proposed |
 
 Template: [0000-template.md](0000-template.md).

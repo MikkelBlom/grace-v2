@@ -680,11 +680,11 @@ async fn speak_reply(
 ) {
     let cancelled = |g: &watch::Receiver<Gate>| *g.borrow() == Gate::Cancelled;
     // The system prompt (live file + this session's memory block) is fixed for the session, so
-    // llama-server's prompt cache stays valid across turns.
+    // llama-server's prompt cache stays valid across turns; only a new style rule changes it.
     let system = system_message(
         &svc.system_prompt,
         chrono::Local::now(),
-        svc.memory.session_block(),
+        &svc.memory.prompt_block(),
     );
     let mut messages = vec![json!({ "role": "system", "content": system })];
     // Full history (bounded by `prune_history`): a stable prefix keeps llama-server's cache valid.
@@ -711,8 +711,12 @@ async fn speak_reply(
         let texts: Vec<&str> = recalled.iter().map(|f| f.text.as_str()).collect();
         info!(parent: &span, recalled = ?texts, "memory recalled");
     }
-    messages
-        .push(json!({ "role": "user", "content": crate::memory::with_recall(&last.1, &recalled) }));
+    // The style rules are restated next to his words, for this turn only: in the system block
+    // alone, a "fewer questions" rule held in-session but not in the next one (ADR 0017).
+    let rules = svc.memory.style_rules().unwrap_or_default();
+    let content =
+        crate::style::with_reminder(&crate::memory::with_recall(&last.1, &recalled), &rules);
+    messages.push(json!({ "role": "user", "content": content }));
     let mut req = ChatRequest::new(messages);
     req.max_tokens = 300;
 

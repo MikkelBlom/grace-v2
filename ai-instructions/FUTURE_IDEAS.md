@@ -27,6 +27,9 @@ Parked so they don't derail the current milestone. Promote to a GitHub issue whe
 - **[low]** Voice verification as an optional layer (sherpa-onnx speaker embeddings).
 - **[low]** Port v1's STT correction dictionary + voice-taught corrections.
 
+- Bilingual STT router (#34): language ID with a Danish prior, edda for Danish, turbo for English.
+- TTS text normalisation (#37): C#, F#, .NET, URLs, numbers with units.
+
 ## LLM
 - **[high]** MTP speculative decoding for Gemma 4 (`--model-draft`) in llama-server; measure.
 - **[medium]** mistral.rs embedded in-process once its Windows CUDA build is proven.

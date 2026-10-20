@@ -163,7 +163,12 @@ struct Playback {
     last_busy: f64,
     drain_at: Option<f64>,
     paused: bool,
+    /// Samples left in the fade-out before a pause takes hold (cutting mid-waveform clicks).
+    pausing: usize,
 }
+
+/// 10 ms: long enough not to click, short enough that Grace still stops at once.
+const PAUSE_FADE: usize = (RATE / 100) as usize;
 
 pub fn spawn_render(
     ep: Endpoint,
@@ -179,19 +184,7 @@ pub fn spawn_render(
                 eprintln!("render: COM init failed: {e:#}");
                 return;
             }
-            let mut p = Playback {
-                queue: VecDeque::new(),
-                gain: 1.0,
-                target: 1.0,
-                fade_out: 0,
-                current: None,
-                started: false,
-                ended: false,
-                audible_left: 0,
-                last_busy: 0.0,
-                drain_at: None,
-                paused: false,
-            };
+            let mut p = Playback::new();
             let mut opened_before = false;
             self_healing("render".into(), stop.clone(), || {
                 let mut out = Render::open(&ep)?;
@@ -227,6 +220,23 @@ pub fn spawn_render(
 }
 
 impl Playback {
+    fn new() -> Self {
+        Self {
+            queue: VecDeque::new(),
+            gain: 1.0,
+            target: 1.0,
+            fade_out: 0,
+            current: None,
+            started: false,
+            ended: false,
+            audible_left: 0,
+            last_busy: 0.0,
+            drain_at: None,
+            paused: false,
+            pausing: 0,
+        }
+    }
+
     fn apply(&mut self, cmd: RenderCmd) {
         match cmd {
             RenderCmd::Enqueue { turn, samples } => {
@@ -248,14 +258,23 @@ impl Playback {
                 }
             }
             RenderCmd::Duck(on) => self.target = if on { 0.3 } else { 1.0 },
-            RenderCmd::Pause(on) => {
-                self.paused = on;
-                if !on {
+            RenderCmd::Pause(true) => {
+                if !self.paused && self.pausing == 0 {
+                    // Fade out first; an empty queue has nothing to click.
+                    self.pausing = PAUSE_FADE;
+                    self.paused = self.queue.is_empty();
+                }
+            }
+            RenderCmd::Pause(false) => {
+                if self.paused {
                     self.gain = 0.0; // fade back in rather than click
                 }
+                self.paused = false;
+                self.pausing = 0;
             }
             RenderCmd::Cancel => {
                 self.paused = false;
+                self.pausing = 0;
                 self.fade_out = (RATE / 50) as usize;
             }
         }
@@ -273,7 +292,13 @@ impl Playback {
                     self.started = true;
                     let _ = events.send(RenderEvent::Started { turn });
                 }
-                if self.fade_out > 0 {
+                if self.pausing > 0 && self.fade_out == 0 {
+                    self.pausing -= 1;
+                    if self.pausing == 0 {
+                        self.paused = true;
+                    }
+                    s * self.gain * (self.pausing as f32 / PAUSE_FADE as f32)
+                } else if self.fade_out > 0 {
                     self.fade_out -= 1;
                     let f = self.fade_out as f32 / (RATE / 50) as f32;
                     if self.fade_out == 0 {
@@ -287,6 +312,10 @@ impl Playback {
             }
             None => {
                 self.fade_out = 0; // a cancel with nothing queued must not mute the next reply
+                if self.pausing > 0 {
+                    self.pausing = 0;
+                    self.paused = true;
+                }
                 0.0
             }
         }
@@ -324,5 +353,55 @@ impl Playback {
                 Some(_) => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn play(p: &mut Playback, n: usize) -> Vec<f32> {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        (0..n).map(|_| p.next_sample(&tx)).collect()
+    }
+
+    fn max_step(x: &[f32]) -> f32 {
+        x.windows(2)
+            .map(|w| (w[1] - w[0]).abs())
+            .fold(0.0, f32::max)
+    }
+
+    #[test]
+    fn pause_and_resume_do_not_click() {
+        let mut p = Playback::new();
+        p.apply(RenderCmd::Enqueue {
+            turn: 1,
+            samples: vec![0.5; RATE as usize],
+        });
+        let mut out = play(&mut p, 100);
+        p.apply(RenderCmd::Pause(true));
+        out.extend(play(&mut p, PAUSE_FADE + 100));
+        assert!(p.paused, "pause takes hold after the fade");
+        assert_eq!(*out.last().unwrap(), 0.0);
+        p.apply(RenderCmd::Pause(false));
+        out.extend(play(&mut p, 2000));
+        // A hard cut would be a 0.5 step; the fades keep every step tiny.
+        assert!(max_step(&out) < 0.01, "max step {}", max_step(&out));
+        assert!(
+            (out.last().unwrap() - 0.5).abs() < 0.01,
+            "back to full volume"
+        );
+    }
+
+    #[test]
+    fn pause_keeps_the_rest_of_the_reply() {
+        let mut p = Playback::new();
+        p.apply(RenderCmd::Enqueue {
+            turn: 1,
+            samples: vec![0.5; 1000],
+        });
+        p.apply(RenderCmd::Pause(true));
+        play(&mut p, 5000);
+        assert_eq!(p.queue.len(), 1000 - PAUSE_FADE);
     }
 }

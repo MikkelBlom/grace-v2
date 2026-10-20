@@ -1,5 +1,12 @@
 {
-  "_comment": "Preferred audio devices, matched case-insensitively against Windows friendly names, first match wins; no match falls back to the Windows default. \"default\" = always the current Windows default device. Used by the engine and the audio test tools. Headset setup: JBL in stereo (A2DP 'Hovedtelefoner', not the 'Headset' hands-free endpoint, which drops to phone quality) + DJI Mic ('USB Audio Device').",
-  "speakers": ["Hovedtelefoner (JBL Tune 777NC)", "Logitech Z337"],
-  "microphone": ["USB Audio Device", "Microphone Array"]
+  "_comment": "Preferred audio devices, matched case-insensitively against Windows friendly names, first match wins; no match falls back to the Windows default. \"default\" = always the current Windows default device. Used by the engine and the audio test tools. Headset setup: JBL in stereo (A2DP 'Hovedtelefoner', not the 'Headset' hands-free endpoint, which drops to phone quality) + the DJI Mic 2 receiver over USB-C. 'USB Audio Device' is not the DJI (live run 4); the DJI only shows up as an audio input when its receiver is plugged in as audio, not as a USB drive.",
+  "speakers": [
+    "Hovedtelefoner (JBL Tune 777NC)",
+    "Logitech Z337"
+  ],
+  "microphone": [
+    "DJI",
+    "Wireless Mic",
+    "Microphone Array"
+  ]
 }

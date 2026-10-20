@@ -69,6 +69,25 @@
 - `ekko-v1-tiny` licence is a custom composite (NVIDIA Open Model + CoRal + CC-BY); read before
   depending on it.
 
+- **Live run 4 (2026-10-20, headset, traces/engine-1792475469070.jsonl, 48 answered turns).**
+  Speech end → first audio p50 1.38 s, p90 3.66 s, 0/48 under 800 ms (issue #35): turn-end wait
+  p50 590 ms (11/48 hit the ~3 s timeout on low Smart Turn scores), Pocket TTS first audio p50
+  507 ms (bench: 94 ms), TTFT grows 54 → 355 ms over the session (prefix cache likely invalidated
+  each turn). Fixed in the same session: (1) turn audio rings were 30 s, so a 65 s turn lost its
+  first 35 s (now 120 s); (2) pausing Grace cut audio in one sample, a click Mikkel heard as
+  crackle when he started talking as she did (now a 10 ms fade). Still open: conversation style
+  (#36: vague "AI" questions, long replies, doesn't go silent on "hold kæft"), "C#" spoken as
+  "køh" (#37). Memory worked: "I have no sister" invalidated the old test fact and added the
+  correction. Open question for Mikkel: is fact 21 ("semester project deadline 16 November
+  2026") real or old test data?
+- **Docker crashes (Mikkel, 2026-10-20) are not Grace's:** nothing in Grace uses Docker (memory is
+  SQLite in-process, data/memory.db). Likely other agents' containers or WSL memory pressure
+  (seen before when the Windows Audio service stopped).
+- **Bilingual input parked (#34, 2026-10-20):** Mikkel speaks Danish *or* English. edda can't
+  detect English (p_da = 1.0 on 60/60) and has 57.7 % WER on English forced to Danish; Whisper
+  language ID misroutes conversational Danish (turbo 6/60 whole turns, tiny-small 13-16/60).
+  `bench/stt_lang.py`. `stt_lang.py en` crashes natively after ekko loads (not investigated).
+
 ## Decisions made (and why), not yet worth an ADR
 - Bench runners are separate processes speaking JSON lines, so any language and any runtime
   can be compared; model load is excluded from per-request latency.
@@ -84,6 +103,7 @@
   speakers once (a `--help` check); never probe it with arbitrary flags.
 - sherpa-onnx CUDA wheels need cuBLAS/cuDNN on PATH; prepend `torch/lib` (done in tts.py).
 - Devices: speakers = **Logitech Z337**, mic = laptop **Microphone Array (Realtek)**, set in `config/audio.json`. Never use the VF0700 (webcam) or the USB Audio Device. The Realtek "Speakers" are the laptop speakers, not his.
+  Headset setup (2026-10-20): output **Hovedtelefoner (JBL Tune 777NC)** (stereo A2DP; the "Headset" endpoints are hands-free, phone quality), mic = **DJI Mic 2** receiver. The DJI receiver showed up only as a USB *drive* ("DJI WIRELESS MIC RX2"), not as an audio input; live run 4 therefore ran on "USB Audio Device" by mistake. config/audio.json now looks for "DJI" / "Wireless Mic" first, so check the startup line for the mic name.
 - llama-server pick: `-ngl 99 -c 16384 -np 2 -fa on -ctk q8_0 -ctv q8_0 --reasoning off --swa-full`.
   Without `--swa-full` Gemma 4 pays ~180 ms fixed prefill per request (log warns "cache_reuse is not
   supported by this context"). Don't leave llama-server running after a session: ~10 GB VRAM.

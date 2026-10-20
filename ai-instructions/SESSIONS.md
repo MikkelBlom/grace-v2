@@ -84,3 +84,21 @@ training); MUSAN mirror failed at 0.96/11 GB (dropped); DEMAND env names lost in
 DEMAND licence may be CC BY-SA upstream (unverified).
 **Next steps:** live session with the new stack; replay tier when Mikkel is away; edda latency
 on idle GPU; Danish voice decision; barge-in.
+
+## 2026-10-11 (late) — Claude Code (Opus 5.5): live run 3 fixes
+**Summary:** Commit d55f379 (logged after the fact): talking over Grace pauses her, and she is
+cancelled only if the new turn has words; Smart Turn da1 thresholds 0.5 → 0.3 (long wait 0.05);
+memory skips turns with avg_logprob < -0.5; code-switch STT set.
+
+## 2026-10-20 — Claude Code (Opus 5.5): headset live run 4, GitHub cleanup
+**Summary:** Mikkel: Grace always answers in English; he speaks Danish or English, but bilingual
+input is parked (#34, measured: edda can't detect English). Closed 15 finished issues (#4-#9,
+#11-#16, #31, #33), commented on #28 and #32, opened #34-#37. Headset config (JBL stereo out).
+Live run 4 with Mikkel: p50 1.38 s speech end → first audio (#35), conversation-style problems
+(#36), C# pronunciation (#37). Fixed: 30 s turn-audio ring that cut long turns (now 120 s), and
+a click when Grace pauses (10 ms fade, unit-tested).
+**Issues encountered:** the run used "USB Audio Device", not the DJI mic: the DJI receiver only
+enumerates as a USB drive. Mikkel's spoken note to "the other AI" was cut by the 30 s ring;
+recovered from the trace's partial transcripts. `stt_lang.py en` crashes natively (skipped).
+**Next steps:** get the DJI to show up as an audio input; short live check of the click fix and
+long turns; then #35 latency (Smart Turn waits, Pocket TTS first audio, TTFT growth).

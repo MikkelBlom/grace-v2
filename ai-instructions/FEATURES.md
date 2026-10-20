@@ -17,7 +17,7 @@
 | `grace-bench llm` | Implemented | TTFT, first speakable piece, decode speed, tool-choice accuracy | 2026-10-10 | grace-llm | — |
 | Runtime fetch | Implemented | `scripts/fetch_runtime.py`: pinned llama.cpp b11539 + Gemma 4 12B QAT | 2026-10-10 | — | — |
 | Speech server | Implemented | `services/speech_server.py`: edda STT + Pocket TTS over local TCP, cancellable streaming | 2026-10-11 | bench venv | — |
-| Engine `grace` | Implemented, untested live | Dual-path capture, AEC3 + delay tracking, VAD gate, Smart Turn, conductor, sentence-streamed replies, barge-in, traces | 2026-10-11 | all crates | Mikkel's first live run |
+| Engine `grace` | Implemented, live-tested (runs 1-4) | Dual-path capture, AEC3 + delay tracking, VAD gate, Smart Turn, conductor, sentence-streamed replies, barge-in, traces | 2026-10-11 | all crates | — |
 | Launcher | Implemented | `scripts/grace.ps1` (+ `-SelfTest`) | 2026-10-11 | — | — |
 | Harness split | Planned | Conversation logic in its own process (now inside the engine's conductor) | — | engine | — |
 | Memory | Implemented (ADR 0015), not yet re-tested live | Code-rendered block, commitments table, quoted evidence, scope, calendar; 216-217/246 on the bench | 2026-10-11 | embed server | — |
@@ -31,3 +31,6 @@
 | Danish TTS (Røst 500m) | Measured, not wired | ~150 ms first audio on idle GPU with CoRal Mic/Nic voices | 2026-10-11 | — | Mikkel's listening test, live GPU-contention test |
 | Synthetic Danish speech | Implemented | `bench/synth/tts_da.py`: 24 NST (CC0) voices via MIT Chatterbox | 2026-10-11 | .venv-roest | — |
 | Acoustic replay tier | Built, not run | `bench/sim/replay.py`: second speaker talks to live Grace | 2026-10-11 | — | Mikkel away from home |
+| English-input bench | Implemented | `bench/stt_lang.py` (language ID + English WER), FLEURS en fixtures | 2026-10-20 | — | — |
+| Bilingual input (da or en) | Planned (#34) | Route English speech to an English-capable STT | — | language ID | parked by Mikkel |
+| Headset config | Implemented | JBL stereo out + DJI mic in, fallback Z337 + laptop mic | 2026-10-20 | — | DJI must enumerate as audio |

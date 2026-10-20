@@ -170,7 +170,9 @@ async fn main() -> anyhow::Result<()> {
     let (front_tx, front_rx) = tokio::sync::mpsc::unbounded_channel();
     let (render_tx, render_rx) = mpsc::channel();
     let (render_ev_tx, render_ev_rx) = tokio::sync::mpsc::unbounded_channel();
-    let shared = Arc::new(Mutex::new(Shared::new(30.0)));
+    // Turn audio is read back from these rings, so they must outlast the longest turn: at 30 s
+    // a 65 s monologue in live run 4 lost its first 35 s (~30 MB for 120 s across four rings).
+    let shared = Arc::new(Mutex::new(Shared::new(120.0)));
 
     let threads = vec![
         audio_io::spawn_render(

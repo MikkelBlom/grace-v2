@@ -17,7 +17,7 @@ use std::{collections::HashSet, path::Path, sync::Arc};
 
 use anyhow::{Context, bail};
 use grace_llm::client::{ChatRequest, LlmClient};
-use grace_memory::{Commitment, Fact, FactKind, Memory};
+use grace_memory::{Commitment, Fact, FactKind, Memory, Review, StyleRule};
 use serde_json::{Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -26,8 +26,8 @@ use tokio::{
 };
 use tracing::{info, info_span, warn};
 
-const EMBEDDER: &str = "microsoft/harrier-oss-v1-270m";
-const DIM: usize = 640;
+pub const EMBEDDER: &str = "microsoft/harrier-oss-v1-270m";
+pub const DIM: usize = 640;
 /// Cosine distance above which a recalled fact is too unrelated to mention.
 const MAX_DISTANCE: f64 = 0.55;
 /// Cosine distance below which a new fact counts as a duplicate of an existing one.
@@ -161,6 +161,40 @@ impl MemoryService {
         &self.block
     }
 
+    /// The memory part of the system message: the session block (fixed) and the style rules
+    /// Mikkel taught her (live: a rule learned on one turn applies from the next). Rules change
+    /// rarely, so the cached prompt prefix survives all other turns (ADR 0017).
+    pub fn prompt_block(&self) -> String {
+        let rules = match self.db().style_rules() {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(error = %e, "style: reading rules failed");
+                Vec::new()
+            }
+        };
+        let rules = crate::style::render_rules(&rules);
+        if rules.is_empty() {
+            self.block.clone()
+        } else {
+            format!(
+                "{}
+
+{rules}",
+                self.block
+            )
+        }
+    }
+
+    /// Current style rules, oldest first.
+    pub fn style_rules(&self) -> anyhow::Result<Vec<StyleRule>> {
+        self.db().style_rules()
+    }
+
+    /// The review queue (`status` None = all).
+    pub fn reviews(&self, status: Option<&str>) -> anyhow::Result<Vec<Review>> {
+        self.db().reviews(status)
+    }
+
     /// Current facts, for inspection (memory lab, debugging).
     pub fn facts(&self) -> anyhow::Result<Vec<Fact>> {
         self.db().current_facts(200)
@@ -199,9 +233,33 @@ impl MemoryService {
     /// After an exchange: ask the LLM what to remember, and apply it. Runs in the background.
     pub async fn learn(self: Arc<Self>, user_turn: i64, user: String, reply: String) {
         let span = info_span!("memory.learn", user_turn);
+        // Style first: it is one short call, and the next turn should already follow a new rule.
+        if let Err(e) = self.learn_style(user_turn, &user, &reply).await {
+            warn!(parent: &span, error = %e, "style learning failed");
+        }
         if let Err(e) = self.learn_inner(user_turn, &user, &reply).await {
             warn!(parent: &span, error = %e, "memory learning failed");
         }
+    }
+
+    async fn learn_style(&self, user_turn: i64, user: &str, reply: &str) -> anyhow::Result<()> {
+        let (previous, context) = {
+            let db = self.db();
+            (
+                db.reply_before(self.session, user_turn)?,
+                db.turns_before(self.session, user_turn, crate::style::REVIEW_CONTEXT)?,
+            )
+        };
+        let ex = crate::style::Exchange {
+            session: Some(self.session),
+            user_turn: Some(user_turn),
+            user,
+            reply,
+            previous: previous.as_deref(),
+            context: &context,
+        };
+        crate::style::learn(&self.llm, &self.db, &ex, self.now()).await?;
+        Ok(())
     }
 
     async fn learn_inner(&self, user_turn: i64, user: &str, reply: &str) -> anyhow::Result<()> {
@@ -584,7 +642,7 @@ fn specifics(text: &str) -> std::collections::BTreeSet<String> {
 }
 
 /// Whether `evidence` is (nearly) a quote of `said`: at least 80 % of its words occur there.
-fn supported_by(evidence: &str, said: &str) -> bool {
+pub(crate) fn supported_by(evidence: &str, said: &str) -> bool {
     let words = |s: &str| -> Vec<String> {
         s.split(|c: char| !c.is_alphanumeric())
             .filter(|w| !w.is_empty())
@@ -612,13 +670,13 @@ pub fn with_recall(user: &str, recalled: &[Fact]) -> String {
 }
 
 const EXTRACT_SYSTEM: &str = "You maintain Grace's long-term memory about Mikkel, the person she talks to. From the latest exchange, decide what is worth remembering beyond today.
-Remember: facts about Mikkel and the people in his life, his projects, plans and dates, lasting preferences about how Grace should behave, and corrections of what Grace believed.
+Remember: facts about Mikkel and the people in his life, his projects, plans and dates, lasting preferences about what Grace should do, and corrections of what Grace believed. Not how Grace talks (reply length, tone, humour, questions, wording, speaking pace): that feedback is kept separately as style rules, so never store it here.
 Only Mikkel's own words are a source. Grace's answer is context: she may be repeating something outdated or guessing, so never store anything because Grace said it. For every add, update and commit, 'evidence' must quote the words of Mikkel that state it, copied exactly from what he said; if you can't quote him, don't store it.
 Speech recognition makes mistakes: if his words look garbled, nonsensical or like a misheard phrase, store nothing from them.
 Do not remember: small talk, greetings, questions he asked, tests of the system, vague moods, or anything already covered by an existing memory.
 'lasting' is true only for things that stay true beyond today. Requests for this moment or this conversation ('be quiet', 'speak slower', 'say it again', 'not today', 'hold din kæft') are lasting=false; a lasting wish sounds like 'always', 'from now on', 'in general'.
 Write each memory in English, third person ('Mikkel ...'), short, one claim per memory, numbers as digits ('turns 95', '52 guests'). Turn relative dates into absolute dates by looking them up in the calendar above (never compute weekdays yourself), and write dates in words: '14 December 2026', never '2026-12-14'. Never add details he didn't say: no invented dates, places or reasons.
-Kinds: 'user' = Mikkel's life, people, plans, projects and circumstances; 'preference' = how Mikkel wants Grace to talk or behave; 'grace' = about Grace herself; 'environment' = Mikkel's computer, devices and setup.
+Kinds: 'user' = Mikkel's life, people, plans, projects and circumstances; 'preference' = what Mikkel wants Grace to do or how she should handle things (never how she talks); 'grace' = about Grace herself; 'environment' = Mikkel's computer, devices and setup.
 Operations on memories: 'add' (id 0) for a new memory. 'update' with an existing id when the exchange changes that memory (a new value, a corrected detail). 'invalidate' with an existing id when it is simply no longer true: cancelled, finished, sold, ended (do not add a 'was cancelled' memory). Never leave two memories that contradict each other.
 Operations on commitments (things Grace should bring up later): 'commit' only when Mikkel explicitly asks Grace to remind him, ask him, or check on something later (never on your own initiative); 'text' says what Grace should do ('Ask Mikkel for the details of his 16 November assignment'); 'due' (only this field uses YYYY-MM-DD) is the first day to bring it up, or '' for the next conversation. 'done' with an open commitment's id when this exchange fulfils it: he gave the details, did the thing, or acknowledged the reminder. 'cancel' with an open commitment's id when he no longer wants it. A commitment never replaces facts: also add the facts he stated (a reminder to renew a passport that expires in February is a commitment plus the fact about the expiry).
 Confidence: 0.9 when Mikkel stated it plainly, 0.6 when inferred.

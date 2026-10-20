@@ -309,7 +309,17 @@ impl Bench {
         mem: &MemoryService,
         e: &Expect,
     ) -> anyhow::Result<()> {
-        let current = mem.facts()?;
+        // Talking-style feedback is stored as style rules, not facts (ADR 0017); for these checks
+        // a current rule counts as a current preference.
+        let mut current = mem.facts()?;
+        current.extend(mem.style_rules()?.into_iter().map(|r| Fact {
+            id: -r.id,
+            text: r.text,
+            kind: FactKind::Preference,
+            confidence: 0.9,
+            source_turn: r.source_turn,
+            recorded_at: r.created_at,
+        }));
         let closed = mem.closed_facts()?;
         let now = f64::from_bits(self.now.load(Ordering::Relaxed));
         let hits = |c: &StateCheck, facts: &[Fact]| -> Vec<String> {
@@ -413,7 +423,7 @@ impl Bench {
         p: &Probe,
     ) -> anyhow::Result<()> {
         let now = memory::local_time(f64::from_bits(self.now.load(Ordering::Relaxed)));
-        let system = system_message(&self.args.system_prompt, now, mem.session_block());
+        let system = system_message(&self.args.system_prompt, now, &mem.prompt_block());
         let recalled = mem.recall(&p.question).await.unwrap_or_default();
         let messages = vec![
             json!({ "role": "system", "content": system }),

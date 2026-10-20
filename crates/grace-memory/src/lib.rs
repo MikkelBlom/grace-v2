@@ -83,6 +83,44 @@ pub struct Commitment {
     pub source_turn: Option<i64>,
 }
 
+/// How Mikkel wants Grace to talk, learned from his feedback ("shorter answers, please").
+/// Kept apart from facts: rules are rendered into their own block, capped, and removable by
+/// voice; facts are what is true about his life.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StyleRule {
+    pub id: i64,
+    /// The rule as an instruction to Grace ("Keep replies to one or two sentences ...").
+    pub text: String,
+    /// Mikkel's own words that asked for it (checked against what he said).
+    pub said: String,
+    /// The reply of Grace's he was reacting to: the example behind the rule.
+    pub example_reply: Option<String>,
+    pub source_turn: Option<i64>,
+    pub created_at: Time,
+}
+
+/// A flagged exchange for an offline review with Mikkel (ADR 0017): a reply he called bad, or
+/// one that made Grace learn a rule.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Review {
+    pub id: i64,
+    pub at: Time,
+    pub session_id: Option<i64>,
+    pub user_turn: Option<i64>,
+    /// `complaint` (he said the reply was bad) or `rule` (a style rule changed).
+    pub reason: String,
+    /// What Mikkel said.
+    pub feedback: String,
+    /// The reply he reacted to.
+    pub reply: Option<String>,
+    /// The turns before it as (role, text), oldest first.
+    pub context: Transcript,
+    pub rule_id: Option<i64>,
+    /// `open`, `done` or `dismissed`.
+    pub status: String,
+    pub note: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Hit {
     pub fact: Fact,
@@ -154,6 +192,30 @@ CREATE TABLE IF NOT EXISTS commitments(
     status TEXT NOT NULL DEFAULT 'open',
     source_turn INTEGER REFERENCES turns(id),
     created_at REAL NOT NULL,
+    closed_at REAL
+);
+CREATE TABLE IF NOT EXISTS style_rules(
+    id INTEGER PRIMARY KEY,
+    text TEXT NOT NULL,
+    said TEXT NOT NULL,
+    example_reply TEXT,
+    source_turn INTEGER REFERENCES turns(id),
+    created_at REAL NOT NULL,
+    invalidated_at REAL,
+    superseded_by INTEGER REFERENCES style_rules(id)
+);
+CREATE TABLE IF NOT EXISTS review_queue(
+    id INTEGER PRIMARY KEY,
+    at REAL NOT NULL,
+    session_id INTEGER REFERENCES sessions(id),
+    user_turn INTEGER REFERENCES turns(id),
+    reason TEXT NOT NULL,
+    feedback TEXT NOT NULL,
+    reply TEXT,
+    context TEXT NOT NULL,
+    rule_id INTEGER REFERENCES style_rules(id),
+    status TEXT NOT NULL DEFAULT 'open',
+    note TEXT,
     closed_at REAL
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(text, content='facts', content_rowid='id', tokenize='unicode61');
@@ -355,6 +417,187 @@ impl Memory {
             .collect::<Result<_, _>>()?;
         rows.reverse();
         Ok(rows)
+    }
+
+    /// Grace's last reply before `turn` in `session`, if any: what a piece of feedback is about.
+    pub fn reply_before(&self, session: i64, turn: i64) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT text FROM turns WHERE session_id = ?1 AND id < ?2 AND role = 'assistant'
+                 ORDER BY id DESC LIMIT 1",
+                params![session, turn],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Up to `n` turns of `session` before `turn` as (role, text), oldest first.
+    pub fn turns_before(&self, session: i64, turn: i64, n: usize) -> anyhow::Result<Transcript> {
+        let mut stmt = self.conn.prepare(
+            "SELECT role, text FROM turns WHERE session_id = ?1 AND id < ?2 ORDER BY id DESC LIMIT ?3",
+        )?;
+        let mut rows: Transcript = stmt
+            .query_map(params![session, turn, n as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?
+            .collect::<Result<_, _>>()?;
+        rows.reverse();
+        Ok(rows)
+    }
+
+    // ── style rules ─────────────────────────────────────────────────────────────────────────
+
+    pub fn add_style_rule(
+        &self,
+        text: &str,
+        said: &str,
+        example_reply: Option<&str>,
+        source_turn: Option<i64>,
+        now: Time,
+    ) -> anyhow::Result<i64> {
+        self.conn.execute(
+            "INSERT INTO style_rules(text, said, example_reply, source_turn, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![text, said, example_reply, source_turn, now],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Replaces rule `old` with a changed version; the old one is closed, not deleted.
+    pub fn supersede_style_rule(
+        &mut self,
+        old: i64,
+        text: &str,
+        said: &str,
+        example_reply: Option<&str>,
+        source_turn: Option<i64>,
+        now: Time,
+    ) -> anyhow::Result<i64> {
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "INSERT INTO style_rules(text, said, example_reply, source_turn, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![text, said, example_reply, source_turn, now],
+        )?;
+        let new = tx.last_insert_rowid();
+        let changed = tx.execute(
+            "UPDATE style_rules SET invalidated_at = ?2, superseded_by = ?3
+             WHERE id = ?1 AND invalidated_at IS NULL",
+            params![old, now, new],
+        )?;
+        anyhow::ensure!(changed == 1, "style rule {old} is not current");
+        tx.commit()?;
+        Ok(new)
+    }
+
+    /// Retires a rule (Mikkel took it back, or it fell off the cap).
+    pub fn invalidate_style_rule(&self, id: i64, now: Time) -> anyhow::Result<()> {
+        let changed = self.conn.execute(
+            "UPDATE style_rules SET invalidated_at = ?2 WHERE id = ?1 AND invalidated_at IS NULL",
+            params![id, now],
+        )?;
+        anyhow::ensure!(changed == 1, "style rule {id} is not current");
+        Ok(())
+    }
+
+    /// Current rules, oldest first (the order they are shown in: later ones win).
+    pub fn style_rules(&self) -> anyhow::Result<Vec<StyleRule>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, text, said, example_reply, source_turn, created_at FROM style_rules
+             WHERE invalidated_at IS NULL ORDER BY created_at, id",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(StyleRule {
+                    id: r.get(0)?,
+                    text: r.get(1)?,
+                    said: r.get(2)?,
+                    example_reply: r.get(3)?,
+                    source_turn: r.get(4)?,
+                    created_at: r.get(5)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
+
+    // ── review queue ────────────────────────────────────────────────────────────────────────
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_review(
+        &self,
+        session_id: Option<i64>,
+        user_turn: Option<i64>,
+        reason: &str,
+        feedback: &str,
+        reply: Option<&str>,
+        context: &Transcript,
+        rule_id: Option<i64>,
+        now: Time,
+    ) -> anyhow::Result<i64> {
+        self.conn.execute(
+            "INSERT INTO review_queue(at, session_id, user_turn, reason, feedback, reply, context, rule_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                now,
+                session_id,
+                user_turn,
+                reason,
+                feedback,
+                reply,
+                serde_json::to_string(context)?,
+                rule_id
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Review entries, oldest first; `status` None = all.
+    pub fn reviews(&self, status: Option<&str>) -> anyhow::Result<Vec<Review>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, at, session_id, user_turn, reason, feedback, reply, context, rule_id, status, note
+             FROM review_queue WHERE ?1 IS NULL OR status = ?1 ORDER BY id",
+        )?;
+        let rows = stmt
+            .query_map([status], |r| {
+                let context: String = r.get(7)?;
+                Ok(Review {
+                    id: r.get(0)?,
+                    at: r.get(1)?,
+                    session_id: r.get(2)?,
+                    user_turn: r.get(3)?,
+                    reason: r.get(4)?,
+                    feedback: r.get(5)?,
+                    reply: r.get(6)?,
+                    context: serde_json::from_str(&context).unwrap_or_default(),
+                    rule_id: r.get(8)?,
+                    status: r.get(9)?,
+                    note: r.get(10)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
+
+    /// Closes a review entry as `done` (turned into a scenario or example) or `dismissed`.
+    pub fn close_review(
+        &self,
+        id: i64,
+        status: &str,
+        note: Option<&str>,
+        now: Time,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            matches!(status, "done" | "dismissed" | "open"),
+            "status must be done, dismissed or open"
+        );
+        let changed = self.conn.execute(
+            "UPDATE review_queue SET status = ?2, note = COALESCE(?3, note), closed_at = ?4 WHERE id = ?1",
+            params![id, status, note, now],
+        )?;
+        anyhow::ensure!(changed == 1, "no review entry {id}");
+        Ok(())
     }
 
     // ── facts ───────────────────────────────────────────────────────────────────────────────
@@ -785,6 +1028,82 @@ mod tests {
             FactKind::parse(FactKind::Followup.as_str()),
             FactKind::Followup
         );
+    }
+
+    #[test]
+    fn style_rules_supersede_and_retire() {
+        let mut m = mem();
+        let a = m
+            .add_style_rule(
+                "Keep replies short.",
+                "kortere svar",
+                Some("A long reply."),
+                None,
+                1.0,
+            )
+            .unwrap();
+        let b = m
+            .add_style_rule("Ask fewer questions.", "færre spørgsmål", None, None, 2.0)
+            .unwrap();
+        let a2 = m
+            .supersede_style_rule(
+                a,
+                "Keep replies to one sentence.",
+                "en sætning",
+                None,
+                None,
+                3.0,
+            )
+            .unwrap();
+        let ids: Vec<i64> = m.style_rules().unwrap().iter().map(|r| r.id).collect();
+        assert_eq!(ids, vec![b, a2], "oldest first, the superseded one gone");
+        m.invalidate_style_rule(b, 4.0).unwrap();
+        assert!(m.invalidate_style_rule(b, 5.0).is_err());
+        assert!(
+            m.supersede_style_rule(a, "x", "y", None, None, 6.0)
+                .is_err()
+        );
+        assert_eq!(m.style_rules().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn review_queue_keeps_context_and_closes() {
+        let m = mem();
+        let s = m.start_session(0.0).unwrap();
+        m.add_turn(s, "user", "fortæl om Hopper", 1.0).unwrap();
+        m.add_turn(s, "assistant", "Grace Hopper was ...", 2.0)
+            .unwrap();
+        let t = m.add_turn(s, "user", "det var alt for langt", 3.0).unwrap();
+        assert_eq!(
+            m.reply_before(s, t).unwrap().as_deref(),
+            Some("Grace Hopper was ...")
+        );
+        let ctx = m.turns_before(s, t, 4).unwrap();
+        assert_eq!(ctx.len(), 2);
+        assert_eq!(ctx[0].0, "user");
+        let id = m
+            .add_review(
+                Some(s),
+                Some(t),
+                "complaint",
+                "det var alt for langt",
+                Some("Grace Hopper was ..."),
+                &ctx,
+                None,
+                4.0,
+            )
+            .unwrap();
+        let open = m.reviews(Some("open")).unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].context, ctx);
+        m.close_review(id, "done", Some("scenario 21"), 5.0)
+            .unwrap();
+        assert!(m.reviews(Some("open")).unwrap().is_empty());
+        assert_eq!(
+            m.reviews(None).unwrap()[0].note.as_deref(),
+            Some("scenario 21")
+        );
+        assert!(m.close_review(id, "bogus", None, 6.0).is_err());
     }
 
     #[test]

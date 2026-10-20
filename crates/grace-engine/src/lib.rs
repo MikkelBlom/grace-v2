@@ -8,4 +8,5 @@ pub mod delay;
 pub mod frontend;
 pub mod memory;
 pub mod speech;
+pub mod style;
 pub mod timed;

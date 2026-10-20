@@ -428,11 +428,11 @@ async fn speak_reply(
     wake: Arc<Notify>,
 ) {
     // The system prompt (live file + this session's memory block) is fixed for the session, so
-    // llama-server's prompt cache stays valid across turns.
+    // llama-server's prompt cache stays valid across turns; only a new style rule changes it.
     let system = system_message(
         &svc.system_prompt,
         chrono::Local::now(),
-        svc.memory.session_block(),
+        &svc.memory.prompt_block(),
     );
     let mut messages = vec![json!({ "role": "system", "content": system })];
     // Full history (bounded by `prune_history`): a stable prefix keeps llama-server's cache valid.

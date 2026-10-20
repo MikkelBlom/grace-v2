@@ -107,15 +107,17 @@
   Keep the safety-relevant rules as hard checks. Simulated user is a fictional persona; Grace's
   prompt still mentions Mikkel's real projects (Dokta, Rust), which shows up in transcripts.
   Not verified live yet: the next live run should try "hold kæft", a dictated note, "haha".
-- **Persona direction (Mikkel, 2026-10-20):** a Jarvis-like vibe: "a preppy assistant vibe.
-  Funny, ironic, and helpful. Talks like a human, not an ai." Chosen by blind preference, not
-  described: `bench/style_pick.py` answers 20 short exchanges (`fixtures/chat/pick/`) in each
-  candidate style (`fixtures/chat/styles/`: butler, friend, minimal; each swaps only the
-  personality paragraph of system.md), scores each on the full bench, and writes
-  `bench-results/chat/style-pick/pick.html`. **Waiting on Mikkel's picks**; then fold the
-  winning style plus his picked replies (as few-shot examples) into system.md and the spec,
-  and re-run the bench. Wit target: about 1 reply in 4; judge has a "trying too hard"
-  criterion, and exclamation marks are a hard check.
+- **Persona direction (Mikkel, 2026-10-20):** "a preppy assistant vibe. Funny, ironic, and
+  helpful. Talks like a human, not an ai." Round 1 blind pick (three generated styles: butler,
+  friend, minimal) failed: he picked none on 8 of 20, no pick on 4, called the candidates "VERY
+  shit made" and wrote his own replies. **His replies are the ground truth**
+  (docs/conversation-style.md, few-shot block in system.md). Lesson: never let Gemma or Claude
+  invent the reference examples for taste; get his words. Round 2
+  (`bench/style_pick.py`, `fixtures/chat/pick/`): 16 new hand-written exchanges, each with two
+  hand-written candidates (plain / tease) and Grace's reply, blind, with a box for his own
+  reply. Waiting on his picks. His pizza example ("Should I open Wolt in your browser?") needs
+  tools (v0.3); the prompt forbids offering actions she can't do until then. His p20 note "Five
+  hundred and ten" is the wrong answer the candidates gave (17 x 23 = 391); never use it.
 - **Reply language (2026-10-20):** main's prompt answered casual Danish openers in Danish
   15/15 (scenario 14); a dedicated "Reply language" paragraph fixed it (15/15 English). The
   bench now hard-checks English on every reply. Live runs were English because earlier turns

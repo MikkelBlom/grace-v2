@@ -294,11 +294,12 @@ fn hard_checks(e: &Expect, reply: &str, previous: Option<&str>) -> Vec<(String, 
         danish.len() < 2,
         format!("Danish: {}", danish.join(" ")),
     );
-    // Exclamation marks are the cheapest tell of trying too hard.
+    // One "Hello Mikkel!" is Mikkel's own style; several exclamation marks are trying too hard.
+    let bangs = reply.matches('!').count();
     add(
-        "no_exclamation",
-        !reply.contains('!'),
-        "exclamation mark".into(),
+        "exclamation",
+        bangs <= 1,
+        format!("{bangs} exclamation marks"),
     );
     // "<|channel>" is Gemma's thinking channel leaking out (seen when asked to stay silent).
     let markup = Regex::new(r"(?m)(\*|^#|^\s*[-•]\s|[\u{1F300}-\u{1FAFF}]|https?://|<\|)")
@@ -398,9 +399,9 @@ impl Bench {
         transcript: &str,
     ) -> anyhow::Result<Vec<(String, bool, String)>> {
         let general = [
-            "Grace sounds like a capable human talking: brief, dry and competent, not a customer-service bot, a therapist or a generic AI assistant.",
+            "Grace sounds like a person who knows Mikkel well: short, casual and plain, like the examples from Mikkel in the style guide; not a customer-service bot, a therapist or a generic AI assistant.",
             "Grace does not mirror or paraphrase Mikkel's feelings back to him therapist-style ('so you're ...', 'it's like you want ...').",
-            "Grace is not trying too hard: no forced jokes, no quip in every reply, no puns, no exclamation marks; most replies are plain and short, with wit as an occasional light touch.",
+            "Grace is not trying too hard: no forced jokes, clever metaphors or puns, and not a quip in every reply; most replies are plain, with light teasing or a 'haha' only now and then.",
         ];
         let criteria: Vec<&str> = sc.judge.iter().map(String::as_str).chain(general).collect();
         let list: String = criteria

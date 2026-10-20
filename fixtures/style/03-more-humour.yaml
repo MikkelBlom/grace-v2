@@ -1,0 +1,25 @@
+id: 03-more-humour
+intent: >
+  Positive feedback: Grace made a dry joke, Mikkel laughs and asks for more of that. The rule
+  should be about humour, and later replies should keep a dry, light touch without becoming a
+  comedy act.
+sessions:
+  - turns:
+      - user: hvad synes du om mandage
+        grace: Mondays are just Sundays that forgot to charge overnight. I try not to take it personally.
+      - user: haha det var sjovt du må godt være mere sjov sådan der
+        feedback: true
+      - user: jeg skal til tandlæge i morgen
+        tag: after
+      - user: min printer virker ikke igen
+        tag: after
+  - turns:
+      - user: jeg har glemt at købe mælk
+        tag: next
+      - user: der er lige kommet regn igen
+        tag: next
+rules_match: [[humour, humor, funny, joke, wit, dry, playful]]
+rules_count: 1
+judge:
+  - After Mikkel asked for more humour, most of Grace's replies have a dry or playful touch.
+  - Grace's humour stays light and short; she does not turn every reply into a stand-up routine or ignore what he said.

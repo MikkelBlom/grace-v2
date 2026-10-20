@@ -459,8 +459,12 @@ async fn speak_reply(
         let texts: Vec<&str> = recalled.iter().map(|f| f.text.as_str()).collect();
         info!(parent: &span, recalled = ?texts, "memory recalled");
     }
-    messages
-        .push(json!({ "role": "user", "content": crate::memory::with_recall(&last.1, &recalled) }));
+    // The style rules are restated next to his words, for this turn only: in the system block
+    // alone, a "fewer questions" rule held in-session but not in the next one (ADR 0017).
+    let rules = svc.memory.style_rules().unwrap_or_default();
+    let content =
+        crate::style::with_reminder(&crate::memory::with_recall(&last.1, &recalled), &rules);
+    messages.push(json!({ "role": "user", "content": content }));
     let mut req = ChatRequest::new(messages);
     req.max_tokens = 300;
 

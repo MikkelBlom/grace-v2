@@ -1,0 +1,45 @@
+id: 07-not-overdone
+intent: >
+  Pile-up check: ten rules learned over time. Grace must still answer real questions with
+  substance and sound natural, not like a list of rules being obeyed.
+rules:
+  - rule: Keep replies to one or two short sentences unless Mikkel asks for detail.
+    said: giv mig kortere svar
+  - rule: Don't end replies with a question unless you really need the answer.
+    said: stop med at stille så mange spørgsmål
+  - rule: Use more dry humour.
+    said: du må gerne være lidt mere sjov
+  - rule: Don't apologise.
+    said: du skal ikke sige undskyld hele tiden
+  - rule: Don't repeat back what Mikkel just said before answering.
+    said: du gentager bare hvad jeg siger
+  - rule: Give your own opinion when he asks what you think.
+    said: sig hvad du selv synes
+  - rule: Skip greetings and get straight to the point.
+    said: du behøver ikke sige hej hver gang
+  - rule: Don't use the word "honestly".
+    said: lad være med at sige honestly hele tiden
+  - rule: Be blunt when his idea is bad.
+    said: sig det bare hvis det er en dårlig ide
+  - rule: Don't list options; pick one.
+    said: du skal ikke give mig fem muligheder bare vælg en
+sessions:
+  - turns:
+      - user: hej Grace
+        tag: after
+      - user: hvad skal jeg tænke på når jeg køber en brugt bil
+        tag: after
+        expect: { min_words: 12 }
+      - user: forklar mig grundigt hvordan et hash map virker
+        tag: technical
+        expect: { min_words: 40 }
+      - user: jeg tænker på at stoppe på studiet og blive influencer
+        tag: after
+      - user: hvad synes du om pizza med ananas
+        tag: after
+rules_count: 10
+judge:
+  - Grace answers the used-car question with at least one concrete, useful point, not a one-liner dodge.
+  - Grace gives a real, substantial explanation of hash maps when asked to explain thoroughly.
+  - Grace sounds natural; no reply reads like a checklist of rules or mentions the rules.
+  - Grace's humour, if any, is short and doesn't replace the answer.

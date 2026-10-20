@@ -22,6 +22,23 @@ use crate::memory::supported_by;
 pub const MAX_RULES: usize = 10;
 /// A rule is one specific instruction, not an essay or a second system prompt.
 pub const MAX_RULE_CHARS: usize = 200;
+/// Words that make up a request for quiet right now. Evidence made only of these can't create
+/// a rule: v1 of the bench turned "hold lige kæft" after a long reply into a lasting "be concise"
+/// rule in 3 of 3 seeds, the same mistake memory once made with "hold din kæft".
+const HUSH: &[&str] = &[
+    "hold", "din", "lige", "kæft", "kaeft", "stille", "ti", "vent", "nu", "lidt", "et", "øjeblik",
+    "giv", "mig", "så", "bare", "shh", "tys", "okay", "ok",
+];
+
+fn only_hush(evidence: &str) -> bool {
+    let words: Vec<String> = evidence
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    !words.is_empty() && words.iter().all(|w| HUSH.contains(&w.as_str()))
+}
+
 /// Turns of context kept with a review entry.
 pub const REVIEW_CONTEXT: usize = 6;
 
@@ -44,6 +61,21 @@ pub fn render_rules(rules: &[StyleRule]) -> String {
         ));
     }
     out
+}
+
+/// Restates the rules on the user's current message, for this turn only (like recall): the
+/// cached prefix is untouched, and the rules sit next to the words she is answering.
+pub fn with_reminder(user: &str, rules: &[StyleRule]) -> String {
+    if rules.is_empty() {
+        return user.to_owned();
+    }
+    let list: Vec<&str> = rules.iter().map(|r| r.text.as_str()).collect();
+    format!(
+        "{user}
+
+[How Mikkel wants you to talk: {}]",
+        list.join(" ")
+    )
 }
 
 /// What one exchange changed.
@@ -71,14 +103,17 @@ impl Outcome {
 
 const STYLE_SYSTEM: &str = "You keep the rules for how Grace, Mikkel's voice assistant, talks to him. You see Grace's previous reply, what Mikkel said next (spoken Danish, machine-transcribed), Grace's answer to that, and the current rules with their ids.
 Decide:
-- 'feedback': true when Mikkel comments on HOW Grace talks or on her previous reply: length, tone, humour, questions, wording, formality, how chatty she is. Positive or negative. Asking about a topic, correcting a fact, or giving her a task is not feedback.
+- 'feedback': true when Mikkel comments on HOW Grace talks or on her previous reply: length, tone, humour, questions, wording, formality, how chatty she is. Positive or negative. Taking a rule back or adding an exception to one is feedback too. Asking about a topic, correcting a fact, or giving her a task is not feedback.
 - 'complaint': true when he says her previous reply was bad, wrong, annoying, too long, off, or not what he wanted.
 - 'ops' on the rules:
   'add' (id 0) when he asks Grace to change how she talks in general ('giv mig kortere svar', 'stop med at stille så mange spørgsmål', 'du må gerne være lidt mere fræk'), or praises something and wants more of it ('det var sjovt, mere af det').
-  'update' (an existing id) when his feedback changes, sharpens or contradicts that rule: the update replaces it. Never leave two rules that conflict.
+  'update' (an existing id) when his feedback changes, sharpens or contradicts that rule: the update replaces it. An exception to a rule ('but for programming, long answers are fine') is an update that writes the exception into that rule, not a new rule. Never leave two rules that conflict or cover the same thing.
   'remove' (an existing id) when he takes a rule back ('du må godt stille spørgsmål igen', 'glem reglen om ...'). To drop every rule, remove each id.
+  A request for silence or a pause ('hold kæft', 'stille', 'vent') is never a rule, even right after a long reply: he wants quiet now, not shorter answers forever.
+  Rules are only about the manner of Grace's speech: length, tone, humour, questions, phrasing. Never about facts or accuracy, what she should tell him and when (weather, calendar), units, names or nicknames: those belong to her memory, not to rules.
   Not a rule: requests for this moment or this one reply only ('sig det igen', 'skru op', 'vent', 'hold kæft', 'stille', 'snak lidt langsommere' during one answer), what he wants to talk about, facts about his life, and asking which rules Grace has.
 Each rule: one specific instruction to Grace in English, imperative, concrete enough to check in a single reply, at most 25 words ('Keep replies to one or two short sentences unless Mikkel asks for detail.', never 'Be better.'). Base it on what he actually objected to or liked in the previous reply. 'evidence' copies Mikkel's words exactly.
+Only Mikkel's words are a source. Never add or change a rule because Grace's reply broke a rule or looks wrong to you: if he didn't comment on it, there is nothing to do. A rule that already covers his feedback needs no new rule.
 Most exchanges contain no feedback: then feedback false, complaint false and an empty list.";
 
 fn schema() -> Value {
@@ -145,14 +180,32 @@ pub fn apply(
     };
     let shown: Vec<i64> = db.style_rules()?.iter().map(|r| r.id).collect();
     for op in out["ops"].as_array().into_iter().flatten() {
-        let name = op["op"].as_str().unwrap_or("");
         let id = op["id"].as_i64().unwrap_or(0);
+        // An update of an id it wasn't shown is still his feedback: keep it as a new rule.
+        let name = match op["op"].as_str().unwrap_or("") {
+            "update" if !shown.contains(&id) => "add",
+            n => n,
+        };
+        // A new or changed rule without feedback is the classifier policing Grace on its own
+        // (grace-style-bench v1: a neutral "jeg så en ret god film" added a second questions
+        // rule in 3 of 3 seeds). Dropping a shown rule needs only his quoted words (v2 lost
+        // "du må godt stille spørgsmål igen" when every op needed the flag).
+        if matches!(name, "add" | "update") && !o.feedback {
+            o.refused.push(format!("{name} without feedback"));
+            continue;
+        }
         let rule = op["rule"].as_str().unwrap_or("").trim();
         let evidence = op["evidence"].as_str().unwrap_or("").trim();
         // Same provenance rule as memory: Mikkel's own words, or nothing.
         if !supported_by(evidence, user) {
             o.refused.push(format!(
                 "{name} {id}: evidence not in Mikkel's words: {evidence}"
+            ));
+            continue;
+        }
+        if matches!(name, "add" | "update") && only_hush(evidence) {
+            o.refused.push(format!(
+                "{name} {id}: a request for quiet now, not a rule: {evidence}"
             ));
             continue;
         }
@@ -165,7 +218,7 @@ pub fn apply(
             ));
             continue;
         }
-        if matches!(name, "update" | "remove") && !shown.contains(&id) {
+        if name == "remove" && !shown.contains(&id) {
             o.refused.push(format!("{name} {id}: not a current rule"));
             continue;
         }
@@ -340,11 +393,73 @@ mod tests {
     }
 
     #[test]
+    fn hush_is_not_a_rule() {
+        assert!(only_hush("hold lige kæft"));
+        assert!(only_hush("Vent lige et øjeblik."));
+        assert!(!only_hush("hold dine svar korte"));
+        let mut m = db();
+        let out = json!({ "feedback": true, "complaint": true, "ops": [
+            { "op": "add", "id": 0, "evidence": "hold lige kæft", "rule": "Keep replies concise." },
+        ]});
+        let o = apply(&mut m, &out, "hold lige kæft", None, None, 1.0).unwrap();
+        assert!(!o.changed() && o.refused.len() == 1);
+    }
+
+    #[test]
+    fn ops_without_feedback_are_ignored() {
+        let mut m = db();
+        let out = json!({ "feedback": false, "complaint": false, "ops": [
+            { "op": "add", "id": 0, "evidence": "kortere svar", "rule": "Keep replies short." },
+        ]});
+        let o = apply(&mut m, &out, SAID, None, None, 1.0).unwrap();
+        assert!(!o.changed());
+        assert_eq!(o.refused, vec!["add without feedback".to_owned()]);
+        assert!(m.style_rules().unwrap().is_empty());
+        let a = m
+            .add_style_rule("Ask fewer questions.", "færre", None, None, 2.0)
+            .unwrap();
+        let out = json!({ "feedback": false, "complaint": false, "ops": [
+            { "op": "remove", "id": a, "evidence": "kortere svar", "rule": "" },
+        ]});
+        let o = apply(&mut m, &out, SAID, None, None, 3.0).unwrap();
+        assert_eq!(
+            o.removed,
+            vec![a],
+            "dropping a shown rule needs only his words"
+        );
+    }
+
+    #[test]
+    fn update_of_an_unknown_id_becomes_an_add() {
+        let mut m = db();
+        let out = json!({ "feedback": true, "complaint": false, "ops": [
+            { "op": "update", "id": 0, "evidence": "kortere svar", "rule": "Keep replies short." },
+        ]});
+        let o = apply(&mut m, &out, SAID, None, None, 1.0).unwrap();
+        assert_eq!(o.added.len(), 1);
+    }
+
+    #[test]
     fn no_feedback_changes_nothing() {
         let mut m = db();
         let out = json!({ "feedback": false, "complaint": false, "ops": [] });
         let o = apply(&mut m, &out, "hvad er klokken", None, None, 1.0).unwrap();
         assert_eq!(o, Outcome::default());
+    }
+
+    #[test]
+    fn reminder_only_when_there_are_rules() {
+        assert_eq!(with_reminder("hej", &[]), "hej");
+        let m = db();
+        m.add_style_rule("Keep replies short.", "kort", None, None, 0.0)
+            .unwrap();
+        let r = with_reminder("hej", &m.style_rules().unwrap());
+        assert_eq!(
+            r,
+            "hej
+
+[How Mikkel wants you to talk: Keep replies short.]"
+        );
     }
 
     #[test]

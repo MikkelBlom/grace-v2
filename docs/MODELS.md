@@ -366,3 +366,36 @@ Docta → "doktor". Real fix: LoRA fine-tune on synthetic code-switched speech (
 
 Live run 3 with da1 @ 0.5 waited 1.6-3 s on complete questions (scores 0.06-0.41). Unfinished
 threshold lowered 0.1 → 0.05 (fewer 3 s waits: 8 → 5 % of finished turns).
+
+## Style learning — grace-style-bench, 7 scenarios × 3 seeds, 2026-10-20
+
+Gemma 4 12B (QAT q4_0) for replies (engine settings), the style classifier and the judge; main's
+`config/prompts/system.md`. "off" = today's behaviour (feedback only in the chat history),
+"on" = rules learned by the classifier, rendered in the system message and restated on the
+current user message ([ADR 0017](adr/0017-style-rules-and-review-queue.md)). Run `v5`.
+
+| | off | on |
+|---|---|---|
+| **hard checks + judge** | **48/69** | **241/243** |
+| 01 shorter: mean words before → after feedback → next session | 49 → 15 → **43** | 51 → 13 → **21** |
+| 01 + 04: replies within the word cap after feedback | 9/15 | 15/15 |
+| 02 fewer questions: question rate before → after → next session | 1.00 → 0.67 → **0.67** | 0.78 → 0.00 → **0.00** |
+| 05 lists its rules / drops one by voice | 4/9 | 9/9 |
+| 07 ten rules at once: thorough technical answer (words), judge | 195, 4/4 | 119 (≥ 40 in 3/3), 4/4 |
+| classifier: rule changed on feedback turns / on other turns | — | 18/18 / 1/120 |
+
+The remaining false rule: "nej det er forkert, Aarhus er ikke hovedstaden" (a fact correction)
+became "be careful with geographical facts" in 1 of 3 seeds.
+
+Iterations (same scenarios): v1 learned 6/120 false rules ("hold lige kæft" after a long reply →
+"be concise", 3/3 seeds; a neutral line after a broken rule → a duplicate rule) → code guards
+(new/changed rules need the feedback flag; hush-only evidence refused). Requiring the flag for
+removals too (v2) lost 6/18 real feedback turns; now removals need only his words. Rules in the
+system block only (v4): next-session question rate 0.67, same as off; restating them on the
+user message (v4-remind, adopted): 0.00, and 243/243.
+
+Memory regression (`grace-memory-bench`, same day, same llama-server): base 6420bd6 220/246,
+this branch 225/246. A first version that told the fact extractor to leave talking style to the
+rules scored 206: one extra sentence in its prompt cost unrelated extraction (sisters, cousins);
+the extractor prompt is unchanged now. Run-to-run noise ±1-4 per category; the old 216 figure
+above is from 2026-10-11.

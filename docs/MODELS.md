@@ -435,3 +435,21 @@ once cited exclamation marks that the hard check found 0 of). Asking for facts m
 holds (scenario 02) is 43-45/48 on both the old and new prompt: a standing weakness, not a
 regression; Gemma reads past the memory block at the end of the prompt.
 
+### Mikkel's own replies as ground truth, 14 scenarios × 3 seeds, 2026-10-20
+
+Round 1 of the blind pick failed (he picked none on 8 of 20); his own replies are now the
+few-shot block in system.md and the judge's reference. Judge criteria were rewritten around them
+("short, casual, like someone who knows him"; one "!" and "haha" allowed), so scores don't
+compare with the tables above.
+
+| Prompt | score | hard | judge | "That sounds like" | small talk ends in "?" ≤ 50 % |
+|---|---|---|---|---|---|
+| his examples folded in | 0.888 | 959/985 | 178/222 | 15 | 1/3 |
+| + "never start with That sounds like", fewer follow-up questions | 0.898 | 961/985 | 182/222 | 11 | 0/3 |
+
+Stable: quiet 21/21, English 162/162, dictation, fillers, greetings, technical, no-tools.
+Weak under the new rubric: small talk (judge 7/18: she interviews him), interview with memory
+(42/48 known-fact questions avoided). Round-2 pick page samples also showed "I cannot set
+reminders" (wrong: memory commitments do that) in 1 of 2 samples despite the new rule, and
+"That is a classic move". Not tuned further: his round-2 picks are the better signal.
+

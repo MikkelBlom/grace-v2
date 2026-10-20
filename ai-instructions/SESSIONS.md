@@ -130,3 +130,16 @@ few-shot examples; re-run the bench; fix the memory-question and "That sounds li
 English on cold Danish openers; fixed: 15/15). Interview rule reworded (no example questions
 that memory usually answers, "full name, you know he's Mikkel").
 
+## 2026-10-20 (afternoon) — Claude Code (Opus 5.5): Mikkel's replies as ground truth
+**Summary:** Round-1 style pick rejected (generated candidates "VERY shit made"). His own
+replies became the few-shot block in system.md and the examples in docs/conversation-style.md;
+judge re-anchored on them. Prompt fixes: reminders are possible via memory, greetings get a
+greeting back, no "That sounds like" openers. Round-2 pick page: 16 hand-written exchanges,
+two hand-written candidates + Grace's reply, blind, with a box for his own reply
+(bench-results/chat/style-pick-2/pick.html). Bench 0.898 under the new rubric.
+**Issues encountered:** two Claude crashes mid-run; the first bench after the crash used a
+stale binary (clippy doesn't rebuild), re-run. The bench loaded the candidates YAML as a
+scenario (moved to fixtures/chat/pick-handwritten.yaml).
+**Next steps:** Mikkel does round 2; fold his picks and written replies in; small talk still
+interviews him; known-fact questions; live check.
+

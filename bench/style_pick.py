@@ -1,6 +1,6 @@
 """Blind style pick, round 2: for each short exchange in fixtures/chat/pick/exchanges.yaml,
 shows Grace's reply (current config/prompts/system.md, through grace-chat-bench) next to the
-hand-written candidates in fixtures/chat/pick/handwritten.yaml, in random order. Mikkel picks
+hand-written candidates in fixtures/chat/pick-handwritten.yaml, in random order. Mikkel picks
 the one he likes, or none and writes his own; his picks and written replies become the
 examples in docs/conversation-style.md and system.md.
 
@@ -135,14 +135,14 @@ def main() -> None:
     if not args.page_only:
         run_bench(label, ROOT / "config" / "prompts" / "system.md", ["--scenarios", "fixtures/chat/pick", "--seeds", "1", "--no-judge"])
     grace = last_exchanges(label)
-    hand = yaml.safe_load((PICK / "handwritten.yaml").read_text(encoding="utf-8"))
+    hand = yaml.safe_load((ROOT / "fixtures" / "chat" / "pick-handwritten.yaml").read_text(encoding="utf-8"))
     items = []
     for sid, e in sorted(grace.items()):
         replies = [{"style": "grace", "reply": e["reply"]}]
         replies += [{"style": k, "reply": v} for k, v in hand.get(sid, {}).items()]
         items.append({"id": sid, "user": e["user"], "before": e["before"], "replies": replies})
     scores = {}
-    final = ROOT / "bench-results" / "chat" / "mikkel-examples" / "report.json"
+    final = ROOT / "bench-results" / "chat" / "mikkel-examples-2" / "report.json"
     if final.exists():
         scores["grace (full bench)"] = json.loads(final.read_text(encoding="utf-8"))["summary"]
     (OUT / "pick.html").write_text(page(items, scores), encoding="utf-8")

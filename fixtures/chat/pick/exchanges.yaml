@@ -1,7 +1,7 @@
 # Round 2 of the blind style pick (bench/style_pick.py). Hand-written, different from the
 # examples in config/prompts/system.md, so the pick shows whether Grace generalises his style.
 # Each line is answered by Grace (current system.md) and shown next to the two hand-written
-# candidates in handwritten.yaml.
+# candidates in ../pick-handwritten.yaml.
 - { id: r01-morning, intent: Greeting., turns: [{ user: godmorgen }] }
 - { id: r02-lazy, intent: Everyday chat., turns: [{ user: jeg gider ikke at lave noget i dag }] }
 - { id: r03-code, intent: Coding problem., turns: [{ user: min kode virker ikke }] }

@@ -78,8 +78,15 @@
   crackle when he started talking as she did (now a 10 ms fade). Still open: conversation style
   (#36: vague "AI" questions, long replies, doesn't go silent on "hold kæft"), "C#" spoken as
   "køh" (#37). Memory worked: "I have no sister" invalidated the old test fact and added the
-  correction. Open question for Mikkel: is fact 21 ("semester project deadline 16 November
-  2026") real or old test data?
+  correction. Fact 21 ("semester project deadline 16 November 2026") checked
+  against itslearning: 16 Nov ends the *First deployment* phase (12 Oct - 16 Nov); final
+  documentation phase is 07-18 Dec (DigitalExam). Not a test fact; the wording is imprecise.
+  STT quality in run 4 is not representative: Mikkel walked around, faced away, even closed a
+  door, believing the (absent) DJI clip mic was on.
+- **Turn length (2026-10-20):** rings stay 30 s between turns, but the conductor pins an open
+  turn (`Shared::keep_from`) so it is kept whole (hard cap 30 min). Next limit for long turns is
+  STT: every pause re-transcribes the whole turn (~0.2 s per 30 s window), so a 10 min monologue
+  would cost seconds per pause. Fix if it bites: transcribe settled chunks once (FUTURE_IDEAS).
 - **Docker crashes (Mikkel, 2026-10-20) are not Grace's:** nothing in Grace uses Docker (memory is
   SQLite in-process, data/memory.db). Likely other agents' containers or WSL memory pressure
   (seen before when the Windows Audio service stopped).

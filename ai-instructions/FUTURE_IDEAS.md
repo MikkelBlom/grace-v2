@@ -28,6 +28,7 @@ Parked so they don't derail the current milestone. Promote to a GitHub issue whe
 - **[low]** Port v1's STT correction dictionary + voice-taught corrections.
 
 - Bilingual STT router (#34): language ID with a Danish prior, edda for Danish, turbo for English.
+- Incremental STT for long turns: transcribe settled 30 s chunks once, re-transcribe only the tail.
 - TTS text normalisation (#37): C#, F#, .NET, URLs, numbers with units.
 
 ## LLM

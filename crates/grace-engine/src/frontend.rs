@@ -56,6 +56,18 @@ impl Shared {
         }
     }
 
+    /// Keep audio from `t` on until `None`: an open turn must not be evicted mid-sentence.
+    pub fn keep_from(&mut self, t: Option<f64>) {
+        for ring in [
+            &mut self.aec16,
+            &mut self.lin16,
+            &mut self.speakers16,
+            &mut self.raw16,
+        ] {
+            ring.keep_from(t);
+        }
+    }
+
     /// Moves what the frontend produced for one chunk into the rings.
     pub fn absorb(&mut self, out: &mut Produced) {
         for (ring, parts) in [

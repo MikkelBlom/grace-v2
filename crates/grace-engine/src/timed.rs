@@ -13,7 +13,13 @@ pub struct TimedRing {
     start: f64,
     buf: VecDeque<f32>,
     capacity: usize,
+    /// While set, samples from this time on are kept past `capacity`: an open turn is read
+    /// back whole however long it runs (live run 4: a 65 s note lost its start at 30 s).
+    keep_from: Option<f64>,
 }
+
+/// Even a pinned ring never holds more than this (a pin left set by a bug must not eat RAM).
+const MAX_PINNED_SECONDS: f64 = 30.0 * 60.0;
 
 impl TimedRing {
     pub fn new(rate: u32, seconds: f64) -> Self {
@@ -22,7 +28,13 @@ impl TimedRing {
             start: 0.0,
             buf: VecDeque::new(),
             capacity: (seconds * rate as f64) as usize,
+            keep_from: None,
         }
+    }
+
+    /// Keep everything from `t` on (an open turn) until called with `None`.
+    pub fn keep_from(&mut self, t: Option<f64>) {
+        self.keep_from = t;
     }
 
     /// Time just past the last sample.
@@ -45,7 +57,15 @@ impl TimedRing {
             }
         }
         self.buf.extend(samples.iter().copied());
-        let excess = self.buf.len().saturating_sub(self.capacity);
+        let mut excess = self.buf.len().saturating_sub(self.capacity);
+        if let Some(keep) = self.keep_from {
+            let before_keep = ((keep - self.start) * self.rate).max(0.0) as usize;
+            let hard = self
+                .buf
+                .len()
+                .saturating_sub((MAX_PINNED_SECONDS * self.rate) as usize);
+            excess = excess.min(before_keep).max(hard);
+        }
         if excess > 0 {
             self.buf.drain(..excess);
             self.start += excess as f64 / self.rate;
@@ -88,6 +108,24 @@ mod tests {
         assert_eq!(r.read(1.2, 2), vec![0.0; 2]);
         assert_eq!(r.read(1.55, 3), vec![2.0, 2.0, 2.0]);
         assert_eq!(r.read(0.5, 2), vec![0.0; 2], "before the ring");
+    }
+
+    #[test]
+    fn keeps_an_open_turn_past_capacity() {
+        let mut r = TimedRing::new(100, 1.0); // holds 1 s
+        r.push(0.0, &[1.0; 50]);
+        r.keep_from(Some(0.5)); // a turn starts at 0.5 s
+        for i in 1..5 {
+            r.push(i as f64 * 0.5, &[2.0; 50]); // talks for 2 more seconds
+        }
+        assert_eq!(r.read_span(0.5, 2.5), vec![2.0; 200], "whole turn kept");
+        assert_eq!(r.read(0.0, 1), vec![0.0], "older audio still evicted");
+        r.keep_from(None);
+        r.push(2.5, &[3.0; 10]);
+        assert!(
+            (r.end() - r.start - 1.0).abs() < 1e-9,
+            "back to 1 s once the turn ends"
+        );
     }
 
     #[test]

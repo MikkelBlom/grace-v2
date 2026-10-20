@@ -100,6 +100,14 @@ pub async fn run(
     // Turns whose transcript Whisper was unsure of: answered, but not learned from.
     let mut unsure: std::collections::HashSet<u64> = Default::default();
     let mut last_speech_start = t0;
+    // The open turn whose audio the rings keep whole, however long it runs.
+    let mut pinned: Option<u64> = None;
+    let unpin = |id: u64, pinned: &mut Option<u64>| {
+        if *pinned == Some(id) {
+            *pinned = None;
+            svc.shared.lock().expect("shared poisoned").keep_from(None);
+        }
+    };
     let mut tick = tokio::time::interval(Duration::from_millis(30));
     let rel = |t: f64| Duration::from_secs_f64((t - t0).max(0.0));
 
@@ -164,6 +172,12 @@ pub async fn run(
                     );
                     // Keep the map small: only recent turns matter.
                     turns.retain(|k, _| *k + 8 > id);
+                    // Pause work reads from 0.5 s before the start; keep a little more.
+                    svc.shared
+                        .lock()
+                        .expect("shared poisoned")
+                        .keep_from(Some(last_speech_start - 1.0));
+                    pinned = Some(id);
                 }
                 Command::EvaluatePause(id) => {
                     let Some(turn) = turns.get_mut(&id) else {
@@ -192,6 +206,7 @@ pub async fn run(
                     }
                 }
                 Command::Respond { turn, text } => {
+                    unpin(turn, &mut pinned);
                     println!("you:   {text}");
                     let user_turn = svc.memory.add_turn("user", &text).unwrap_or_else(|e| {
                         warn!(error = %e, "memory: storing user turn failed");
@@ -225,6 +240,7 @@ pub async fn run(
                     reply = Some(Reply { turn, cancel, wake });
                 }
                 Command::DropTurn(id) => {
+                    unpin(id, &mut pinned);
                     if let Some(t) = turns.get(&id) {
                         info!(parent: &t.span, "turn dropped: no words");
                     }

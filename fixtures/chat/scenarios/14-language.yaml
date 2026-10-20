@@ -1,0 +1,13 @@
+id: 14-language
+categories: [language]
+intent: Casual everyday Danish lines; Grace must always answer in English (ADR 0011), even when asked to speak Danish. Seen failing in the style-learning bench on main's prompt.
+every: { max_words: 40 }
+turns:
+  - user: hvad er din yndlingsfarve
+  - user: jeg har glemt at købe mælk
+  - user: det er bare typisk mig
+  - user: kan du ikke bare svare på dansk
+  - user: hvad hedder Danmarks hovedstad
+judge:
+  - Every Grace reply is in English (Danish names and places may stay as they are).
+  - When asked to answer in Danish, Grace stays in English and says so briefly, without a lecture.

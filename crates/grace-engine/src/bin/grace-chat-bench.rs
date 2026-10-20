@@ -49,6 +49,11 @@ const BANNED: &[&str] = &[
     "re:\\bf#",
     "c\\+\\+",
 ];
+/// Danish words that are not English words; two or more in a reply means it's in Danish.
+const DANISH_WORDS: &[&str] = &[
+    "jeg", "ikke", "det", "og", "har", "du", "til", "af", "kan", "vil", "skal", "hvad", "så", "på",
+    "er", "med", "mig", "dig", "der", "være", "også", "bare", "lige", "nej", "jo",
+];
 /// What counts as staying quiet: nothing, or one of these.
 const QUIET_OK: &[&str] = &["", "okay", "ok", "mm", "mhm", "sure", "got it", "alright"];
 
@@ -275,6 +280,20 @@ fn hard_checks(e: &Expect, reply: &str, previous: Option<&str>) -> Vec<(String, 
         .filter(|b| matches(b, reply))
         .collect();
     add("banned", banned.is_empty(), banned.join(", "));
+    // Grace always answers in English (ADR 0011). Danish names and places stay, so look for
+    // Danish function words, which never appear in an English sentence.
+    let lower = reply.to_lowercase();
+    let danish: Vec<&str> = lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| DANISH_WORDS.contains(w))
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    add(
+        "english",
+        danish.len() < 2,
+        format!("Danish: {}", danish.join(" ")),
+    );
     // Exclamation marks are the cheapest tell of trying too hard.
     add(
         "no_exclamation",

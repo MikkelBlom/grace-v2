@@ -417,3 +417,21 @@ sounds like…"; minimal leaked `<|channel>` tokens on fillers twice. The pick i
 Also seen in the pick set: "sytten gange treogtyve" answered 510 and 51 (correct: 391) in three
 of four styles.
 
+### Reply language, 2026-10-20
+
+New scenario 14 (casual Danish openers, "kan du ikke bare svare på dansk") and a global hard
+check (two or more Danish function words = not English). Reported by the style-learning
+session. English replies in scenario 14, 3 seeds × 5 turns:
+
+| Prompt | English | judge |
+|---|---|---|
+| main's system.md | 0/15 | 0/15 |
+| tuned #36 prompt | 11/15 | 7/15 |
+| + explicit "Reply language" paragraph | 15/15 | 15/15 |
+
+The other 13 scenarios were already 54/54 English. Full bench with the language paragraph:
+0.949-0.965 over two runs (14 scenarios × 3 seeds; judge varies by ±7 of 222 between runs and
+once cited exclamation marks that the hard check found 0 of). Asking for facts memory already
+holds (scenario 02) is 43-45/48 on both the old and new prompt: a standing weakness, not a
+regression; Gemma reads past the memory block at the end of the prompt.
+

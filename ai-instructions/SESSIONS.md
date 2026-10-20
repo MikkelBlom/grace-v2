@@ -126,4 +126,7 @@ the judge's old rubric penalises "sir".
 **Next steps:** Mikkel picks; fold winning style and his picked replies into system.md as
 few-shot examples; re-run the bench; fix the memory-question and "That sounds like" regressions;
 "What is your name?" when she knows he's Mikkel (interview order should say full name).
+**Later the same day:** reply-language scenario 14 + English hard check (main's prompt: 0/15
+English on cold Danish openers; fixed: 15/15). Interview rule reworded (no example questions
+that memory usually answers, "full name, you know he's Mikkel").
 

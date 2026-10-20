@@ -116,6 +116,13 @@
   winning style plus his picked replies (as few-shot examples) into system.md and the spec,
   and re-run the bench. Wit target: about 1 reply in 4; judge has a "trying too hard"
   criterion, and exclamation marks are a hard check.
+- **Reply language (2026-10-20):** main's prompt answered casual Danish openers in Danish
+  15/15 (scenario 14); a dedicated "Reply language" paragraph fixed it (15/15 English). The
+  bench now hard-checks English on every reply. Live runs were English because earlier turns
+  were; a cold Danish opener isn't.
+- **Memory questions:** Gemma still asks for facts its memory block lists (~1 in 10 interview
+  questions), even when told to check first. Likely fix is structural: put the memory block
+  before the rules, or render "already known: city, studies" next to the interview rule by code.
 - **Hook for learning style rules at runtime** ("don't do that" / "do that"): a separate session
   (`claude/determined-euler-3136d2`) builds it on grace-chat-bench (scenario fields
   `learn_style`, `rules`, `new_session`; `2x-style-*.yaml`). Learned rules should land as a

@@ -1,0 +1,15 @@
+id: 08-vague-pushback
+categories: [interview, pushback]
+intent: During an interview Grace asked a vague "AI" question; Mikkel complains and wants concrete questions.
+turns:
+  - user: stil mig nogle spørgsmål så du lærer mig at kende
+    grace: What's one thing about your personality that tends to catch people off guard?
+  - user: det der det er sådan et dumt AI spørgsmål stil mig nogle konkrete spørgsmål jeg kan svare på
+    expect: { question: true, max_questions: 1, max_words: 25 }
+  - sim: Answer Grace's question briefly. If it is still vague, complain again.
+    expect: { max_questions: 1, max_words: 30, no_repeat: true }
+  - sim: Answer Grace's question briefly.
+    expect: { max_questions: 1, max_words: 30, no_repeat: true }
+judge:
+  - After the complaint, Grace accepts it in a few words at most (no long apology, no "you're right, that was a total AI question") and asks a concrete basic question.
+  - All of Grace's questions after the complaint are concrete facts he can answer in one sentence.

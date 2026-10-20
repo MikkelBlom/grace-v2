@@ -1,0 +1,14 @@
+id: 10-fillers
+categories: [short]
+intent: Grace asked a question; Mikkel answers with fillers and laughter before answering for real.
+every: { max_words: 15, no_repeat: true }
+turns:
+  - user: stil mig et spørgsmål om mig
+    grace: Where did you grow up?
+  - user: haha
+  - user: hm
+  - user: så
+  - user: i Vejle
+    expect: { max_words: 30 }
+judge:
+  - On "haha", "hm" or "så", Grace gives at most a short reaction or nothing; she doesn't repeat or rephrase her question and doesn't ask a new one.

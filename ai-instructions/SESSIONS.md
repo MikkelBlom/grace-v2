@@ -102,3 +102,16 @@ enumerates as a USB drive. Mikkel's spoken note to "the other AI" was cut by the
 recovered from the trace's partial transcripts. `stt_lang.py en` crashes natively (skipped).
 **Next steps:** get the DJI to show up as an audio input; short live check of the click fix and
 long turns; then #35 latency (Smart Turn waits, Pocket TTS first audio, TTFT growth).
+
+## 2026-10-20 — Claude Code (Opus 5.5): conversation-style bench (#36)
+**Summary:** Style spec `docs/conversation-style.md` (do/don't pairs from live run 4).
+`grace-chat-bench` (grace-engine bin): 13 scenarios in `fixtures/chat/scenarios/`, simulated
+Danish user (fictional persona), hard checks + Gemma judge, transcripts in
+`bench-results/chat/<label>/`. `memory::session_block` made public so the bench renders memory
+exactly like the engine. Prompt tuned in 4 rounds: score 0.793 → 0.975 (repeat 0.980); quiet
+3/21 → 21/21. Issue #38 for engine-side silence and channel-token stripping.
+**Issues encountered:** Gemma emits `<|channel>thought` loops when asked for an empty reply;
+over-strong interview rules made Grace quiz on "tak" (fixed by scoping).
+**Next steps:** live check of quiet/dictation/fillers/interview; #38 in conductor.rs once the
+turn-taking work lands; add scenarios from each new live run's failures.
+

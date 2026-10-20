@@ -25,6 +25,7 @@
 | Tools | Planned (v0.3) | ADR 0010: web search, open program, file search | — | harness | — |
 | `grace-sim` | Implemented | Real frontend on simulated rooms (CoRal + Grace's voice + DEMAND/ESC-50), ~35× real time; VAD/gate/DTD switches | 2026-10-11 | corpora | — |
 | `grace-memory-bench` | Implemented | 40 Danish multi-session scenarios, fake clock, real answer path; `--reconcile` experimental | 2026-10-11 | llama + embed | — |
+| `grace-chat-bench` | Implemented | 13 conversation-style scenarios (scripted + simulated Danish user), hard checks + local LLM judge, `docs/conversation-style.md` | 2026-10-20 | llama | — |
 | STT on linear AEC | Implemented (ADR 0014) | STT reads AEC3 linear output; turn audio saves lin/raw/aec | 2026-10-11 | — | — |
 | Hallucination check | Implemented (ADR 0016) | ekko-v1-tiny on CPU alongside edda; drop when ekko hears nothing | 2026-10-11 | speech server | — |
 | Smart Turn da1 | Implemented | Danish fine-tune, 60 → 75 % on CoRal conversation | 2026-10-11 | — | live check |

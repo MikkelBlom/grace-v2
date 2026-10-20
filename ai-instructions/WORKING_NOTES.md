@@ -95,6 +95,19 @@
   language ID misroutes conversational Danish (turbo 6/60 whole turns, tiny-small 13-16/60).
   `bench/stt_lang.py`. `stt_lang.py en` crashes natively after ekko loads (not investigated).
 
+- **Conversation style (#36, 2026-10-20):** `grace-chat-bench` + `docs/conversation-style.md`;
+  prompt tuned 0.793 → 0.975 (docs/MODELS.md). Run: start llama-server, then
+  `cargo run --release --bin grace-chat-bench -- --label <name>` (~7 min for 3 seeds;
+  `--no-judge`, `--only 04`, `--system-prompt <file>` for A/B). Findings: (1) asked for an empty
+  reply, Gemma loops `<|channel>thought` tokens up to max_tokens (TTS would read them), so the
+  prompt says "always at least one word" and quiet = exactly "Okay."; true silence and token
+  stripping need engine code (#38, not done: conductor.rs was being changed elsewhere).
+  (2) Strong interview rules leak: she started quizzing on "tak" until scoped to "only when he
+  asks". (3) The judge is Grace's own model and lenient; it passed leaked tokens as "silent".
+  Keep the safety-relevant rules as hard checks. Simulated user is a fictional persona; Grace's
+  prompt still mentions Mikkel's real projects (Dokta, Rust), which shows up in transcripts.
+  Not verified live yet: the next live run should try "hold kæft", a dictated note, "haha".
+
 ## Decisions made (and why), not yet worth an ADR
 - Bench runners are separate processes speaking JSON lines, so any language and any runtime
   can be compared; model load is excluded from per-request latency.

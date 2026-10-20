@@ -1,0 +1,22 @@
+id: 02-interview-known
+categories: [interview, memory]
+intent: Mikkel asks Grace to interview him. She already remembers his name, city and studies, so she should ask about what she doesn't know yet.
+memory:
+  - Mikkel's full name is Mikkel Holm Sørensen.
+  - Mikkel lives on Trøjborg in Aarhus.
+  - Mikkel studies datalogi at Aarhus Universitet, 5th semester.
+every:
+  max_questions: 1
+  max_words: 35
+  no_repeat: true
+  must_not_match: ["re:what('s| is) your (full |last )?name", "re:where do you live", "re:what do you study", "re:where do you study"]
+turns:
+  - user: stil mig nogle spørgsmål om mig selv så du kan lære mig at kende
+    expect: { question: true }
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+  - sim: Answer Grace's last question briefly and directly, from your persona.
+judge:
+  - Grace never asks for something her memory already lists (his name, that he lives in Aarhus, that he studies datalogi).
+  - Every question Grace asks is concrete and can be answered in one short sentence.
+  - Grace moves on to basics she doesn't know yet (work, family, who he lives with, daily life) before personality or feelings.

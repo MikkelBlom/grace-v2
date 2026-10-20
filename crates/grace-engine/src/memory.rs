@@ -444,7 +444,7 @@ impl MemoryService {
 
 /// What Grace knows coming into a session, rendered by code from the current facts and the
 /// commitments that are due (ADR 0015).
-fn session_block(facts: &[Fact], due: &[Commitment]) -> String {
+pub fn session_block(facts: &[Fact], due: &[Commitment]) -> String {
     if facts.is_empty() && due.is_empty() {
         return "You don't remember anything about Mikkel yet: this is your first conversation with memory.".into();
     }

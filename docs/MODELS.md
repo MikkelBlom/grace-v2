@@ -366,3 +366,34 @@ Docta → "doktor". Real fix: LoRA fine-tune on synthetic code-switched speech (
 
 Live run 3 with da1 @ 0.5 waited 1.6-3 s on complete questions (scores 0.06-0.41). Unfinished
 threshold lowered 0.1 → 0.05 (fewer 3 s waits: 8 → 5 % of finished turns).
+
+## Conversation style — grace-chat-bench, 13 scenarios × 3 seeds, 2026-10-20
+
+Gemma 4 12B at the engine's settings (temperature 0.6, seeded), real `system_message` path, fake
+date. Multi-turn scenarios use a simulated user (Gemma playing a fictional Danish persona,
+`fixtures/chat/persona.md`). Hard checks in code; judge = the same Gemma at temperature 0 with
+`docs/conversation-style.md` as rubric. Score = mean of hard and judge pass rates. Scenarios
+from live run 4's failures (#36, #37).
+
+| | Baseline prompt | Tuned prompt (#36) | Tuned, repeat run |
+|---|---|---|---|
+| **score** | **0.793** | **0.975** | **0.980** |
+| hard checks | 538/625 | 604/616 | 605/615 |
+| judge criteria | 122/168 | 163/168 | 164/168 |
+| quiet when told ("Okay." or nothing) | 3/21 | 21/21 | 21/21 |
+| length caps | 84/126 | 123/126 | 120/126 |
+| banned phrases | 127/147 | 142/147 | 144/147 |
+| one question at a time | 63/69 | 68/69 | 69/69 |
+| speakable (no markdown / model tokens) | 146/147 | 147/147 | 147/147 |
+| run time | 676 s | 445 s | — |
+
+Per scenario, judge: interview with empty memory 9/21 → 20/21, be quiet 3/9 → 9/9, dictation
+6/12 → 12/12, fillers 5/9 → 9/9, no-tools 9/12 → 9/12 (unchanged). The first baseline run, on
+an earlier harness (cruder repeat check), scored 0.729.
+
+How much to trust it: run-to-run noise is about ±0.01 on the tuned prompt (seeded, but
+llama-server isn't bit-exact across runs). The judge is Grace's own model and is lenient: it
+passed a reply that was only leaked `<|channel>` tokens as "silent", so the hard checks carry the
+safety-relevant rules. Leftovers: "That sounds like…" as a reflex (5/147), asking for studies
+already in memory (2/9 runs), "haha" still re-asks the question in 1/3 seeds.
+

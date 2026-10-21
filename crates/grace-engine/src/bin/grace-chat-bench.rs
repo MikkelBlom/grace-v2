@@ -68,6 +68,9 @@ struct Args {
     scenarios: PathBuf,
     #[arg(long, default_value = "fixtures/chat/persona.md")]
     persona: PathBuf,
+    /// A tools server (run it with --dry-run): Grace answers with her tools, like the engine.
+    #[arg(long)]
+    tools: Option<String>,
     #[arg(long, default_value = "docs/conversation-style.md")]
     style: PathBuf,
     #[arg(long, default_value = "config/prompts/system.md")]
@@ -335,6 +338,8 @@ struct Bench {
     out: PathBuf,
     /// Every generated exchange, for tools that compare runs (bench/style_pick.py).
     exchanges: Vec<Value>,
+    /// Grace's tools (a `--dry-run` tools server), as the engine runs her (ADR 0020).
+    tools: Option<grace::tools::Tools>,
 }
 
 impl Bench {
@@ -350,10 +355,28 @@ impl Bench {
                 .iter()
                 .map(|(r, t)| json!({ "role": r, "content": t })),
         );
+        let Some(tools) = &self.tools else {
+            let mut req = ChatRequest::new(messages);
+            req.max_tokens = REPLY_MAX_TOKENS;
+            req.extra.insert("seed".into(), json!(seed));
+            return Ok(self.llm.complete(&req).await?.trim().to_owned());
+        };
+        // As conductor::speak_reply: the checker's hint on the user's line, then the tool loop.
+        let said = history.last().map(|h| h.1.clone()).unwrap_or_default();
+        let span = tracing::Span::none();
+        let route = tools.hint(&said, &span).await;
+        if let Some(last) = messages.last_mut()
+            && route.is_some_and(|r| r.hint())
+        {
+            last["content"] = json!(format!("{said}\n\n{}", grace::tools::HINT));
+        }
+        let tools = route.is_none_or(|r| r.offer_tools()).then_some(tools);
         let mut req = ChatRequest::new(messages);
         req.max_tokens = REPLY_MAX_TOKENS;
         req.extra.insert("seed".into(), json!(seed));
-        Ok(self.llm.complete(&req).await?.trim().to_owned())
+        let mut sink = grace::tools::Collect::default();
+        grace::tools::reply(&self.llm, tools, req, seed, &said, &span, &mut sink).await;
+        Ok(sink.text.trim().to_owned())
     }
 
     /// The simulated user's next line: Gemma playing the persona, in Danish, as STT writes it.
@@ -640,6 +663,7 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(out.join("transcripts"))?;
     // The prompt this run measured, for before/after comparisons.
     std::fs::copy(&args.system_prompt, out.join("system.md"))?;
+    let args_tools = args.tools.clone();
     let mut bench = Bench {
         persona: std::fs::read_to_string(&args.persona).context("persona")?,
         style: std::fs::read_to_string(&args.style).context("style spec")?,
@@ -648,6 +672,10 @@ async fn main() -> anyhow::Result<()> {
         checks: Vec::new(),
         out: out.clone(),
         exchanges: Vec::new(),
+        tools: match &args_tools {
+            Some(addr) => Some(grace::tools::Tools::connect(addr).await?),
+            None => None,
+        },
     };
     let started = std::time::Instant::now();
     for sc in &scenarios {

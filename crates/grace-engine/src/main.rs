@@ -30,7 +30,7 @@ const LLM_URL: &str = "http://127.0.0.1:8080";
 const STT_ADDR: &str = "127.0.0.1:7810";
 const TTS_ADDR: &str = "127.0.0.1:7811";
 const EMBED_ADDR: &str = "127.0.0.1:7812";
-const LOOKUP_ADDR: &str = "127.0.0.1:7813";
+const TOOLS_ADDR: &str = "127.0.0.1:7813";
 const LEAD_MS: f64 = 30.0;
 
 /// Runs scripted exchanges through the real learning path into a scratch memory and prints
@@ -309,10 +309,10 @@ async fn main() -> anyhow::Result<()> {
         played,
         system_prompt: PathBuf::from("config/prompts/system.md"),
         memory,
-        lookup: match grace::lookup::Lookup::connect(LOOKUP_ADDR).await {
-            Ok(l) => Some(Arc::new(l)),
+        tools: match grace::tools::Tools::connect(TOOLS_ADDR).await {
+            Ok(t) => Some(Arc::new(t)),
             Err(e) => {
-                eprintln!("no web search this session: {e:#}");
+                eprintln!("no tools this session: {e:#}");
                 None
             }
         },

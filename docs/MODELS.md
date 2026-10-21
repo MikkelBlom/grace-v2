@@ -660,3 +660,44 @@ in the loop's top evidence 17/18 vs 9/18 for SearXNG's first result. 16/18 reach
 organisation first sponsored Rust" (Mozilla) not found in 2 rounds. End to end through Gemma:
 "hvem spillede sean parker i the social network" -> "Justin Timberlake played Sean Parker."
 in 3.4 s; Runner Runner's plot right but 12.8 s (the checker isn't sure on "what is it about").
+
+## Tools end to end — grace-tools-sim and grace-chat-bench with tools, 2026-10-21 ([ADR 0020](adr/0020-desktop-tools-and-routing.md))
+
+`grace-tools-sim`: 25 scenarios / 27 Danish lines (fixtures/tools) through `tools::reply` (the
+engine's own loop) against llama-server and a `--dry-run` tools server; web search and file search
+real; checks on tools called, their arguments, the reply text, and English. 3 seeds, Mikkel's
+style rules (`--rules-from data/memory.db`). Iterations, each fixing what the previous run
+showed:
+
+| Run | all checks | what it found |
+|---|---|---|
+| v1 (no calculator, 400 ms hint, no prefetch) | 39/48 | 17x23 = 51 / 510; "should I open it?"; capital of Australia searched; Runner (2026) accepted for Runner Runner; hint late 14/48 (file index held the GIL) |
+| v3 (calculator, prefetch at transcript) | 46/48 | Gemma wrote 17*30 for "treogtyve"; "should I open YouTube?" |
+| v4 (Danish numbers read by the tool, act-don't-ask) | 72/72 | weather searched twice then "couldn't find"; "åbn mappen" opened a PDF in it |
+| v7 (weather tool, folder kind, stricter checks) | 81/81 | by eye: one Danish reply ("Her navn er Sofie.") |
+| final (English check; rule reminder says "replying in English") | 81/81 (english 81/81) | |
+| route (checker routing, memory block first) | 79/81 | "åbn youtube" -> open_app YouTube (no such program): server now opens the site |
+
+Timing (final, 3 seeds): calculate 0.8 s total, open_app 0.7 s, open_url 0.8 s, list_folder 1.4 s,
+find_files 4.6 s, web_search 2.6 s p50 / 10.8 s max, no tool 0.2 s after the hint. The hint was
+late 0-1 times in 81 once prefetched at transcript time (sim: 300 ms lead).
+
+Lookup loop (`bench/lookup_bench.py`, 18 facts) after the changes: 17/18, first hit 7/18, p50
+3.5 s. A burst of ~200 searches got SearXNG's Brave, Google CSE, Wikipedia and Qwant suspended
+("too many requests") and DuckDuckGo timing out; Yahoo kept answering.
+
+Routing (checker choice: search / weather / calculate / open / files / none) on 84 lines from
+fixtures/decide, fixtures/tools and chat: with "none" >= 0.8 skipping the tools, 0/45 tool
+requests lost their tools and 24/39 chat turns went without them; 252 ms p50 on the Arc.
+
+`grace-chat-bench --tools` (16 scenarios x 3, same day): tools offered on every turn 0.910-0.929
+(interviews asked for facts memory listed; "That sounds like" came back); with routing and the
+memory block first **0.966** (scenario 13 rewritten for tools: 54/54, 15/15; 16 unknown facts
+74/75, 15/15). Memory last vs first on 02/15/01 alone: 128 vs 123 hard on 02, but 7/15 vs 15/15
+judge on 15; memory first kept.
+
+After the YouTube fallback: grace-tools-sim **81/81** (english 81/81). Memory bench, same day, same
+code apart from the memory block's place: **first 213/246**, last 202/246 (present 80 vs 76,
+probe 54 vs 51, invalidated 7 vs 5 of 10). Both are below the 225 from earlier on 2026-10-21 with
+the pre-tools prompt; "present" alone moved by 4 between these two runs, so that gap isn't
+attributed yet.

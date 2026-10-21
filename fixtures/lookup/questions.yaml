@@ -3,7 +3,7 @@
 # the expected answers don't drift. Several are traps from live run 5 (Runner vs Runner Runner,
 # Sean Parker's actor vs the person).
 - { q: "Who played Sean Parker in The Social Network?", query: "Sean Parker Social Network", a: "timberlake" }
-- { q: "What is the 2013 film Runner Runner about?", query: "Runner 2013 film", a: "gambl|casino|poker" }
+- { q: "What is the 2013 film Runner Runner about?", query: "Runner 2013 film", a: "gambl|casino|poker", type: overview }
 - { q: "Who directed the film Runner Runner?", query: "Runner Runner", a: "furman" }
 - { q: "Which actor plays the accountant in The Accountant (2016)?", query: "The Accountant 2016 accountant", a: "affleck" }
 - { q: "In what year did Grace Hopper die?", query: "Grace Hopper", a: "1992" }

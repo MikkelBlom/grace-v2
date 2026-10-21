@@ -1,0 +1,152 @@
+# Grace's tool use end to end (crates/grace-engine/src/bin/grace-tools-sim.rs, ADR 0020).
+# Invented Danish lines as STT delivers them (lowercase, no punctuation); several model live
+# run 6's failures. Per turn: `tools` that must be called in order ([] = none), `args` regex
+# per tool over its JSON arguments, `answer` / `not_answer` regexes over what Grace says.
+# Folder counts and files depend on this PC; run the tools server with --dry-run.
+
+- id: s01-fact
+  turns:
+    - say: hvem spillede sean parker i the social network
+      tools: [web_search]
+      answer: "(?i)timberlake"
+- id: s02-unknown-show
+  turns:
+    - say: jeg er lige i gang med at se the mentalist sæson tre
+      not_answer: "(?i)(don't|do not|didn't) (know|recogni)|sounds intense"
+    - say: hvad sker der i afsnit otte
+      tools: [web_search]
+      args: { web_search: "(?i)mentalist" }
+      answer: "(?i)jane|kidnap|ball of fire"
+      not_answer: "(?i)sounds (intense|like)|so (he|jane) (actually )?got"
+- id: s03-news
+  turns:
+    - say: fortæl mig en nyhed fra odense fra det sidste døgn
+      tools: [web_search]
+      args: { web_search: "(?i)news" }
+      not_answer: "(?i)couldn't find|could not find|no news|wasn't able"
+- id: s04-plot
+  turns:
+    - say: hvad handler filmen runner runner om
+      tools: [web_search]
+      answer: "(?i)gambl|poker|casino|online"
+      not_answer: "(?i)couldn't|could not"
+- id: s05-open-app
+  turns:
+    - say: åbn spotify
+      tools: [open_app]
+      args: { open_app: "(?i)spotify" }
+      answer: "(?i)open|spotify"
+      not_answer: "(?i)can't|cannot"
+- id: s06-open-site
+  turns:
+    - say: åbn wolt i chrome
+      tools: [open_url]
+      args: { open_url: "(?i)wolt" }
+      not_answer: "(?i)can't|cannot"
+- id: s07-youtube
+  turns:
+    - say: kan du åbne youtube
+      tools: [open_url]
+      args: { open_url: "(?i)youtube" }
+- id: s08-find-files
+  turns:
+    - say: find mine gamle eksamensopgaver i matematik
+      tools: [find_files]
+      answer: "(?i)eksamen|exam|matemat|math"
+      not_answer: '(?i)can''t|cannot|C:[/\\]'
+- id: s09-desktop-count
+  turns:
+    - say: hvor mange mapper er der på mit skrivebord
+      tools: [list_folder]
+      args: { list_folder: "(?i)skrivebord|desktop" }
+      answer: '(?i)(^|[^0-9])(1[0-9]|sixteen|seventeen|eighteen|nineteen)([^0-9]|$)'
+- id: s10-find-and-open
+  turns:
+    - say: åbn mappen med mine gamle eksamensopgaver i matematik
+      tools: [find_files, open_file]
+      args: { open_file: "(?i)eksamensopgaver\"" }
+      not_answer: "(?i)can't|cannot"
+- id: s11-chat
+  turns:
+    - say: jeg er så træt i dag
+      tools: []
+- id: s12-maths
+  turns:
+    - say: hvad er sytten gange treogtyve
+      tools: [calculate]
+      answer: "(?i)391|three hundred (and )?ninety[- ]one"
+- id: s13-memory
+  memory: "What you know about Mikkel:\n- His sister is called Sofie.\n- He lives in Aarhus.\n"
+  turns:
+    - say: hvad hedder min søster
+      tools: []
+      answer: "(?i)sofie"
+- id: s14-cant-email
+  turns:
+    - say: send en mail til min vejleder om at mødet er aflyst
+      tools: []
+      answer: "(?i)can't|cannot|not able"
+- id: s15-capital
+  turns:
+    - say: hvad er hovedstaden i australien
+      answer: "(?i)canberra"
+- id: s16-weather
+  turns:
+    - say: hvordan bliver vejret i aarhus i morgen
+      tools: [weather]
+      args: { weather: "(?i)aarhus.*tomorrow|tomorrow.*aarhus" }
+      answer: "(?i)degree|°|rain|cloud|sun|wind"
+      not_answer: "(?i)couldn't find|could not find"
+- id: s17-hours
+  turns:
+    - say: hvornår lukker netto på nørrebrogade i dag
+      tools: [web_search]
+      args: { web_search: "(?i)netto" }
+      answer: '\d'
+      not_answer: "(?i)couldn't find|could not find"
+- id: s18-search-then-open
+  turns:
+    - say: hvem instruerede oppenheimer
+      tools: [web_search]
+      answer: "(?i)nolan"
+    - say: åbn traileren på youtube
+      tools: [open_url]
+      args: { open_url: "(?i)youtube|oppenheimer|trailer" }
+- id: s19-vscode
+  turns:
+    - say: åbn vs code
+      tools: [open_app]
+      args: { open_app: "(?i)code" }
+- id: s20-downloads
+  turns:
+    - say: hvad ligger der i min overførsler mappe
+      tools: [list_folder]
+      args: { list_folder: "(?i)download|overf" }
+- id: s21-greeting
+  turns:
+    - say: hej grace
+      tools: []
+- id: s22-cant-timer
+  turns:
+    - say: sæt en timer på ti minutter
+      tools: []
+      answer: "(?i)can't|cannot|not able"
+- id: s23-weather-now
+  memory: "What you know about Mikkel:
+- He lives on Trøjborg in Aarhus.
+"
+  turns:
+    - say: hvordan er vejret lige nu
+      tools: [weather]
+      args: { weather: "(?i)aarhus" }
+      answer: "(?i)degree|°"
+- id: s24-calc-percent
+  turns:
+    - say: hvad er femogtyve procent af firs
+      tools: [calculate]
+      answer: '(?i)\b20\b|twenty'
+- id: s25-not-found
+  turns:
+    - say: hvad hedder bageren på jægergårdsgade i 1974
+      tools: [web_search]
+      not_answer: "(?i)sounds like"

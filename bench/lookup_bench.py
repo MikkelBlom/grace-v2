@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def call(req):
-    with socket.create_connection(("127.0.0.1", 7813), timeout=60) as s:
+    with socket.create_connection(("127.0.0.1", int(__import__("os").environ.get("TOOLS_PORT", "7813"))), timeout=60) as s:
         s.sendall((json.dumps(req) + "\n").encode())
         buf = b""
         while not buf.endswith(b"\n"):
@@ -43,7 +43,7 @@ def main():
     items = yaml.safe_load((ROOT / "fixtures/lookup/questions.yaml").read_text(encoding="utf-8"))
     rows = []
     for it in items:
-        out = call({"id": 1, "kind": "lookup", "question": it["q"], "query": it["query"]})
+        out = call({"id": 1, "kind": "lookup", "question": it["q"], "query": it["query"], "type": it.get("type", "fact")})
         top = out["evidence"][0]["text"] + " " + out["evidence"][0]["title"] if out.get("evidence") else ""
         ok = bool(re.search(it["a"], top, re.I))
         first = bool(re.search(it["a"], first_hit(it["query"]), re.I))

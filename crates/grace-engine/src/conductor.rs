@@ -17,10 +17,9 @@ use std::{
     time::Duration,
 };
 
-use futures_util::StreamExt;
 use grace_core::turn::{Command, Config as TurnConfig, Input, TurnMachine};
 use grace_llm::{
-    client::{ChatRequest, Delta, LlmClient},
+    client::{ChatRequest, LlmClient},
     sentences::SentenceSplitter,
 };
 use grace_vad::smart_turn::SmartTurn;
@@ -47,8 +46,8 @@ pub struct Services {
     pub played: Played,
     pub system_prompt: PathBuf,
     pub memory: Arc<crate::memory::MemoryService>,
-    /// Web lookup and the decision checker (None: the lookup server isn't running).
-    pub lookup: Option<Arc<crate::lookup::Lookup>>,
+    /// Grace's tools and the decision checker (None: the tools server isn't running).
+    pub tools: Option<Arc<crate::tools::Tools>>,
     /// Where each turn's STT input is saved for diagnosis (None = don't save).
     pub turn_audio_dir: Option<PathBuf>,
 }
@@ -203,6 +202,9 @@ pub async fn run(
                 Done::Transcript { turn, epoch, text, confident } => {
                     let current = c.turns.get(&turn).is_some_and(|t| t.epoch == epoch);
                     if current && !confident { c.unsure.insert(turn); } else if current { c.unsure.remove(&turn); }
+                    if current && let Some(tools) = &c.svc.tools && !text.trim().is_empty() {
+                        tools.prefetch(&text);
+                    }
                     (current.then_some(Input::Transcript { turn, text }), clock::now())
                 }
                 Done::Generated { reply, any_audio } => (c.generated(reply, any_audio), clock::now()),
@@ -663,12 +665,59 @@ pub fn system_message(
     // Read every turn: editing the file changes Grace's behaviour immediately (ADR 0002).
     let base = std::fs::read_to_string(path)
         .unwrap_or_else(|_| "You are Grace, a helpful voice assistant.".into());
-    // Hour granularity keeps the cached prompt prefix valid for an hour at a time.
+    // Hour granularity keeps the cached prompt prefix valid for an hour at a time. The memory
+    // block comes first: Gemma's template puts the tool declarations right after the system
+    // text, and with memory last she asked for facts it already listed (chat bench 02 with tools).
     format!(
-        "{base}\n\nToday is {}, around {}:00 local time (Denmark).\n\n{memory_block}",
+        "{memory_block}\n\n{base}\n\nToday is {}, around {}:00 local time (Denmark).",
         now.format("%A %-d %B %Y"),
         now.format("%H")
     )
+}
+
+/// Where a reply's words go: sentences to TTS, and the gate that says whether it may act.
+struct ReplySink<'a> {
+    sent_tx: &'a mpsc::UnboundedSender<String>,
+    splitter: &'a mut SentenceSplitter,
+    full: &'a mut String,
+    gate: watch::Receiver<Gate>,
+    ttft: &'a mut Option<Span>,
+}
+
+impl crate::tools::Sink for ReplySink<'_> {
+    fn text(&mut self, text: &str) {
+        self.ttft.take();
+        self.full.push_str(text);
+        for piece in self.splitter.push(text) {
+            let _ = self.sent_tx.send(piece);
+        }
+    }
+
+    fn filler(&mut self, line: &str) {
+        self.ttft.take();
+        self.full.push_str(line);
+        self.full.push(' ');
+        let _ = self.sent_tx.send(line.to_owned());
+    }
+
+    fn tool_done(&mut self, _name: &str, _args: &serde_json::Value, _out: &serde_json::Value) {}
+
+    async fn cancelled(&mut self) {
+        let _ = self.gate.wait_for(|g| *g == Gate::Cancelled).await;
+    }
+
+    fn is_cancelled(&self) -> bool {
+        *self.gate.borrow() == Gate::Cancelled
+    }
+
+    async fn ready_to_act(&mut self) -> bool {
+        let _ = self.gate.wait_for(|g| *g != Gate::Held).await;
+        *self.gate.borrow() == Gate::Released
+    }
+
+    fn silent(&self) -> bool {
+        self.full.trim().is_empty()
+    }
 }
 
 /// Streams the LLM reply into TTS and the speakers, one sentence at a time. A held reply
@@ -705,20 +754,9 @@ async fn speak_reply(
     // The checker's "needs a lookup?" runs next to recall and is dropped if it is late: with
     // its hint Gemma searched on 17/17 lookup requests instead of 14/17 (ADR 0019).
     let hint = async {
-        let lookup = svc.lookup.as_ref()?;
-        let _stage =
-            info_span!(parent: &span, "stage", stage = "lookup.check", model = "jevk5-4b-arc");
-        match tokio::time::timeout(crate::lookup::HINT_TIMEOUT, lookup.needs_lookup(&last.1)).await
-        {
-            Ok(Ok(p)) => Some(p),
-            Ok(Err(e)) => {
-                warn!(parent: &span, error = %e, "lookup check failed");
-                None
-            }
-            Err(_) => {
-                warn!(parent: &span, "lookup check too slow, skipped");
-                None
-            }
+        match svc.tools.as_ref() {
+            Some(t) => t.hint(&last.1, &span).await,
+            None => None,
         }
     };
     let recall = async {
@@ -733,9 +771,6 @@ async fn speak_reply(
         }
     };
     let (recalled, needs_lookup) = tokio::join!(recall, hint);
-    if let Some(p) = needs_lookup {
-        info!(parent: &span, p, "lookup check");
-    }
     if !recalled.is_empty() {
         let texts: Vec<&str> = recalled.iter().map(|f| f.text.as_str()).collect();
         info!(parent: &span, recalled = ?texts, "memory recalled");
@@ -745,15 +780,12 @@ async fn speak_reply(
     let rules = svc.memory.style_rules().unwrap_or_default();
     let mut content =
         crate::style::with_reminder(&crate::memory::with_recall(&last.1, &recalled), &rules);
-    if needs_lookup.is_some_and(|p| p > crate::lookup::HINT_AT) {
-        content = format!("{content}\n\n{}", crate::lookup::HINT);
+    if needs_lookup.is_some_and(|r| r.hint()) {
+        content = format!("{content}\n\n{}", crate::tools::HINT);
     }
     messages.push(json!({ "role": "user", "content": content }));
     let mut req = ChatRequest::new(messages);
     req.max_tokens = 300;
-    if svc.lookup.is_some() {
-        req.tools = vec![crate::lookup::tool()];
-    }
 
     // Sentences flow to a TTS worker as soon as they are complete.
     let (sent_tx, mut sent_rx) = mpsc::unbounded_channel::<String>();
@@ -847,104 +879,25 @@ async fn speak_reply(
         info_span!(parent: &span, "stage", stage = "llm.decode", model = svc.llm_model.as_str());
     let mut splitter = SentenceSplitter::default();
     let mut full = String::new();
-    let mut llm_gate = gate.clone();
-    // At most one search per reply: the second pass answers from its result, without tools.
-    for pass in 0..2 {
-        // (id, name, arguments) of a tool call, assembled from its pieces.
-        let mut call: Option<(String, String, String)> = None;
-        match svc.llm.stream(&req).await {
-            Ok(mut stream) => loop {
-                let delta = tokio::select! {
-                    d = stream.next() => d,
-                    _ = llm_gate.wait_for(|g| *g == Gate::Cancelled) => None,
-                };
-                if cancelled(&llm_gate) {
-                    break;
-                }
-                match delta {
-                    Some(Ok(Delta::Content(text))) => {
-                        ttft.take();
-                        full.push_str(&text);
-                        for piece in splitter.push(&text) {
-                            let _ = sent_tx.send(piece);
-                        }
-                    }
-                    Some(Ok(Delta::ToolCall {
-                        id,
-                        name,
-                        arguments,
-                        ..
-                    })) => {
-                        ttft.take();
-                        let c = call.get_or_insert_with(Default::default);
-                        if let Some(id) = id {
-                            c.0 = id;
-                        }
-                        if let Some(name) = name {
-                            c.1 = name;
-                        }
-                        c.2.push_str(&arguments);
-                    }
-                    Some(Ok(Delta::Done { .. })) | None => break,
-                    Some(Ok(_)) => {}
-                    Some(Err(e)) => {
-                        warn!(parent: &span, error = %e, "llm stream error");
-                        break;
-                    }
-                }
-            },
-            Err(e) => warn!(parent: &span, error = %e, "llm request failed"),
-        }
-        let (Some((id, name, args)), Some(lookup), 0) = (call, svc.lookup.as_ref(), pass) else {
-            break;
-        };
-        if cancelled(&gate) || name != crate::lookup::TOOL_NAME {
-            break;
-        }
-        // Say something while searching, unless she already started talking.
-        if full.trim().is_empty() {
-            let line = crate::lookup::filler(reply);
-            full.push_str(line);
-            full.push(' ');
-            let _ = sent_tx.send(line.to_owned());
-        }
-        let (question, query) = crate::lookup::arguments(&args, &last.1);
-        let stage =
-            info_span!(parent: &span, "stage", stage = "lookup.search", model = "searxng+jevk5");
-        let found = tokio::select! {
-            r = tokio::time::timeout(crate::lookup::SEARCH_TIMEOUT, lookup.search(&question, &query)) => r,
-            _ = llm_gate.wait_for(|g| *g == Gate::Cancelled) => break,
-        };
-        drop(stage);
-        let result = match found {
-            Ok(Ok(out)) => {
-                info!(parent: &span, query = %query, status = %out["status"], rounds = %out["rounds"], ms = %out["ms"], "web search");
-                crate::lookup::result_text(&out)
-            }
-            Ok(Err(e)) => {
-                warn!(parent: &span, error = %e, "web search failed");
-                "The search failed. Say you couldn't look it up right now.".to_owned()
-            }
-            Err(_) => {
-                warn!(parent: &span, "web search timed out");
-                "The search took too long. Say you couldn't look it up right now.".to_owned()
-            }
-        };
-        let call_id = if id.is_empty() {
-            "call_0".to_owned()
-        } else {
-            id
-        };
-        req.messages.push(json!({
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [{ "id": call_id, "type": "function",
-                             "function": { "name": name, "arguments": args } }],
-        }));
-        req.messages
-            .push(json!({ "role": "tool", "tool_call_id": call_id, "content": result }));
-        req.tools.clear();
-    }
+    let mut sink = ReplySink {
+        sent_tx: &sent_tx,
+        splitter: &mut splitter,
+        full: &mut full,
+        gate: gate.clone(),
+        ttft: &mut ttft,
+    };
+    // Plain conversation goes without tool definitions (see tools::SKIP_TOOLS_AT).
+    let offer = needs_lookup.is_none_or(|r| r.offer_tools());
+    crate::tools::reply(
+        &svc.llm,
+        svc.tools.as_deref().filter(|_| offer),
+        req,
+        reply,
+        &last.1,
+        &span,
+        &mut sink,
+    )
+    .await;
     if !cancelled(&gate)
         && let Some(rest) = splitter.finish()
     {

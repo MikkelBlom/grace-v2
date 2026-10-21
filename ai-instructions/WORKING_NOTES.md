@@ -86,6 +86,19 @@
   Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
   Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
   error and worked when double-clicked.
+- **Tools (ADR 0020, 2026-10-21, not tested live yet):** `services/tools_server.py` (7813,
+  replaces lookup_server.py) serves the manifest and runs web_search / weather / calculate /
+  open_app / open_url / find_files / list_folder / open_file; `--dry-run` for benches (run a
+  second copy on 7814). Engine: `tools::reply` (shared with grace-tools-sim and grace-chat-bench
+  --tools), checker route prefetched at transcript time (`Tools::prefetch`), tools sent only when
+  route.none < 0.8, memory block now first in the system message. Gotchas: (1) bash heredocs +
+  Python string escapes turned `` into a backspace in two files today: write regex fixtures
+  with the Edit tool or single-quoted YAML. (2) Search engines rate-limit benchmark bursts:
+  don't run lookup_bench and the sims back to back without a pause; check
+  `/search?format=json` `unresponsive_engines`. (3) The file index walks ~200k entries in a child
+  process (30 s); in-process it starved the checker. (4) Gemma converts Danish numbers wrongly,
+  so calculate parses `spoken` itself. (5) Opening things needs no confirmation; anything that
+  changes data must get a spoken yes first (not built).
 - **Live run 6 (2026-10-21, web search, traces/engine-1792557402975.jsonl, ~7.5 min, 36 replies):**
   speech end -> first audio p50 1.16 s / p90 2.02 s; checker 279 ms p50 / 401 p90 next to recall
   138 / 288 (10 % hit the 400 ms cap). Findings: (1) The Mentalist: checker hint 0.64 but Gemma

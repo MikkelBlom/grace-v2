@@ -231,3 +231,16 @@ and 0/33 with the checker hint (14/17 without); loop 17/18 vs first hit 9/18, me
 didn't search for The Mentalist (said "don't know" instead), reacted to search results as if
 Mikkel said them, news searches failed (wrong search category), plot lookups slow, speculative
 searches for discarded replies. Details in WORKING_NOTES.
+
+## 2026-10-21 — Claude Code (Opus 5.5): desktop tools, routing, end-to-end tool sim (ADR 0020)
+**Summary:** After live run 6, rebuilt tools properly: one tools server (web search with
+fact/overview/live/news types, weather via Open-Meteo, calculator reading Danish numbers, open
+app / Chrome tab, find/list/open files), engine tool loop shared with a new `grace-tools-sim`
+(25 scenarios, real search + file search, dry-run actions), checker routing prefetched at
+transcript time, memory block first. Iterated the sim from 39/48 to 81/81; chat bench with tools
+0.966; style bench 18/18 learned, 0/144 false; memory bench 213 (memory first) vs 202 (last).
+Dropped style rules #8, #10 and junk facts 57, 60-62, 66, 70, 72 (backup in %TEMP%).
+**Issues encountered:** SearXNG engines suspended after benchmark bursts (more engines, 5-min
+suspensions, 10-min cache added); escape mangling in generated files; Danish reply caused by the
+style-rule reminder (fixed: "replying in English").
+**Next steps:** live test with Mikkel (search, news, weather, open apps/sites, files).

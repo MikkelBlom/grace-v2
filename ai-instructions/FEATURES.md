@@ -42,3 +42,4 @@
 | Bilingual input (da or en) | Planned (#34) | Route English speech to an English-capable STT | — | language ID | parked by Mikkel |
 | Headset config | Implemented | JBL stereo out + DJI mic in, fallback Z337 + laptop mic | 2026-10-20 | — | DJI must enumerate as audio |
 | Web lookup (web_search tool, JevK5 checker on Arc, search loop) | Implemented, not yet used live | SearXNG + DDG/Wikipedia fallback; checker hint 17/17 vs 14/17; loop 17/18 vs first hit 9/18 (ADR 0019) | 2026-10-21 | llama, Docker, OpenVINO venv | — |
+| Desktop tools (weather, calculate, open app/url, find/list/open files) + checker routing | Implemented, not yet used live | tools_server.py; grace-tools-sim 81/81; chat bench with tools 0.966 (ADR 0020) | 2026-10-21 | Docker, OpenVINO venv | — |

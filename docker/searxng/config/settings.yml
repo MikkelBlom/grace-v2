@@ -1,4 +1,4 @@
-# Minimal SearXNG config for Grace (copied from Grace v1). The JSON API is off by default in
+# Minimal SearXNG config for Grace (from Grace v1, ADR 0019). The JSON API is off by default in
 # SearXNG; Grace queries http://localhost:8888/search?q=...&format=json.
 # Bound to 127.0.0.1 only (docker-compose.yml), so the secret key below protects nothing
 # reachable from outside; change it before ever exposing the instance.
@@ -14,6 +14,29 @@ search:
   formats:
     - html
     - json
+  # An engine that answers "too many requests" is suspended; SearXNG's default is an hour, which
+  # left Grace without Brave, Google and Wikipedia after a benchmark (2026-10-21).
+  suspended_times:
+    SearxEngineAccessDenied: 600
+    SearxEngineCaptcha: 600
+    SearxEngineTooManyRequests: 300
+    cf_SearxEngineCaptcha: 600
+    cf_SearxEngineAccessDenied: 600
+    recaptcha_SearxEngineCaptcha: 600
+
+# More general engines spread the load, so one engine blocking us doesn't empty the results.
+# (startpage and mojeek aren't in this SearXNG build; bing returns nothing from here.)
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: qwant
+    disabled: false
+  - name: yahoo
+    disabled: false
+  - name: wikidata
+    disabled: false
 
 ui:
   infinite_scroll: false

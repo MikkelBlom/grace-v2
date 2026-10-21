@@ -73,7 +73,7 @@ pub fn with_reminder(user: &str, rules: &[StyleRule]) -> String {
     format!(
         "{user}
 
-[How Mikkel wants you to talk: {}]",
+[How Mikkel wants you to talk, replying in English: {}]",
         list.join(" ")
     )
 }
@@ -511,7 +511,7 @@ mod tests {
             r,
             "hej
 
-[How Mikkel wants you to talk: Keep replies short.]"
+[How Mikkel wants you to talk, replying in English: Keep replies short.]"
         );
     }
 

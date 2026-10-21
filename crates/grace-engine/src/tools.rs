@@ -137,12 +137,14 @@ impl Tools {
         self.slow.contains(name)
     }
 
-    /// What the checker thinks `said` needs.
+    /// What the checker thinks `said` needs. Requests share one key, so the server drops an
+    /// older transcript's check once a newer one waits (live run 7: 1 in 4 hints came late).
     pub async fn route(&self, said: &str) -> anyhow::Result<Route> {
         let v = call(
             &self.addr,
             json!({
                 "kind": "decide",
+                "key": "route",
                 "state": format!("Mikkel said: \"{said}\""),
                 "question": { "type": "choice", "instructions": ROUTE_Q, "criteria": route_options() },
             }),
@@ -174,6 +176,7 @@ impl Tools {
     async fn checked(&self, said: &str) -> Option<Route> {
         match self.route(said).await {
             Ok(r) => Some(r),
+            Err(e) if e.to_string().contains("superseded") => None,
             Err(e) => {
                 warn!(error = %e, "lookup check failed");
                 None
@@ -224,6 +227,23 @@ async fn call(addr: &str, req: Value) -> anyhow::Result<Value> {
     Ok(v)
 }
 
+/// Drops the oldest half of the conversation between the system message and the current user
+/// message, starting again on a user turn. False if there is nothing left to drop.
+fn shrink(messages: &mut Vec<Value>) -> bool {
+    let Some(last_user) = messages.iter().rposition(|m| m["role"] == "user") else {
+        return false;
+    };
+    if last_user <= 1 {
+        return false;
+    }
+    let mut cut = 1 + (last_user - 1).div_ceil(2);
+    while cut < last_user && messages[cut]["role"] != "user" {
+        cut += 1;
+    }
+    messages.drain(1..cut);
+    true
+}
+
 /// What the reply loop needs from its caller: where the words go and whether it may go on.
 pub trait Sink {
     /// Streamed reply text.
@@ -259,7 +279,22 @@ pub async fn reply<S: Sink + Send>(
     loop {
         // (id, name, arguments) per tool call index, assembled from their pieces.
         let mut calls: Vec<(String, String, String)> = Vec::new();
-        match llm.stream(&req).await {
+        let mut opened = llm.stream(&req).await;
+        // Live run 7: after 17 minutes the request outgrew the context and every reply after
+        // that was silence. Drop the oldest half of the conversation and try again.
+        for _ in 0..3 {
+            match &opened {
+                Err(e) if e.to_string().contains("exceed") => {
+                    if !shrink(&mut req.messages) {
+                        break;
+                    }
+                    warn!(parent: span, messages = req.messages.len(), "context exceeded, dropped the oldest turns");
+                    opened = llm.stream(&req).await;
+                }
+                _ => break,
+            }
+        }
+        match opened {
             Ok(mut stream) => loop {
                 let delta = tokio::select! {
                     d = stream.next() => d,
@@ -322,7 +357,14 @@ pub async fn reply<S: Sink + Send>(
             } else {
                 id
             };
-            let parsed: Value = serde_json::from_str(&args).unwrap_or_else(|_| json!({}));
+            let mut parsed: Value = serde_json::from_str(&args).unwrap_or_else(|_| json!({}));
+            // The calculator reads his own transcribed words: Gemma rewrote "12.213" as
+            // "tolv tusinde to hundrede treogtyve" (grace-tools-sim, live run 7).
+            if name == "calculate"
+                && let Some(o) = parsed.as_object_mut()
+            {
+                o.insert("heard".into(), json!(said));
+            }
             if tools.is_slow(&name) && sink.silent() {
                 sink.filler(filler(reply_id, &name));
             }
@@ -360,6 +402,46 @@ pub async fn reply<S: Sink + Send>(
             req.tools.clear();
         }
     }
+}
+
+/// A tool call kept in the conversation history (role "tool"): live run 7 asked "which folders
+/// start with P?", "where did you read that?" and "open that article" right after tool calls,
+/// and without the results Grace made the answers (and an article URL) up.
+pub fn tool_note(name: &str, args: &Value, out: &Value) -> String {
+    let result: String = out["result"]
+        .as_str()
+        .unwrap_or("")
+        .chars()
+        .take(1500)
+        .collect();
+    json!({ "name": name, "args": args, "result": result }).to_string()
+}
+
+/// Chat messages for a history of ("user" | "assistant" | "tool", text): a tool note becomes the
+/// assistant's tool call and its result, as Gemma saw them when it happened.
+pub fn to_messages(history: &[(&str, String)]) -> Vec<Value> {
+    let mut out = Vec::new();
+    for (i, (role, text)) in history.iter().enumerate() {
+        if *role != "tool" {
+            out.push(json!({ "role": role, "content": text }));
+            continue;
+        }
+        let v: Value = serde_json::from_str(text).unwrap_or(Value::Null);
+        let name = v["name"].as_str().unwrap_or("tool");
+        let id = format!("past_{i}");
+        out.push(json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{ "id": id, "type": "function",
+                             "function": { "name": name, "arguments": v["args"].to_string() } }],
+        }));
+        out.push(json!({
+            "role": "tool",
+            "tool_call_id": id,
+            "content": tool_message(name, v["result"].as_str().unwrap_or("")),
+        }));
+    }
+    out
 }
 
 /// A sink that only collects: for benches (no audio, never cancelled, always committed).
@@ -404,6 +486,46 @@ mod tests {
         let m = tool_message("web_search", "Found. Justin Timberlake played Sean Parker.");
         assert!(m.contains("not something Mikkel said"));
         assert!(m.ends_with("Justin Timberlake played Sean Parker."));
+    }
+
+    #[test]
+    fn tool_results_stay_in_the_conversation() {
+        let note = tool_note(
+            "list_folder",
+            &json!({ "folder": "Desktop" }),
+            &json!({ "ok": true, "result": "Desktop: 17 folders. Folders: Portfolio, Projects" }),
+        );
+        let history = vec![
+            ("user", "hvor mange mapper".to_owned()),
+            ("tool", note),
+            ("assistant", "17.".to_owned()),
+        ];
+        let m = to_messages(&history);
+        assert_eq!(m.len(), 4);
+        assert_eq!(m[1]["tool_calls"][0]["function"]["name"], "list_folder");
+        assert_eq!(m[2]["role"], "tool");
+        assert_eq!(m[2]["tool_call_id"], m[1]["tool_calls"][0]["id"]);
+        assert!(m[2]["content"].as_str().unwrap().contains("Portfolio"));
+    }
+
+    #[test]
+    fn shrink_keeps_system_and_current_turn_and_starts_on_user() {
+        let mut m: Vec<Value> = std::iter::once(json!({ "role": "system" }))
+            .chain((0..10).flat_map(|i| {
+                [
+                    json!({ "role": "user", "content": i }),
+                    json!({ "role": "assistant", "content": i }),
+                ]
+            }))
+            .chain(std::iter::once(json!({ "role": "user", "content": "now" })))
+            .collect();
+        assert!(shrink(&mut m));
+        assert_eq!(m[0]["role"], "system");
+        assert_eq!(m[1]["role"], "user");
+        assert_eq!(m.last().unwrap()["content"], "now");
+        assert!(m.len() < 22);
+        let mut only = vec![json!({ "role": "system" }), json!({ "role": "user" })];
+        assert!(!shrink(&mut only));
     }
 
     #[test]

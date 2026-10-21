@@ -244,3 +244,9 @@ Dropped style rules #8, #10 and junk facts 57, 60-62, 66, 70, 72 (backup in %TEM
 suspensions, 10-min cache added); escape mangling in generated files; Danish reply caused by the
 style-rule reminder (fixed: "replying in English").
 **Next steps:** live test with Mikkel (search, news, weather, open apps/sites, files).
+**Live run 7 + fixes (same day):** Grace went silent after 17 min (context overflow with tools);
+also claimed actions she hadn't done, invented follow-up answers (tool results weren't kept),
+told an old story as today's news, read "22" as "20 20", and caved on a correct calculation.
+Fixed all (32k context + retry, tool results in history, article links + dates, numbers to words
+before TTS, stale checker requests dropped, calculator reads the transcript, media tool) and
+added 7 multi-turn scenarios to grace-tools-sim for them.

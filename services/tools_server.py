@@ -93,6 +93,10 @@ def log(*a):
 
 # ---- the checker ------------------------------------------------------------------------------
 
+class Superseded(Exception):
+    """A newer request with the same key arrived while this one waited for the checker."""
+
+
 class Checker:
     """JevK5 4B through OpenVINO: one prefill per decision, the option letters' logits read and
     renormalised under the model's temperature (the same readout as jevk5's llama.cpp client)."""
@@ -109,7 +113,7 @@ class Checker:
         log(f"checker: JevK5 4B on {DEVICE} in {time.perf_counter() - t0:.1f} s")
         self.decide("The sky is blue.", {"type": "noul", "instructions": "Is the sky blue?"})
 
-    def decide(self, state, question):
+    def decide(self, state, question, wanted=lambda: True):
         options = decision_options(question)
         if len(options) > len(LETTERS):
             raise ValueError("more than 16 options is not supported here")
@@ -120,6 +124,8 @@ class Checker:
         if "position_ids" in self.names:
             feed["position_ids"] = np.arange(x.shape[1], dtype=np.int64)[None, :]
         with self.lock:
+            if not wanted():
+                raise Superseded()
             row = self.req.infer(feed)[self.compiled.outputs[0]][0, -1].astype(np.float64)
         z = np.array([row[self.letter_ids[i]] for i in range(len(texts))]) / TEMPERATURE
         p = np.exp(z - z.max())
@@ -153,18 +159,34 @@ def text_of(page):
     return "\n".join(line for line in lines if len(line) > 30)
 
 
-def headlines(page, n=10):
-    """A news front page's headlines: heading text, else long link text, in page order."""
+def headlines(page, base, n=10):
+    """A news front page's article links: (headline, absolute url), in page order. Live run 7:
+    without the links Grace made up an article URL (404) when asked to open the story."""
     page = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer)\b.*?</\1>", " ", page)
     seen, out = set(), []
-    for h in re.findall(r"(?is)<h[1-4][^>]*>(.*?)</h[1-4]>", page) + re.findall(r"(?is)<a\b[^>]*>(.*?)</a>", page):
-        t = strip_tags(h)
-        if 25 <= len(t) <= 160 and t.lower() not in seen and not re.search(r"cookie|abonn|log ind|nyhedsbrev|privatliv", t, re.I):
-            seen.add(t.lower())
-            out.append(t)
+    for href, inner in re.findall(r'(?is)<a\b[^>]*href="([^"#]+)"[^>]*>(.*?)</a>', page):
+        t = strip_tags(inner)
+        if not (25 <= len(t) <= 160) or t.lower() in seen:
+            continue
+        if re.search(r"cookie|abonn|log ind|nyhedsbrev|privatliv|kontakt|annonce", t, re.I):
+            continue
+        url = urllib.parse.urljoin(base, html.unescape(href))
+        if urllib.parse.urlsplit(url).netloc != urllib.parse.urlsplit(base).netloc:
+            continue
+        seen.add(t.lower())
+        out.append((t, url))
         if len(out) >= n:
             break
     return out
+
+
+def published(page):
+    """An article's publication time from its metadata, as 'YYYY-MM-DD HH:MM', or None."""
+    m = (re.search(r'(?i)<meta[^>]+(?:property|name)="(?:article:published_time|pubdate|date)"[^>]+content="([^"]+)"', page)
+         or re.search(r'"datePublished"\s*:\s*"([^"]+)"', page))
+    if not m:
+        return None
+    return m.group(1).replace("T", " ")[:16]
 
 
 SEARCH_CACHE = {}  # (query, language) -> (time, hits, engine)
@@ -257,15 +279,24 @@ def news(checker, question, query, language, alive):
     log(f"news [{engine}] {query!r}: reading {[urllib.parse.urlsplit(h[1]).netloc for h in sites]}")
     with ThreadPoolExecutor(4) as pool:
         pages = list(pool.map(lambda h: page_text(h[1], 6), sites))
-    evidence = []
-    for (title, url, _), page in zip(sites, pages):
-        if not alive():
-            break
-        hs = headlines(page)
-        if len(hs) >= 3:
-            evidence.append(dict(title=title, url=url, text="Headlines right now: " + " | ".join(hs[:8]), p=1.0))
-        if len(evidence) >= 2:
-            break
+        evidence = []
+        for (title, url, _), page in zip(sites, pages):
+            if not alive():
+                break
+            hs = headlines(page, url)
+            if len(hs) < 3:
+                continue
+            # The front page doesn't say when a story is from (live run 7: a September verdict was
+            # told as news from the last 24 hours), so read the top stories' publication times.
+            dates = list(pool.map(lambda h: published(page_text(h[1], 4)), hs[:4]))
+            lines = []
+            for i, (head, link) in enumerate(hs[:8]):
+                when = dates[i] if i < len(dates) and dates[i] else "date unknown"
+                lines.append(f"- {head} [{when}] {link}")
+            evidence.append(dict(title=title, url=url, p=1.0,
+                                 text="Front-page stories right now, with publication time where known:\n" + "\n".join(lines)))
+            if len(evidence) >= 2:
+                break
     status = "answered" if evidence else "not_found"
     return dict(status=status, kind="news", evidence=evidence, queries=[query], rounds=1, decisions=0,
                 ms=round((time.perf_counter() - t0) * 1000, 1))
@@ -360,9 +391,9 @@ def search_result_text(out):
         return "Nothing reliable was found. Say you couldn't find it."
     lines = [head]
     for i, e in enumerate(ev[:3]):
-        site = urllib.parse.urlsplit(e["url"]).netloc
-        lines.append(f"{i + 1}. {e['title']} ({site}): {e['text'].strip()[:700]}")
-    return "\n".join(lines)
+        lines.append(f"{i + 1}. {e['title']} ({e['url']}): {e['text'].strip()[:900]}")
+    return "\n".join(lines) + ("\nSay the source by site name if he asks; open a link with open_url only if he asks "
+                               "to open it, and only a link from this list. Don't read links out.")
 
 
 # ---- programs and web pages -------------------------------------------------------------------
@@ -552,100 +583,76 @@ DA_OPS = [("divideret med", "/"), ("delt med", "/"), ("ganget med", "*"), ("gang
           ("minus", "-"), ("i anden", "**2"), ("i tredje", "**3"), ("procent af", "/100*")]
 
 
-def da_number(word):
-    """One Danish number word (as STT writes them) to an int: 'treogtyve' -> 23, 'hundrede' -> 100."""
-    w = word.lower().replace("-", "")
+DA_BIG = {"hundrede": 100, "hundred": 100, "tusind": 1000, "tusinde": 1000, "million": 1_000_000, "millioner": 1_000_000}
+
+
+def da_word(w):
+    """One Danish number word (as STT writes them): 'treogtyve' -> 23, 'tusind' -> 1000."""
+    w = w.lower().replace("-", "")
     if w.isdigit():
         return int(w)
-    total = 0
-    for big, mult in (("tusind", 1000), ("hundrede", 100)):
-        if big in w:
-            head, _, w = w.partition(big)
-            head = head.removesuffix("og")
-            total += (DA_UNITS.get(head, 1) if head else 1) * mult
-            w = w.removeprefix("og")
-    if not w:
-        return total if total else None
+    if w in DA_BIG:
+        return DA_BIG[w]
     if w in DA_UNITS:
-        return total + DA_UNITS[w]
+        return DA_UNITS[w]
     if w in DA_TENS:
-        return total + DA_TENS[w]
-    if "og" in w:
-        u, _, t = w.partition("og")
-        if u in DA_UNITS and t in DA_TENS:
-            return total + DA_UNITS[u] + DA_TENS[t]
+        return DA_TENS[w]
+    u, sep, t = w.partition("og")
+    if sep and u in DA_UNITS and t in DA_TENS:
+        return DA_UNITS[u] + DA_TENS[t]
+    for big, mult in DA_BIG.items():  # "tohundrede", "fem-tusind"
+        if w.endswith(big) and w[: -len(big)] in DA_UNITS:
+            return DA_UNITS[w[: -len(big)]] * mult
     return None
 
 
 def from_danish(spoken):
-    """'hvad er sytten gange treogtyve' -> '17*23', or None if it isn't plain arithmetic."""
-    t = " " + spoken.lower().replace(",", ".") + " "
+    """'hvad er tolv tusind to hundrede og tretten gange to' -> '12213*2', or None if it isn't plain
+    arithmetic. Numbers are built the usual way: units and tens add, hundrede multiplies the part
+    before it, tusind/million close a group (tools sim: "tolv tusind to hundrede tretten" -> 12213)."""
+    t = spoken.lower()
+    # Danish writes 12.213 for twelve thousand two hundred and thirteen and 3,5 for three and a half
+    # (live run 7: "hvad er 12.213" was read as 12.213).
+    t = re.sub(r"(?<![\d.])(\d{1,3}(?:\.\d{3})+)(?![\d.,])", lambda m: m.group(1).replace(".", ""), t)
+    t = " " + t.replace(",", ".") + " "
     for word, sym in DA_OPS:
         t = t.replace(f" {word} ", f" {sym} ")
-    out, cur = [], None
+    out, total, cur, open_num = [], 0, 0, False
 
     def flush():
-        nonlocal cur
-        if cur is not None:
-            out.append(str(cur))
-            cur = None
+        nonlocal total, cur, open_num
+        if open_num:
+            out.append(str(total + cur))
+        total, cur, open_num = 0, 0, False
 
     for tok in t.split():
-        if tok == "og" and cur is not None:
+        if tok == "og" and open_num:
             continue
-        n = da_number(tok)
-        if n is not None:
-            # "to tusind og fireogtyve" -> 2024, "hundrede og tyve" -> 120
-            if cur is None:
-                cur = n
-            elif n in (100, 1000) and cur < n:
-                cur *= n
-            elif cur >= 100 and n < cur:
+        n = None if re.fullmatch(r"\d+\.\d+", tok) else da_word(tok)
+        if n is None:
+            flush()
+            if re.fullmatch(r"[0-9.]+|[-+*/()]|\*\*[23]|/100\*", tok):
+                out.append(tok)
+            continue
+        if n >= 1000:
+            total += (cur or 1) * n
+            cur = 0
+        elif n == 100:
+            cur = (cur or 1) * 100
+        else:
+            if open_num and cur % 100 == 0 and cur and n < 100:
                 cur += n
-            else:
+            elif open_num and (cur or total) and cur % 1000 == 0 and n < 1000:
+                cur += n
+            elif open_num and (cur or total):
                 flush()
                 cur = n
-            continue
-        flush()
-        if re.fullmatch(r"[0-9.]+|[-+*/()]|\*\*[23]|/100\*", tok):
-            out.append(tok)
+            else:
+                cur += n
+        open_num = True
     flush()
     expr = "".join(out)
     return expr if re.search(r"\d[-+*/]", expr) else None
-
-
-WMO = {0: "clear sky", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "freezing fog",
-       51: "light drizzle", 53: "drizzle", 55: "heavy drizzle", 56: "freezing drizzle", 57: "freezing drizzle",
-       61: "light rain", 63: "rain", 65: "heavy rain", 66: "freezing rain", 67: "freezing rain",
-       71: "light snow", 73: "snow", 75: "heavy snow", 77: "snow grains", 80: "light showers", 81: "showers",
-       82: "heavy showers", 85: "snow showers", 86: "heavy snow showers", 95: "thunderstorm",
-       96: "thunderstorm with hail", 99: "thunderstorm with hail"}
-
-
-def weather(place, day):
-    """Open-Meteo's forecast for a place: now, today, tomorrow or the day after."""
-    g = json.loads(get("https://geocoding-api.open-meteo.com/v1/search?" + urllib.parse.urlencode(
-        {"name": place, "count": 1, "language": "da"}), 8)).get("results")
-    if not g:
-        return None
-    g = g[0]
-    f = json.loads(get("https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
-        "latitude": g["latitude"], "longitude": g["longitude"],
-        "current": "temperature_2m,weather_code,wind_speed_10m",
-        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max",
-        "timezone": "Europe/Copenhagen", "forecast_days": 3, "wind_speed_unit": "ms"}), 8))
-    where = f"{g['name']} ({g.get('country', '')})"
-    if day == "now":
-        c = f["current"]
-        return (f"{where} right now: {WMO.get(c['weather_code'], 'weather code ' + str(c['weather_code']))}, "
-                f"{c['temperature_2m']:.0f} degrees, wind {c['wind_speed_10m']:.0f} m/s.")
-    i = {"today": 0, "tomorrow": 1, "day_after": 2}.get(day, 0)
-    d = f["daily"]
-    return (f"{where}, {['today', 'tomorrow', 'the day after tomorrow'][i]} ({d['time'][i]}): "
-            f"{WMO.get(d['weather_code'][i], 'weather code ' + str(d['weather_code'][i]))}, "
-            f"{d['temperature_2m_min'][i]:.0f} to {d['temperature_2m_max'][i]:.0f} degrees, "
-            f"{d['precipitation_probability_max'][i]}% chance of rain ({d['precipitation_sum'][i]:.1f} mm), "
-            f"wind up to {d['wind_speed_10m_max'][i]:.0f} m/s.")
 
 
 def safe_eval(expr):
@@ -692,7 +699,12 @@ def manifest():
            "`spoken`; the tool reads Danish numbers itself.",
            {"spoken": s("Mikkel's words, exactly as he said them, e.g. 'hvad er sytten gange treogtyve'."),
             "expression": s("The same as digits, e.g. 17*23 (used only if the words can't be read).")}, ["spoken"]),
-        fn("open_app", "Open a program on Mikkel's PC by name (Spotify, Discord, VS Code, Word, Chrome...).",
+        fn("media", "Control music and video playing on the PC (Spotify, YouTube...): play or pause, next, "
+           "previous, volume up or down, mute. 'search' opens a Spotify search for `query`.",
+           {"action": s("What to do.", ["play_pause", "next", "previous", "volume_up", "volume_down", "mute", "search"]),
+            "query": s("For search: what to look for in Spotify.")}, ["action"]),
+        fn("open_app", "Open a program on Mikkel's PC by name (Spotify, Discord, VS Code, Word, Chrome...). "
+           "Danish names work too: stifinder (File Explorer), lommeregner, indstillinger, notesblok.",
            {"name": s("The program's name.")}, ["name"]),
         fn("open_url", "Open a web page in a new tab in Mikkel's Chrome.",
            {"target": s("A full URL, a domain like wolt.com, or a site's name.")}, ["target"]),
@@ -744,14 +756,40 @@ class Tools:
 
     def t_calculate(self, a, alive):
         # Danish number words are read here, not by Gemma: she turned "treogtyve" into 30 (tools sim v3).
-        expr = from_danish(a.get("spoken") or "") or (a.get("expression") or "").replace(",", ".").replace(
-            "x", "*").replace("×", "*").replace("^", "**")
+        # His transcribed words first (the engine adds them as `heard`): Gemma rewrote "12.213" as
+        # "tolv tusinde to hundrede treogtyve" (tools sim run 7).
+        expr = (from_danish(a.get("heard") or "") or from_danish(a.get("spoken") or "")
+                or (a.get("expression") or "").replace(",", ".").replace("x", "*").replace("×", "*").replace("^", "**"))
         try:
             value = safe_eval(expr)
         except Exception as e:
             return {"ok": False, "result": f"Couldn't calculate {expr!r} ({e}). Say so."}
         text = f"{value:,.6g}" if isinstance(value, float) and not float(value).is_integer() else f"{int(value)}"
-        return {"ok": True, "detail": {"expression": expr, "value": value}, "result": f"{expr} = {text}"}
+        return {"ok": True, "detail": {"expression": expr, "value": value},
+                "result": f"{expr} = {text} (exact; if he disputes it, say it again and how you read his numbers)"}
+
+    def t_media(self, a, alive):
+        action = a.get("action") or "play_pause"
+        if action == "search":
+            q = (a.get("query") or "").strip()
+            if not q:
+                return {"ok": False, "result": "Nothing to search for. Ask what to play."}
+            if not self.dry:
+                os.startfile("spotify:search:" + urllib.parse.quote(q))
+            return {"ok": True, "detail": {"dry_run": self.dry}, "result": f"Opened a Spotify search for {q}."}
+        keys = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1, "volume_up": 0xAF, "volume_down": 0xAE, "mute": 0xAD}
+        if action not in keys:
+            return {"ok": False, "result": f"Unknown media action {action}."}
+        if not self.dry:
+            import ctypes
+
+            for _ in range(5 if action.startswith("volume") else 1):  # one press is only 2 %
+                ctypes.windll.user32.keybd_event(keys[action], 0, 0, 0)
+                ctypes.windll.user32.keybd_event(keys[action], 0, 2, 0)
+        said = {"play_pause": "Pressed play/pause.", "next": "Skipped to the next track.",
+                "previous": "Went back a track.", "volume_up": "Turned the volume up.",
+                "volume_down": "Turned the volume down.", "mute": "Toggled mute."}[action]
+        return {"ok": True, "detail": {"dry_run": self.dry}, "result": said}
 
     def t_open_app(self, a, alive):
         name = (a.get("name") or "").strip()
@@ -870,7 +908,18 @@ class Handler(socketserver.StreamRequestHandler):
             if kind == "manifest":
                 out = {"tools": manifest(), "slow": SLOW}
             elif kind == "decide":
-                out = {"answer": srv.checker.decide(req["state"], req["question"])}
+                # The engine checks every partial transcript; once a newer one for the same key is
+                # waiting, an older one is pointless (live run 7: 1 in 4 hints came too late).
+                key = req.get("key")
+                wanted = lambda: True
+                if key:
+                    with srv.keys_lock:
+                        gen = srv.keys[key] = srv.keys.get(key, 0) + 1
+                    wanted = lambda: srv.keys.get(key) == gen
+                try:
+                    out = {"answer": srv.checker.decide(req["state"], req["question"], wanted)}
+                except Superseded:
+                    out = {"error": "superseded"}
             elif kind == "tool":
                 out = srv.tools.run(req["name"], req.get("args") or {}, peer_alive(self.connection))
             elif kind == "lookup":  # the old lookup_server API, kept for bench/lookup_bench.py
@@ -899,6 +948,7 @@ def main():
     args = ap.parse_args()
     server = Server(("127.0.0.1", args.port), Handler)
     server.checker = Checker()
+    server.keys, server.keys_lock = {}, threading.Lock()
     server.tools = Tools(server.checker, args.dry_run)
     log(f"tools server listening on 127.0.0.1:{args.port}{' (dry run)' if args.dry_run else ''}")
     server.serve_forever()

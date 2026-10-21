@@ -27,7 +27,7 @@ function Wait-Port($port, $what, $seconds) {
 if (-not (Test-Port 8080)) {
     Write-Host 'starting llama-server (Gemma 4 12B) ...'
     Start-Process -WindowStyle Hidden -FilePath .runtime\llama.cpp\b11539\llama-server.exe `
-        -ArgumentList '-m','.runtime\models\gemma-4-12b-it-qat-q4_0.gguf','-ngl','99','-c','16384','-np','2','-fa','on','-ctk','q8_0','-ctv','q8_0','--reasoning','off','--swa-full','--host','127.0.0.1','--port','8080' `
+        -ArgumentList '-m','.runtime\models\gemma-4-12b-it-qat-q4_0.gguf','-ngl','99','-c','32768','-np','2','-fa','on','-ctk','q8_0','-ctv','q8_0','--reasoning','off','--swa-full','--host','127.0.0.1','--port','8080' `
         -RedirectStandardError logs\llama-server.log -RedirectStandardOutput logs\llama-server.out.log
 }
 # Restart the speech server with -Restart (e.g. after changing config/speech.json).

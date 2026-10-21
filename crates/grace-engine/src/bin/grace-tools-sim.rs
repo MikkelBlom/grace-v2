@@ -84,6 +84,10 @@ struct Turn {
     /// Regex the spoken reply must match / must not match.
     answer: Option<String>,
     not_answer: Option<String>,
+    /// Tools whose arguments must come from an earlier tool result (an article link, a path):
+    /// live run 7 opened a made-up article URL.
+    #[serde(default)]
+    seen: Vec<String>,
 }
 
 #[derive(Default)]
@@ -154,7 +158,8 @@ async fn main() -> anyhow::Result<()> {
             md.push_str(&format!("\n## {} (seed {seed})\n", sc.id));
             let block = format!("{}{}", sc.memory, style::render_rules(&rules));
             let system = system_message(&args.system_prompt, now, &block);
-            let mut history: Vec<Value> = vec![json!({ "role": "system", "content": system })];
+            // As the engine keeps it: user / tool notes / assistant (tools::to_messages).
+            let mut history: Vec<(&'static str, String)> = Vec::new();
             for (ti, turn) in sc.turns.iter().enumerate() {
                 let span = Span::none();
                 if args.transcript_lead_ms > 0 {
@@ -168,7 +173,8 @@ async fn main() -> anyhow::Result<()> {
                 if hint.is_some_and(|r| r.hint()) {
                     content = format!("{content}\n\n{}", tools::HINT);
                 }
-                let mut messages = history.clone();
+                let mut messages = vec![json!({ "role": "system", "content": system })];
+                messages.extend(tools::to_messages(&history));
                 messages.push(json!({ "role": "user", "content": content }));
                 let mut req = ChatRequest::new(messages);
                 req.max_tokens = 300;
@@ -190,8 +196,11 @@ async fn main() -> anyhow::Result<()> {
                 .await;
                 let total = t0.elapsed().as_secs_f64();
                 let reply = sink.text.trim().to_owned();
-                history.push(json!({ "role": "user", "content": turn.say }));
-                history.push(json!({ "role": "assistant", "content": reply }));
+                history.push(("user", turn.say.clone()));
+                for (name, args, out) in &sink.calls {
+                    history.push(("tool", tools::tool_note(name, args, out)));
+                }
+                history.push(("assistant", reply.clone()));
 
                 let called: Vec<&str> = sink.calls.iter().map(|c| c.0.as_str()).collect();
                 let t_ok = match &turn.tools {
@@ -208,6 +217,27 @@ async fn main() -> anyhow::Result<()> {
                         .iter()
                         .any(|c| c.0 == *tool && re.is_match(&c.1.to_string()))
                 });
+                let earlier: String = history
+                    .iter()
+                    .filter(|(r, _)| *r == "tool")
+                    .map(|(_, t)| t.as_str())
+                    .chain(sink.calls.iter().filter_map(|c| c.2["result"].as_str()))
+                    .collect::<Vec<_>>()
+                    .join(
+                        "
+",
+                    );
+                let s_ok = turn.seen.iter().all(|tool| {
+                    sink.calls.iter().any(|(n, a, _)| {
+                        n == tool
+                            && a.as_object().is_some_and(|o| {
+                                o.values().filter_map(Value::as_str).any(|v| {
+                                    v.len() > 8 && earlier.contains(v.trim_end_matches('/'))
+                                })
+                            })
+                    })
+                });
+                let a_ok = a_ok && s_ok;
                 let r_ok = turn
                     .answer
                     .as_ref()

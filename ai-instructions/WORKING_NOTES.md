@@ -86,6 +86,22 @@
   Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
   Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
   error and worked when double-clicked.
+- **Live run 7 (2026-10-21, tools, traces/engine-1792589197919.jsonl, ~18 min, DJI -> JBL):**
+  (1) **Silence after ~17 min:** requests outgrew llama-server's 8192-token slot (16384 / 2) once
+  tool definitions and tool turns were in; llama-server answered 400 "exceeds the available
+  context size" and Grace said nothing. Fixed: -c 32768 (16k per slot, Gemma 10 -> 13 GB VRAM),
+  and tools::reply drops the oldest half of the conversation and retries on that error.
+  (2) Claimed actions without a tool call ("I have opened the projects folder", "opened Finder").
+  (3) Tool results weren't in the history, so follow-ups were invented ("no folders start with
+  P"; a made-up tv2fyn article URL -> 404). Fixed: role "tool" history entries
+  (tools::tool_note / to_messages), news results carry article links and publication times.
+  (4) News: a September verdict told as "last 24 hours". (5) TTS read "22-year-old" as "20 20":
+  spoken::numbers_to_words before TTS, prompt asks for digits. (6) 1 in 4 route checks late:
+  server drops a checker request once a newer one with the same key waits. (7) Maths was right
+  (12213 x 612 / 224 = 33,367.66) but she caved to "33,293.33"; "12.213" (Danish thousands) and
+  Gemma rewriting his numbers into wrong Danish words: the engine now passes the transcript to
+  calculate as `heard`. (8) No media control: `media` tool (media keys, Spotify search).
+  (9) "stifinder" refused: Danish app names in the open_app description.
 - **Tools (ADR 0020, 2026-10-21, not tested live yet):** `services/tools_server.py` (7813,
   replaces lookup_server.py) serves the manifest and runs web_search / weather / calculate /
   open_app / open_url / find_files / list_folder / open_file; `--dry-run` for benches (run a

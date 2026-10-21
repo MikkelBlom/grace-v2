@@ -150,3 +150,58 @@
     - say: hvad hedder bageren på jægergårdsgade i 1974
       tools: [web_search]
       not_answer: "(?i)sounds like"
+
+# ---- from live run 7 (multi-turn follow-ups on tool results) ----
+- id: s26-folder-followup
+  turns:
+    - say: hvor mange mapper er der på mit skrivebord
+      tools: [list_folder]
+    - say: er der nogen af dem der starter med p
+      answer: '(?i)portfolio|projects'
+      not_answer: '(?i)\bno\b|none|zero|aren''t any|there are no'
+- id: s27-source-followup
+  turns:
+    - say: hvad sker der i the mentalist sæson tre afsnit otte
+      tools: [web_search]
+    - say: hvor læste du det
+      answer: '(?i)fandom|wiki|imdb|tv ?guide|rotten|\w+\.(com|org|dk|net)'
+      not_answer: '(?i)^i (looked it up|found it) on the internet\.?$'
+- id: s28-news-open-article
+  turns:
+    - say: fortæl mig en nyhed fra odense fra det sidste døgn
+      tools: [web_search]
+    - say: åbn den artikel i chrome
+      tools: [open_url]
+      seen: [open_url]
+- id: s29-no-fake-open
+  turns:
+    - say: åbn mappen projects på mit skrivebord
+      tools: [open_file]
+      not_answer: '(?i)can''t|cannot'
+    - say: åbn stifinder
+      tools: [open_app]
+      args: { open_app: '(?i)explorer|stifinder|file' }
+      not_answer: '(?i)\bfinder\b'
+- id: s30-media
+  turns:
+    - say: afspil noget musik på spotify
+      tools: [media]
+    - say: skru lidt op for lyden
+      tools: [media]
+      args: { media: '(?i)volume_up' }
+    - say: næste sang
+      tools: [media]
+      args: { media: '(?i)next' }
+- id: s31-math-dispute
+  turns:
+    - say: hvad er 12213 gange 612 divideret med 224
+      tools: [calculate]
+      answer: '(?i)33,?36[78]|thirty[- ]three thousand,? three hundred'
+    - say: nej det er forkert
+      answer: '(?i)33,?36[78]|thirty[- ]three thousand,? three hundred'
+      not_answer: '(?i)33,?293|you are right|you''re right'
+- id: s32-danish-thousands
+  turns:
+    - say: hvad er 12.213 gange to
+      tools: [calculate]
+      answer: '(?i)24,?426|twenty[- ]four thousand,? four hundred (and )?twenty[- ]six'

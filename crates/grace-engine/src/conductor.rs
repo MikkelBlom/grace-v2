@@ -107,6 +107,8 @@ struct Reply {
     paused: bool,
     /// Generation ended without any audio: nothing will drain.
     silent: bool,
+    /// Tool calls this reply made, as `tools::tool_note`s for the history.
+    tool_notes: Arc<Mutex<Vec<String>>>,
     span: Span,
 }
 
@@ -298,6 +300,7 @@ impl Conductor {
         self.next_reply += 1;
         let (tx, rx) = watch::channel(gate);
         let sentences = Arc::new(Mutex::new(Vec::new()));
+        let tool_notes = Arc::new(Mutex::new(Vec::new()));
         let span = self.span(turn);
         let mut messages = context.clone();
         messages.push(("user", text.clone()));
@@ -308,7 +311,10 @@ impl Conductor {
             messages,
             span.clone(),
             rx,
-            sentences.clone(),
+            ReplyOut {
+                sentences: sentences.clone(),
+                tool_notes: tool_notes.clone(),
+            },
         ));
         Reply {
             id,
@@ -321,6 +327,7 @@ impl Conductor {
             stash: None,
             paused: false,
             silent: false,
+            tool_notes,
             span,
         }
     }
@@ -337,6 +344,10 @@ impl Conductor {
         r.gate.send_replace(Gate::Cancelled); // stops generation if it was still running
         self.unpin(r.turn);
         info!(parent: &r.span, text = %heard, cut, "reply heard");
+        // What a tool found or did stays in the conversation, even if he cut the reply short.
+        for note in r.tool_notes.lock().expect("notes poisoned").drain(..) {
+            self.history.push(("tool", note));
+        }
         if !heard.is_empty() {
             self.history.push(("assistant", heard.clone()));
         }
@@ -675,6 +686,13 @@ pub fn system_message(
     )
 }
 
+/// What a reply leaves behind for the conductor: the sentences that went to the speakers and
+/// the tool calls it made.
+struct ReplyOut {
+    sentences: Arc<Mutex<Vec<(String, usize)>>>,
+    tool_notes: Arc<Mutex<Vec<String>>>,
+}
+
 /// Where a reply's words go: sentences to TTS, and the gate that says whether it may act.
 struct ReplySink<'a> {
     sent_tx: &'a mpsc::UnboundedSender<String>,
@@ -682,6 +700,7 @@ struct ReplySink<'a> {
     full: &'a mut String,
     gate: watch::Receiver<Gate>,
     ttft: &'a mut Option<Span>,
+    tool_notes: &'a Mutex<Vec<String>>,
 }
 
 impl crate::tools::Sink for ReplySink<'_> {
@@ -700,7 +719,12 @@ impl crate::tools::Sink for ReplySink<'_> {
         let _ = self.sent_tx.send(line.to_owned());
     }
 
-    fn tool_done(&mut self, _name: &str, _args: &serde_json::Value, _out: &serde_json::Value) {}
+    fn tool_done(&mut self, name: &str, args: &serde_json::Value, out: &serde_json::Value) {
+        self.tool_notes
+            .lock()
+            .expect("notes poisoned")
+            .push(crate::tools::tool_note(name, args, out));
+    }
 
     async fn cancelled(&mut self) {
         let _ = self.gate.wait_for(|g| *g == Gate::Cancelled).await;
@@ -730,8 +754,12 @@ async fn speak_reply(
     history: History,
     span: Span,
     gate: watch::Receiver<Gate>,
-    sentences: Arc<Mutex<Vec<(String, usize)>>>,
+    out: ReplyOut,
 ) {
+    let ReplyOut {
+        sentences,
+        tool_notes,
+    } = out;
     let cancelled = |g: &watch::Receiver<Gate>| *g.borrow() == Gate::Cancelled;
     // The system prompt (live file + this session's memory block) is fixed for the session, so
     // llama-server's prompt cache stays valid across turns; only a new style rule changes it.
@@ -745,11 +773,7 @@ async fn speak_reply(
     let (last, earlier) = history
         .split_last()
         .expect("history ends with the user's turn");
-    messages.extend(
-        earlier
-            .iter()
-            .map(|(r, t)| json!({ "role": r, "content": t })),
-    );
+    messages.extend(crate::tools::to_messages(earlier));
     // Recall goes on the current user message only: the cached prefix before it is untouched.
     // The checker's "needs a lookup?" runs next to recall and is dropped if it is late: with
     // its hint Gemma searched on 17/17 lookup requests instead of 14/17 (ADR 0019).
@@ -817,7 +841,11 @@ async fn speak_reply(
                 if cancelled(&gate) {
                     break;
                 }
-                let Ok((id, mut audio)) = svc.tts.speak(&sentence).await else {
+                let Ok((id, mut audio)) = svc
+                    .tts
+                    .speak(&crate::spoken::numbers_to_words(&sentence))
+                    .await
+                else {
                     break;
                 };
                 sentences
@@ -885,6 +913,7 @@ async fn speak_reply(
         full: &mut full,
         gate: gate.clone(),
         ttft: &mut ttft,
+        tool_notes: &tool_notes,
     };
     // Plain conversation goes without tool definitions (see tools::SKIP_TOOLS_AT).
     let offer = needs_lookup.is_none_or(|r| r.offer_tools());

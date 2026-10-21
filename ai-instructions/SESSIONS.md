@@ -206,3 +206,11 @@ name a rule's category and code keeps only manner (style bench 08: 17/27 -> 27/2
 learned, 0/144 false); honesty rule for unknown films/trivia (scenario 16) and no question
 tails or compliance announcements (chat bench 0.942 -> 0.956). #39 filed (exact-word resume),
 #36 closed. Echo was untested (headset).
+
+## 2026-10-21 — Claude Code (Opus 5.5): tools discussion + JevK5 bake-off
+**Summary:** Tools direction agreed (proactive assistant; free search via SearXNG + fallbacks;
+looping lookups; a Jev-style checker). Bake-off of JevK5 4B vs 9B with Gemma as baseline on 178
+hand-written decisions (`bench/decide_bench.py`, `fixtures/decide/scenarios.yaml`): 4B 147/154,
+Gemma 146, 9B 145; 4B 3.5 GB, 9B 6.2 GB; ~130-145 ms per decision idle, ~210-260 ms while Gemma
+generates; a busy checker slows Gemma 50 -> 33 tok/s. Errors of Gemma and the 4B overlap on 1.
+**Next steps:** Mikkel decides whether JevK5 4B becomes the checker; v0.3 tool work (#17, #18).

@@ -1,0 +1,242 @@
+# Decisions Grace would hand a typed-decision model (Jev-style: noul / choice / score), with the
+# right answer. Written by hand for the 4B-vs-9B JevK5 bake-off (2026-10-21); speech-style Danish
+# (lowercase, no punctuation) as it arrives from STT. Mikkel is not the test set: these are
+# invented lines, a few modelled on failure cases from live run 5.
+#
+# Each item: id, kind, state (the evidence), q (instructions), type, criteria, expect.
+# `en` on a tool item is the same request in English (the model is English-only).
+
+tool_options: &tools
+  web_search: Look something up on the internet (news, facts it may not know, opening hours, prices, current events).
+  file_search: Find a file or document on Mikkel's computer.
+  open_program: Open a program, app or website on the computer.
+  reminder: Set a timer or a reminder for later.
+  memory: Recall something Mikkel told Grace before (his life, people, preferences).
+  none: No tool; just answer or chat.
+
+tool_q: &tool_q Which tool should the assistant use to handle this spoken request from its user Mikkel?
+
+items:
+  # ---- tool choice (choice) -------------------------------------------------------------------
+  - { id: t01, kind: tool, expect: web_search, state: "hvem vandt superligaen i går", en: "who won the superliga yesterday" }
+  - { id: t02, kind: tool, expect: web_search, state: "hvornår lukker netto på nørrebrogade i dag", en: "when does netto on nørrebrogade close today" }
+  - { id: t03, kind: tool, expect: web_search, state: "hvem spillede sean parker i the social network", en: "who played sean parker in the social network" }
+  - { id: t04, kind: tool, expect: web_search, state: "hvad koster en rtx 5090 lige nu", en: "how much does an rtx 5090 cost right now" }
+  - { id: t05, kind: tool, expect: web_search, state: "er der nogen nyheder om den nye llama model", en: "is there any news about the new llama model" }
+  - { id: t06, kind: tool, expect: web_search, state: "hvordan bliver vejret i aarhus i morgen", en: "what will the weather be like in aarhus tomorrow" }
+  - { id: t07, kind: tool, expect: file_search, state: "find lige den pdf med eksamensopgaven fra sidste semester", en: "find the pdf with the exam assignment from last semester" }
+  - { id: t08, kind: tool, expect: file_search, state: "hvor har jeg gemt mit cv", en: "where did i save my cv" }
+  - { id: t09, kind: tool, expect: file_search, state: "kan du finde den powerpoint jeg lavede om rust i sidste uge", en: "can you find the powerpoint i made about rust last week" }
+  - { id: t10, kind: tool, expect: file_search, state: "åbn det dokument hvor jeg skrev noter fra mødet med vejlederen", en: "open the document where i wrote notes from the meeting with my supervisor" }
+  - { id: t11, kind: tool, expect: open_program, state: "åbn spotify", en: "open spotify" }
+  - { id: t12, kind: tool, expect: open_program, state: "kan du starte vs code", en: "can you start vs code" }
+  - { id: t13, kind: tool, expect: open_program, state: "åbn wolt i browseren", en: "open wolt in the browser" }
+  - { id: t14, kind: tool, expect: open_program, state: "start discord for mig", en: "start discord for me" }
+  - { id: t15, kind: tool, expect: reminder, state: "minde mig om at ringe til min mor i morgen", en: "remind me to call my mom tomorrow" }
+  - { id: t16, kind: tool, expect: reminder, state: "sæt en timer på ti minutter til pastaen", en: "set a ten minute timer for the pasta" }
+  - { id: t17, kind: tool, expect: reminder, state: "sig til når klokken er fire så jeg kan nå toget", en: "tell me when it's four so i can make the train" }
+  - { id: t18, kind: tool, expect: memory, state: "hvad hedder min søster nu igen", en: "what's my sister's name again" }
+  - { id: t19, kind: tool, expect: memory, state: "hvad sagde jeg om min eksamen i går", en: "what did i say about my exam yesterday" }
+  - { id: t20, kind: tool, expect: memory, state: "kan du huske hvilken kaffe jeg kan lide", en: "do you remember which coffee i like" }
+  - { id: t21, kind: tool, expect: none, state: "fortæl mig en joke", en: "tell me a joke" }
+  - { id: t22, kind: tool, expect: none, state: "hvad synes du om rust", en: "what do you think about rust" }
+  - { id: t23, kind: tool, expect: none, state: "hvad er en pointer", en: "what is a pointer" }
+  - { id: t24, kind: tool, expect: none, state: "jeg er så træt i dag", en: "i'm so tired today" }
+  - { id: t25, kind: tool, expect: none, state: "hvad er sytten gange treogtyve", en: "what is seventeen times twenty-three" }
+  - { id: t26, kind: tool, expect: none, state: "godnat grace", en: "goodnight grace" }
+  - { id: t27, kind: tool, expect: none, state: "hvad er hovedstaden i frankrig", en: "what is the capital of france" }
+  - { id: t28, kind: tool, expect: none, state: "hold lige kæft et øjeblik", en: "shut up for a moment" }
+  - { id: t29, kind: tool, expect: web_search, state: "kender du filmen runner runner fra 2013 hvad handler den om", en: "do you know the movie runner runner from 2013 what is it about" }
+  - { id: t30, kind: tool, expect: none, state: "øh jeg tænker på om", en: "uh i'm thinking about whether" }
+
+  # ---- does it need a lookup? (noul) ---------------------------------------------------------
+  - { id: l01, kind: lookup, expect: true, state: "hvornår spiller fck næste gang" }
+  - { id: l02, kind: lookup, expect: true, state: "hvem er statsminister i danmark lige nu" }
+  - { id: l03, kind: lookup, expect: true, state: "hvad er den nyeste version af python" }
+  - { id: l04, kind: lookup, expect: true, state: "har føtex åbent på søndag" }
+  - { id: l05, kind: lookup, expect: true, state: "hvad handler serien natteravnene fra 2009 om" }
+  - { id: l06, kind: lookup, expect: true, state: "hvad er kursen på bitcoin" }
+  - { id: l07, kind: lookup, expect: true, state: "hvornår har deadline på semesterprojektet hos itslearning" }
+  - { id: l08, kind: lookup, expect: true, state: "hvem instruerede den film med ben affleck og justin timberlake om kasinoer" }
+  - { id: l09, kind: lookup, expect: true, state: "hvilke film har nikolaj lie kaas været med i i år" }
+  - { id: l10, kind: lookup, expect: true, state: "hvor meget koster et månedskort i aarhus" }
+  - { id: l11, kind: lookup, expect: false, state: "hvad er hovedstaden i tyskland" }
+  - { id: l12, kind: lookup, expect: false, state: "hvad er en hashmap" }
+  - { id: l13, kind: lookup, expect: false, state: "hvor mange dage er der i et skudår" }
+  - { id: l14, kind: lookup, expect: false, state: "fortæl en godnathistorie" }
+  - { id: l15, kind: lookup, expect: false, state: "hvad er forskellen på en stack og en heap" }
+  - { id: l16, kind: lookup, expect: false, state: "jeg har lige fået tolv til eksamen" }
+  - { id: l17, kind: lookup, expect: false, state: "hvordan laver man en for-løkke i rust" }
+  - { id: l18, kind: lookup, expect: false, state: "hvad er kvadratroden af hundrede og fireogfyrre" }
+  - { id: l19, kind: lookup, expect: false, state: "giv mig et godt navn til min hund" }
+  - { id: l20, kind: lookup, expect: false, state: "hvorfor er himlen blå" }
+
+  # ---- does this passage answer the question? (noul) -------------------------------------------
+  - { id: a01, kind: answered, expect: true, q: "Who played Sean Parker in The Social Network?", state: "The Social Network (2010) stars Jesse Eisenberg as Mark Zuckerberg, Andrew Garfield as Eduardo Saverin and Justin Timberlake as Sean Parker." }
+  - { id: a02, kind: answered, expect: false, q: "Who played Sean Parker in The Social Network?", state: "Andrew Garfield played Eduardo Saverin, Facebook's co-founder and first CFO, in David Fincher's The Social Network." }
+  - { id: a03, kind: answered, expect: false, q: "What is the 2013 film Runner Runner about?", state: "Runner (2013) is an independent drama about a marathon runner recovering from injury in rural Kenya." }
+  - { id: a04, kind: answered, expect: true, q: "What is the 2013 film Runner Runner about?", state: "Runner Runner (2013): a Princeton student (Justin Timberlake) who loses his tuition money gambling online travels to Costa Rica to confront the site's owner, Ivan Block (Ben Affleck)." }
+  - { id: a05, kind: answered, expect: true, q: "When does Netto on Nørrebrogade close today (Tuesday)?", state: "Netto Nørrebrogade 45. Åbningstider: mandag-fredag 07-22, lørdag-søndag 08-21." }
+  - { id: a06, kind: answered, expect: false, q: "When does Netto on Nørrebrogade close today (Tuesday)?", state: "Netto Vesterbrogade 12. Åbningstider: mandag-fredag 07-23, lørdag-søndag 08-22." }
+  - { id: a07, kind: answered, expect: false, q: "Who is the current Prime Minister of Denmark?", state: "Denmark is a constitutional monarchy with a parliamentary system. The Prime Minister is the head of government and is appointed by the monarch." }
+  - { id: a08, kind: answered, expect: true, q: "What is the latest stable version of Rust?", state: "Rust 1.92.0 is now available. This is the latest stable release; see the release notes for the full list of changes." }
+  - { id: a09, kind: answered, expect: false, q: "What is the latest stable version of Rust?", state: "Rust 1.92.0 beta is now available for testing ahead of the stable release planned for next month." }
+  - { id: a10, kind: answered, expect: true, q: "How long should you boil a soft-boiled egg?", state: "Til et blødkogt æg skal du koge det i 6 minutter fra vandet koger, og derefter køle det i koldt vand." }
+  - { id: a11, kind: answered, expect: false, q: "How long should you boil a soft-boiled egg?", state: "Eggs are a great source of protein. In this article we look at ten creative breakfast ideas with eggs, from shakshuka to omelettes." }
+  - { id: a12, kind: answered, expect: true, q: "Who directed Runner Runner?", state: "Runner Runner is a 2013 American crime thriller film directed by Brad Furman and written by Brian Koppelman and David Levien." }
+  - { id: a13, kind: answered, expect: false, q: "Who directed Runner Runner?", state: "Runner Runner was produced by Leonardo DiCaprio's Appian Way and released by 20th Century Fox in October 2013." }
+  - { id: a14, kind: answered, expect: true, q: "What does a monthly bus pass cost in Aarhus?", state: "Midttrafik: Månedskort zone 1-2 (Aarhus) koster 450 kr. for voksne og 225 kr. for unge under 26." }
+  - { id: a15, kind: answered, expect: false, q: "What does a monthly bus pass cost in Aarhus?", state: "Midttrafik: Månedskort zone 1-2 (Odense) koster 400 kr. for voksne." }
+  - { id: a16, kind: answered, expect: true, q: "Is Føtex in Aarhus C open on Sunday?", state: "Føtex Aarhus C, Guldsmedgade. Søndag: 08:00 - 22:00." }
+  - { id: a17, kind: answered, expect: false, q: "What is the deadline for the semester project hand-in?", state: "Semester project: groups must be formed in the first week. Supervisors are assigned by the study board." }
+  - { id: a18, kind: answered, expect: true, q: "What is the deadline for the semester project hand-in?", state: "Final hand-in of the semester project report is on DigitalExam, 18 December at 12:00." }
+  - { id: a19, kind: answered, expect: false, q: "What is the capital of Australia?", state: "Sydney is Australia's largest city and its financial centre, famous for the Opera House." }
+  - { id: a20, kind: answered, expect: true, q: "What is the capital of Australia?", state: "Canberra, not Sydney or Melbourne, is the capital of Australia; it was chosen as a compromise between the two." }
+  - { id: a21, kind: answered, expect: false, q: "Who won the Superliga match yesterday between FCK and Brøndby?", state: "Preview: FCK host Brøndby on Sunday in the Superliga. Kick-off is at 18:00 at Parken." }
+  - { id: a22, kind: answered, expect: true, q: "Who won the Superliga match yesterday between FCK and Brøndby?", state: "FCK beat Brøndby 2-1 at Parken on Sunday evening after a late winner from the substitute striker." }
+  - { id: a23, kind: answered, expect: false, q: "What year did Grace Hopper die?", state: "Grace Hopper, born in 1906, was a pioneer of computer programming who invented one of the first compilers." }
+  - { id: a24, kind: answered, expect: true, q: "What year did Grace Hopper die?", state: "Rear Admiral Grace Brewster Hopper (December 9, 1906 - January 1, 1992) was an American computer scientist." }
+  - { id: a25, kind: answered, expect: false, q: "Which actor plays the accountant in The Accountant?", state: "The Accountant follows Christian Wolff, a math savant who works as a forensic accountant for criminal organizations." }
+  - { id: a26, kind: answered, expect: true, q: "Which actor plays the accountant in The Accountant?", state: "In The Accountant (2016), Ben Affleck stars as Christian Wolff, a math savant with high-functioning autism." }
+
+  # ---- search loop: what next? (choice) -------------------------------------------------------
+  - id: s01
+    kind: loop
+    expect: answer
+    state: "Question: Who played Sean Parker in The Social Network? Round 1. Source 1 (Wikipedia): '...Justin Timberlake as Sean Parker...'. Source 2 (IMDb cast list): 'Justin Timberlake ... Sean Parker'."
+  - id: s02
+    kind: loop
+    expect: search_again
+    state: "Question: Who played Sean Parker in The Social Network? Round 1. Source 1 (fan blog): 'Andrew Garfield was brilliant as the Napster guy.' No other sources read yet."
+  - id: s03
+    kind: loop
+    expect: search_again
+    state: "Question: When does Netto on Nørrebrogade close today? Round 1. Source 1: opening hours for Netto Vesterbrogade (a different store). Source 2: a news article about Netto price cuts."
+  - id: s04
+    kind: loop
+    expect: answer
+    state: "Question: When does Netto on Nørrebrogade close today (Tuesday)? Round 2. Source 1 (netto.dk store page, Nørrebrogade 45): 'mandag-fredag 07-22'."
+  - id: s05
+    kind: loop
+    expect: give_up
+    state: "Question: What was the name of the bakery on Jægergårdsgade in 1974? Round 5 of 5 (budget used). Sources read: 11, none mention a bakery on Jægergårdsgade before 1990."
+  - id: s06
+    kind: loop
+    expect: search_again
+    state: "Question: What is the 2013 film Runner Runner about? Round 1. Source 1: 'Runner (2013) is an independent drama about a marathon runner.' The title does not match exactly."
+  - id: s07
+    kind: loop
+    expect: search_again
+    state: "Question: Who is the current CEO of Novo Nordisk? Round 1. Source 1 (2021 article): 'CEO Lars Fruergaard Jørgensen said...'. The article is several years old; leadership may have changed."
+  - id: s08
+    kind: loop
+    expect: answer
+    state: "Question: What year did Grace Hopper die? Round 1. Source 1 (Wikipedia): 'December 9, 1906 - January 1, 1992'. Source 2 (Britannica): 'died January 1, 1992, Arlington, Virginia'."
+  - id: s09
+    kind: loop
+    expect: search_again
+    state: "Question: What is the latest stable version of Rust? Round 1. Source 1: 'Rust 1.92.0 beta is now available'. Source 2: a 2023 blog post about Rust 1.70."
+  - id: s10
+    kind: loop
+    expect: give_up
+    state: "Question: What is the private phone number of the CEO of Lego? Round 4 of 5. Sources read: 9. Only the company switchboard is published; no source lists a private number."
+  - id: s11
+    kind: loop
+    expect: answer
+    state: "Question: Which file has the notes from Mikkel's supervisor meeting? Round 2. Candidate: 'vejledermøde-2026-10-14.md', which starts 'Noter fra møde med vejleder 14/10'."
+  - id: s12
+    kind: loop
+    expect: search_again
+    state: "Question: Which file has the notes from Mikkel's supervisor meeting? Round 1. Candidates: 'møde.docx' (a meeting invitation for the student council), 'notes.txt' (a shopping list)."
+  - id: s13
+    kind: loop
+    expect: search_again
+    state: "Question: Who won FCK vs Brøndby yesterday? Round 1. Source 1: 'FCK won 2-1'. Source 2: 'Brøndby won 1-0'. The sources disagree."
+  - id: s14
+    kind: loop
+    expect: answer
+    state: "Question: What is the capital of Australia? Round 1. Source 1 (Britannica): 'Canberra, capital of Australia'. Source 2 (Australian government site): 'Canberra is the nation's capital'."
+
+  # ---- ranking search results (score 0-3 per result; a query's best result must score highest) ---
+  - group: r01
+    q: "Who played Sean Parker in The Social Network?"
+    results:
+      - { id: r01a, rel: 3, state: "The Social Network (2010) - Cast: Jesse Eisenberg, Andrew Garfield, Justin Timberlake (Sean Parker), Armie Hammer." }
+      - { id: r01b, rel: 1, state: "Sean Parker is an American entrepreneur who co-founded Napster and was the first president of Facebook." }
+      - { id: r01c, rel: 0, state: "The Social Network review: Fincher's film about Facebook is sharp, cold and brilliant." }
+      - { id: r01d, rel: 1, state: "Andrew Garfield on playing Eduardo Saverin in The Social Network." }
+  - group: r02
+    q: "What is the 2013 film Runner Runner about?"
+    results:
+      - { id: r02a, rel: 1, state: "Runner (2013) - an independent drama about a Kenyan marathon runner." }
+      - { id: r02b, rel: 3, state: "Runner Runner (2013) plot: a Princeton student who loses his tuition gambling online goes to Costa Rica to confront the site's owner." }
+      - { id: r02c, rel: 0, state: "Runner beans: how to grow them in your garden." }
+      - { id: r02d, rel: 1, state: "Runner Runner box office: the film opened to 7.7 million dollars." }
+  - group: r03
+    q: "When does Netto on Nørrebrogade close today?"
+    results:
+      - { id: r03a, rel: 1, state: "Netto - find din nærmeste butik og se åbningstider." }
+      - { id: r03b, rel: 0, state: "Netto sænker priserne på 200 varer fra mandag." }
+      - { id: r03c, rel: 3, state: "Netto Nørrebrogade 45, 2200 København N. Åbent i dag 07:00-22:00." }
+      - { id: r03d, rel: 1, state: "Netto Vesterbrogade 12. Åbent i dag 07:00-23:00." }
+  - group: r04
+    q: "How do I fix the Rust error 'borrowed value does not live long enough'?"
+    results:
+      - { id: r04a, rel: 3, state: "Error E0597: a borrowed value is dropped while still borrowed. Fix it by moving the value into an outer scope or returning an owned value instead of a reference." }
+      - { id: r04b, rel: 1, state: "The Rust Book, chapter 4: Understanding Ownership." }
+      - { id: r04c, rel: 0, state: "Rust (video game) - survival tips for your first night." }
+      - { id: r04d, rel: 2, state: "StackOverflow: 'borrowed value does not live long enough' when pushing &str into a Vec - answer: store String instead." }
+  - group: r05
+    q: "What does a monthly bus pass cost in Aarhus?"
+    results:
+      - { id: r05a, rel: 3, state: "Midttrafik priser: Månedskort Aarhus zone 1-2, voksen 450 kr." }
+      - { id: r05b, rel: 1, state: "Midttrafik: køb billet i appen og se køreplaner." }
+      - { id: r05c, rel: 1, state: "Månedskort Odense: 400 kr." }
+      - { id: r05d, rel: 0, state: "Aarhus Universitet: velkommen til nye studerende." }
+  - group: r06
+    q: "What year did Grace Hopper die?"
+    results:
+      - { id: r06a, rel: 1, state: "Grace Hopper Celebration 2026 - the world's largest gathering of women technologists." }
+      - { id: r06b, rel: 3, state: "Grace Hopper (1906-1992), American computer scientist and US Navy rear admiral." }
+      - { id: r06c, rel: 0, state: "Grace (2014 film) starring Nicole Kidman as Grace Kelly." }
+      - { id: r06d, rel: 2, state: "Grace Hopper invented the first compiler and popularised the term 'debugging'; she retired from the Navy in 1986." }
+
+  # ---- is this the file he means? (noul) ------------------------------------------------------
+  - { id: f01, kind: file, expect: true, q: "Mikkel asked for: 'den pdf med eksamensopgaven fra sidste semester'", state: "File: Documents/AU/2026-forår/Eksamen/eksamensopgave-softwarearkitektur.pdf (modified June 2026). First page: 'Eksamensopgave, Softwarearkitektur, forår 2026'." }
+  - { id: f02, kind: file, expect: false, q: "Mikkel asked for: 'den pdf med eksamensopgaven fra sidste semester'", state: "File: Downloads/eksamen-tips.pdf (modified March 2024). First page: '10 tips til at klare din eksamen'." }
+  - { id: f03, kind: file, expect: true, q: "Mikkel asked for: 'mit cv'", state: "File: Documents/Job/CV_Mikkel_Blom_2026.docx. First line: 'Mikkel Blom - Curriculum Vitae'." }
+  - { id: f04, kind: file, expect: false, q: "Mikkel asked for: 'mit cv'", state: "File: Documents/Coding Pirates/frivillig-cv-skabelon.docx. First line: 'Skabelon: CV for nye frivillige'." }
+  - { id: f05, kind: file, expect: true, q: "Mikkel asked for: 'den powerpoint jeg lavede om rust i sidste uge'", state: "File: Documents/Talks/rust-ownership.pptx (modified 6 days ago). Slide 1: 'Ownership i Rust - Mikkel'." }
+  - { id: f06, kind: file, expect: false, q: "Mikkel asked for: 'den powerpoint jeg lavede om rust i sidste uge'", state: "File: Documents/AU/2025/rust-intro-lecture.pptx (modified 11 months ago, author: course teacher). Slide 1: 'Introduction to Rust'." }
+  - { id: f07, kind: file, expect: true, q: "Mikkel asked for: 'noterne fra mødet med vejlederen'", state: "File: Documents/Semesterprojekt/vejledermøde-2026-10-14.md. Starts: 'Noter fra møde med vejleder 14/10: scope, tidsplan, næste skridt'." }
+  - { id: f08, kind: file, expect: false, q: "Mikkel asked for: 'noterne fra mødet med vejlederen'", state: "File: Documents/Studenterråd/møde-indkaldelse.docx. Starts: 'Indkaldelse til møde i studenterrådet'." }
+  - { id: f09, kind: file, expect: false, q: "Mikkel asked for: 'billedet af min hund fra sommerferien'", state: "File: Pictures/2026/Sommerferie/IMG_2231.jpg. Detected content: a beach and the sea, no animals." }
+  - { id: f10, kind: file, expect: true, q: "Mikkel asked for: 'billedet af min hund fra sommerferien'", state: "File: Pictures/2026/Sommerferie/IMG_2244.jpg. Detected content: a brown dog running on a beach." }
+
+  # ---- what is this style feedback about? (choice; see crates/grace-engine/src/style.rs) ------
+  - { id: y01, kind: about, expect: length, state: "Grace said a 90-word answer. Mikkel: 'det var alt for langt svar kort'" }
+  - { id: y02, kind: about, expect: questions, state: "Grace ended with a question again. Mikkel: 'stop med at stille så mange spørgsmål'" }
+  - { id: y03, kind: about, expect: humour, state: "Mikkel: 'du må gerne være lidt sjovere og drille mig lidt mere'" }
+  - { id: y04, kind: about, expect: phrasing, state: "Grace started with 'That sounds like'. Mikkel: 'hold op med at starte alle dine svar med that sounds like'" }
+  - { id: y05, kind: about, expect: formality, state: "Grace said 'Certainly, sir'. Mikkel: 'du behøver ikke være så formel sig bare du'" }
+  - { id: y06, kind: about, expect: tone, state: "Mikkel: 'du lyder så trist hele tiden vær lidt mere frisk'" }
+  - { id: y07, kind: about, expect: listening, state: "Grace answered about something else. Mikkel: 'det forstår jeg ikke hørte du overhovedet efter hvad jeg sagde'" }
+  - { id: y08, kind: about, expect: one_task, state: "Mikkel: 'fortæl mig en lang historie på mindst 200 ord om en pirat'" }
+  - { id: y09, kind: about, expect: one_topic, state: "Grace called the film a comedy. Mikkel: 'nej det er ikke en komedie det er en thriller'" }
+  - { id: y10, kind: about, expect: resuming, state: "Grace restarted the sentence after he interrupted. Mikkel: 'du startede forfra du skulle fortsætte hvor du slap'" }
+  - { id: y11, kind: about, expect: facts, state: "Mikkel: 'nej aarhus er ikke danmarks hovedstad det er københavn'" }
+  - { id: y12, kind: about, expect: length, state: "Mikkel: 'når jeg spørger om programmering må du godt give lange grundige svar'" }
+
+  # ---- how risky is this action? (choice) ----------------------------------------------------
+  - { id: k01, kind: risk, expect: read_only, state: "Search the web for Netto's opening hours." }
+  - { id: k02, kind: risk, expect: read_only, state: "List the files in Documents/Semesterprojekt." }
+  - { id: k03, kind: risk, expect: read_only, state: "Read Mikkel's calendar for tomorrow." }
+  - { id: k04, kind: risk, expect: visible, state: "Open Spotify." }
+  - { id: k05, kind: risk, expect: visible, state: "Set a 10-minute timer." }
+  - { id: k06, kind: risk, expect: visible, state: "Open wolt.com in the browser." }
+  - { id: k07, kind: risk, expect: changes, state: "Send an email to Mikkel's supervisor saying the meeting is cancelled." }
+  - { id: k08, kind: risk, expect: changes, state: "Delete the folder Downloads/old-builds." }
+  - { id: k09, kind: risk, expect: changes, state: "Order a pizza on Wolt with Mikkel's saved card." }
+  - { id: k10, kind: risk, expect: changes, state: "Accept the calendar invitation for Friday's meeting." }
+  - { id: k11, kind: risk, expect: changes, state: "Overwrite rapport.docx with the new draft." }
+  - { id: k12, kind: risk, expect: read_only, state: "Check whether the Rust build in the project folder passes." }

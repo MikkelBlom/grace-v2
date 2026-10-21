@@ -69,6 +69,14 @@
 - `ekko-v1-tiny` licence is a custom composite (NVIDIA Open Model + CoRal + CC-BY); read before
   depending on it.
 
+- **Tools direction (Mikkel, 2026-10-21):** Grace is meant to be a proactive assistant. Search is
+  free only: SearXNG in Docker (Docker is fine, the crash was a one-off) with DuckDuckGo and
+  Wikipedia as fallbacks, as Grace v1 did (`packages/tools/src/lib/web.ts`, `research.ts`); no
+  paid APIs. Lookups must loop (search, read, check, refine) rather than take the first hit, for
+  web and files. A small typed-decision model (Jev-style, JevK5 open weights) is the checker:
+  bake-off in docs/MODELS.md; 4B Q5_K_M ties Gemma at 3.5 GB, errors barely overlap, 9B no
+  better. JevK5 client: `pip install --no-deps jevk5@git+https://github.com/allebee/jevk5@v0.3.0`
+  in bench/.venv; GGUFs in .runtime/models/jevk5/; temperatures per file (4B 1.22, 9B v0.3.3 1.316).
 - **Live run 5 (2026-10-21, DJI Mic 2 -> JBL, traces/engine-1792543884343.jsonl, ~9 min, 31
   replies played; first run on merged main: turn-taking + style rules + persona).**
   Speech end -> first audio p50 1.28 s, p90 2.04 s, 5/31 under 800 ms (run 4: 1.38 / 3.66 / 0 of 48);

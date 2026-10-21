@@ -566,3 +566,44 @@ system.md 0.942 (hard 1104/1122) → honesty + no question tail + no compliance 
 0.956 (hard 1107/1122, judge 233/252). New scenario 16 (two made-up titles, two actor questions):
 invented plots 3/3 → "I don't know that one" 3/3; "who played Sean Parker" is Andrew Garfield in
 3/3 on both prompts (it's Justin Timberlake), a knowledge gap, not a prompt one.
+
+## Typed-decision model: JevK5 4B vs 9B, Gemma as baseline — 2026-10-21
+
+`bench/decide_bench.py` on `fixtures/decide/scenarios.yaml`: 178 hand-written decisions Grace
+would hand a Jev-style model. They are tool choice (30 Danish + the same 30 in English), "needs a
+lookup?" (20), "does this passage answer the question?" (26, with traps like Runner vs Runner
+Runner), search-loop next step (14), result ranking (6 queries × 4), "is this the file?" (10),
+style-feedback category (12) and action risk (12). Every backend gets the identical JevK5 prompt and
+readout (option-letter log-probabilities, nothing generated). JevK5 from `alibiserikbay/JevK5-GGUF`
+(v0.3 4B, v0.3.3 9B, both Q5_K_M, SHA-256 checked) on llama.cpp b11539, `-c 8192 -np 1 -fa on`,
+on port 8091 next to Grace's Gemma (port 8080, engine settings).
+
+| | Gemma 4 12B (already loaded) | JevK5 4B Q5_K_M | JevK5 9B Q5_K_M |
+|---|---|---|---|
+| **typed decisions right** | 146/154 | **147/154** | 145/154 |
+| tool choice, Danish / English | 27/30 / 29/30 | 28/30 / 28/30 | 28/30 / 28/30 |
+| needs a lookup (Brier) | 20/20 (0.014) | 20/20 (0.069) | 20/20 (0.016) |
+| passage answers it (Brier) | 25/26 (0.041) | **26/26** (0.041) | 24/26 (0.049) |
+| loop next step | 13/14 | 13/14 | 13/14 |
+| right file | 9/10 | 9/10 | 9/10 |
+| style category / risk | 11/12 / 12/12 | 12/12 / 11/12 | 12/12 / 11/12 |
+| ranking: best result on top, MAE | 5/6, 0.37 | 6/6, 0.46 | 5/6, 0.35 |
+| ms per decision p50 / p95, GPU otherwise idle | 128 / 196 | 133 / 158 | 144 / 180 |
+| ms p50 / p95 while Gemma generates | — | 208 / 253 | 261 / 329 |
+| extra VRAM | 0 (10.1 GB for Gemma) | **3.5 GB** | 6.2 GB |
+| mean confidence when right / wrong | 0.98 / 0.95 | 0.83 / **0.65** | 0.90 / 0.69 |
+
+- The 9B is no better than the 4B on these (2 more misses, +2.7 GB VRAM, slower).
+- The errors barely overlap: Gemma and the 4B are both wrong on only 1 of 154 (s12). Gemma's
+  misses lean to "I know this, no search" (t03 Sean Parker, t29 Runner Runner, a03 accepted Runner
+  for Runner Runner), the live-run-5 failure, and it is as confident when wrong (0.95) as when
+  right. The 4B's misses lean to "search" on things it could answer (t23 "what is a pointer",
+  t27 "capital of France"), and its confidence separates right from wrong (0.83 vs 0.65), so a
+  threshold can route low-confidence decisions elsewhere.
+- Danish input doesn't hurt JevK5 here (28/30 Danish = 28/30 English), despite being English-only.
+- Shared GPU: a checker running back to back slows Gemma's decode 50 → 33 tok/s (4B) / 32 (9B)
+  and prefill 38 → 59-65 ms. Real use is bursts inside a search loop, but it must not run while
+  Grace is speaking a reply, or it should move to the Arc iGPU / NPU (untested).
+- Caveats: 154 typed decisions written by one author (Claude), so 1-2 point differences are
+  noise; Gemma is read through the same letter-logprob prompt, not through its native tool
+  calling, which is how Grace would actually pick tools.

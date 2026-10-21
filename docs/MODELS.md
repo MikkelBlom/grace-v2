@@ -629,3 +629,12 @@ prefill per decision; the cached export keeps a dynamic `Range` and dynamic stat
 
 INT4 per-channel (the NPU's preferred format) costs 7-8 decisions (tool choice in Danish 24/30);
 INT8 matches or beats the RTX GGUF. The Arc shares system RAM (4.0 GB export), not the RTX's 24 GB.
+
+**After updating Intel drivers (2026-10-21: NPU 32.0.100.5540, Arc 32.0.101.9150):**
+- NPU now compiles the model (the old norm/`Range` errors are gone) but can't run it: INT8 at 512
+  tokens compiled in 21 min, then `ZE_RESULT_ERROR_DEVICE_LOST` on the first inference; INT4
+  per-channel at 384 tokens: `ZE_RESULT_ERROR_INVALID_NATIVE_BINARY`; NPUW (NPU+CPU partitions):
+  compiled in 228 s, then the process died on the first inference with no message. Three
+  different failures, so Qwen3.5's hybrid linear-attention layers aren't usable on this NPU
+  with OpenVINO 2026.4 today. Retry when OpenVINO or the NPU driver lists Qwen3.5 support.
+- Arc on driver 9150: same 148/154, p50 238 ms / p95 549 ms (228 / 333 on 8974; one run each).

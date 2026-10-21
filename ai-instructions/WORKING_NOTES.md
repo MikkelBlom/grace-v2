@@ -80,7 +80,12 @@
   **Arc iGPU is the place for it:** OpenVINO INT8 export (.runtime/models/jevk5-ov/4b-int8-stateless,
   bench/.venv-openvino, transformers pinned to 5.2) scores 148/154 at ~230 ms and slows Gemma only
   50 -> 48.5 tok/s (on the RTX: 50 -> 33). The NPU fails to compile Qwen3.5's linear-attention norm
-  with driver 32.0.100.3159 (2024-09); retry after Mikkel updates the Intel NPU driver.
+  with driver 32.0.100.3159 (2024-09). After the driver update (5540) it compiles but crashes on
+  inference in three different ways (device lost / invalid native binary / NPUW process death):
+  not usable for Qwen3.5 hybrid models today. Compile cache: OV_CONFIG='{"CACHE_DIR":...}'.
+  Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
+  Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
+  error and worked when double-clicked.
 - **Live run 5 (2026-10-21, DJI Mic 2 -> JBL, traces/engine-1792543884343.jsonl, ~9 min, 31
   replies played; first run on merged main: turn-taking + style rules + persona).**
   Speech end -> first audio p50 1.28 s, p90 2.04 s, 5/31 under 800 ms (run 4: 1.38 / 3.66 / 0 of 48);

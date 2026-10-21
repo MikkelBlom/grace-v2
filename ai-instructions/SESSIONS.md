@@ -217,3 +217,6 @@ generates; a busy checker slows Gemma 50 -> 33 tok/s. Errors of Gemma and the 4B
 **NPU / iGPU (same day):** JevK5 4B via OpenVINO: the NPU won't compile it on the 2024 driver
 (linear-attention norm); the Arc iGPU at INT8 scores 148/154 at ~230 ms and barely slows Gemma
 (50 -> 48.5 tok/s vs 33 on the RTX). Next: Mikkel updates the NPU driver, then retry the NPU.
+**Drivers + NPU retry (same day):** Mikkel updated NPU, Arc, Wi-Fi and Bluetooth drivers (script +
+one manual graphics install). The NPU now compiles JevK5 4B but crashes on inference in three
+ways; stopped. Arc on the new driver: same 148/154, ~240 ms. The checker's home is the Arc iGPU.

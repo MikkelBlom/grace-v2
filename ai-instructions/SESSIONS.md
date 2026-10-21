@@ -214,3 +214,6 @@ hand-written decisions (`bench/decide_bench.py`, `fixtures/decide/scenarios.yaml
 Gemma 146, 9B 145; 4B 3.5 GB, 9B 6.2 GB; ~130-145 ms per decision idle, ~210-260 ms while Gemma
 generates; a busy checker slows Gemma 50 -> 33 tok/s. Errors of Gemma and the 4B overlap on 1.
 **Next steps:** Mikkel decides whether JevK5 4B becomes the checker; v0.3 tool work (#17, #18).
+**NPU / iGPU (same day):** JevK5 4B via OpenVINO: the NPU won't compile it on the 2024 driver
+(linear-attention norm); the Arc iGPU at INT8 scores 148/154 at ~230 ms and barely slows Gemma
+(50 -> 48.5 tok/s vs 33 on the RTX). Next: Mikkel updates the NPU driver, then retry the NPU.

@@ -607,3 +607,25 @@ on port 8091 next to Grace's Gemma (port 8080, engine settings).
 - Caveats: 154 typed decisions written by one author (Claude), so 1-2 point differences are
   noise; Gemma is read through the same letter-logprob prompt, not through its native tool
   calling, which is how Grace would actually pick tools.
+
+### JevK5 4B on the NPU and the Arc iGPU (OpenVINO), 2026-10-21
+
+Export: optimum-intel 2.0 + transformers 5.2 (5.5 is refused) in `bench/.venv-openvino`,
+`optimum-cli export openvino -m alibiserikbay/JevK5 --task text-generation` (no KV cache: one
+prefill per decision; the cached export keeps a dynamic `Range` and dynamic states). Bench backend
+`--backend ov`: same prompt and letter readout, right-padded to 512 tokens on the NPU.
+
+- **NPU (Intel AI Boost, NPU 3720, driver 32.0.100.3159 from 2024-09): does not compile.** The
+  driver's compiler rejects Qwen3.5's linear-attention RMS norm ("Input tensor rank should be 3 or
+  greater. Got 2D tensor", LLVM abort), with or without NPUW CPU fallback; the cached export
+  fails earlier on `aten::arange`. The error message asks for a newer driver.
+- **Arc 140T iGPU works**, and leaves the RTX alone:
+
+| JevK5 4B | typed right | ms p50 / p95 | ms p50 while Gemma generates | Gemma decode while it runs |
+|---|---|---|---|---|
+| RTX, GGUF Q5_K_M (above) | 147/154 | 133 / 158 | 208 | 50 → 33 tok/s |
+| Arc iGPU, OpenVINO INT4 sym per-channel | 140/154 | 215 / 927 | — | — |
+| **Arc iGPU, OpenVINO INT8** | **148/154** | 228 / 333 | 301 | **50 → 48.5 tok/s** |
+
+INT4 per-channel (the NPU's preferred format) costs 7-8 decisions (tool choice in Danish 24/30);
+INT8 matches or beats the RTX GGUF. The Arc shares system RAM (4.0 GB export), not the RTX's 24 GB.

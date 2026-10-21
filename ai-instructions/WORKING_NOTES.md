@@ -77,6 +77,10 @@
   bake-off in docs/MODELS.md; 4B Q5_K_M ties Gemma at 3.5 GB, errors barely overlap, 9B no
   better. JevK5 client: `pip install --no-deps jevk5@git+https://github.com/allebee/jevk5@v0.3.0`
   in bench/.venv; GGUFs in .runtime/models/jevk5/; temperatures per file (4B 1.22, 9B v0.3.3 1.316).
+  **Arc iGPU is the place for it:** OpenVINO INT8 export (.runtime/models/jevk5-ov/4b-int8-stateless,
+  bench/.venv-openvino, transformers pinned to 5.2) scores 148/154 at ~230 ms and slows Gemma only
+  50 -> 48.5 tok/s (on the RTX: 50 -> 33). The NPU fails to compile Qwen3.5's linear-attention norm
+  with driver 32.0.100.3159 (2024-09); retry after Mikkel updates the Intel NPU driver.
 - **Live run 5 (2026-10-21, DJI Mic 2 -> JBL, traces/engine-1792543884343.jsonl, ~9 min, 31
   replies played; first run on merged main: turn-taking + style rules + persona).**
   Speech end -> first audio p50 1.28 s, p90 2.04 s, 5/31 under 800 ms (run 4: 1.38 / 3.66 / 0 of 48);

@@ -13,6 +13,7 @@ Start the servers yourself; `--vram` samples nvidia-smi during the run for the p
 """
 
 import argparse
+import os
 import json
 import statistics as st
 import subprocess
@@ -136,6 +137,72 @@ class GemmaReader(JevK5GGUF):
         return {k: v / s for (k, _), v in zip(options, w)}, tokens
 
 
+class OpenVinoReader(JevK5GGUF):
+    """The JevK5 prompt and readout on an OpenVINO export, on CPU, the Arc iGPU or the NPU.
+
+    One prefill pass, no generation. The NPU needs static shapes, so the prompt is padded on the
+    right to `--ov-len` tokens and the logits are read at the last real position: everything is
+    causal (attention and Qwen3.5's linear-attention layers), so padding after it changes nothing.
+    """
+
+    def __init__(self, path, device, length, temperature, **_):
+        import openvino as ov
+        from transformers import AutoTokenizer
+
+        super().__init__(temperature=temperature)
+        self.tok = AutoTokenizer.from_pretrained(path)
+        core = ov.Core()
+        model = core.read_model(f"{path}/openvino_model.xml")
+        self.names = [i.get_any_name() for i in model.inputs]
+        self.length = length
+        self.static = device == "NPU"
+        if self.static:
+            shapes = {}
+            for i in model.inputs:
+                n = i.get_any_name()
+                shapes[n] = [1] if n == "beam_idx" else [1, length]
+            model.reshape(shapes)
+        t0 = time.perf_counter()
+        config = json.loads(os.environ.get("OV_CONFIG", "{}"))
+        self.compiled = core.compile_model(model, device, config)
+        self.compile_s = time.perf_counter() - t0
+        self.req = self.compiled.create_infer_request()
+
+    def _logprobs(self, prompt):
+        import numpy as np
+
+        from jevk5.prompt import LETTERS
+
+        ids = self.tok(prompt, add_special_tokens=False)["input_ids"]
+        n = len(ids)
+        if n > self.length:
+            raise ValueError(f"prompt is {n} tokens, more than --ov-len {self.length}")
+        pad = self.tok.pad_token_id or 0
+        full = self.length if self.static else n
+        x = np.full((1, full), pad, dtype=np.int64)
+        x[0, :n] = ids
+        mask = np.zeros((1, full), dtype=np.int64)
+        mask[0, :n] = 1
+        feed = {"input_ids": x, "attention_mask": mask}
+        if "position_ids" in self.names:
+            feed["position_ids"] = np.arange(full, dtype=np.int64)[None, :]
+        if "beam_idx" in self.names:
+            feed["beam_idx"] = np.zeros((1,), dtype=np.int32)
+        self.req.reset_state()
+        t0 = time.perf_counter()
+        logits = self.req.infer(feed)[self.compiled.outputs[0]]
+        seconds = time.perf_counter() - t0
+        row = logits[0, n - 1].astype(np.float64)
+        row = row - row.max()
+        logp = row - np.log(np.exp(row).sum())
+        seen = {}
+        for letter in LETTERS:
+            tid = self.tok.convert_tokens_to_ids(letter)
+            if tid is not None and tid >= 0:
+                seen[letter] = float(logp[tid])
+        return seen, n, seconds
+
+
 def vram_sampler(stop, peak):
     while not stop.is_set():
         try:
@@ -150,17 +217,24 @@ def vram_sampler(stop, peak):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--backend", choices=["jev", "gemma"], required=True)
-    ap.add_argument("--url", required=True)
+    ap.add_argument("--backend", choices=["jev", "gemma", "ov"], required=True)
+    ap.add_argument("--url", default="")
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--knockout-temperature", type=float)
     ap.add_argument("--label", required=True)
     ap.add_argument("--scenarios", default=str(ROOT / "fixtures/decide/scenarios.yaml"))
     ap.add_argument("--vram", action="store_true")
+    ap.add_argument("--ov-path", help="OpenVINO export directory (backend ov)")
+    ap.add_argument("--ov-device", default="NPU")
+    ap.add_argument("--ov-len", type=int, default=512)
     args = ap.parse_args()
 
-    cls = JevK5GGUF if args.backend == "jev" else GemmaReader
-    model = cls(url=args.url, temperature=args.temperature, knockout_temperature=args.knockout_temperature)
+    if args.backend == "ov":
+        model = OpenVinoReader(args.ov_path, args.ov_device, args.ov_len, args.temperature)
+        print(f"compiled on {args.ov_device} in {model.compile_s:.1f} s", file=sys.stderr)
+    else:
+        cls = JevK5GGUF if args.backend == "jev" else GemmaReader
+        model = cls(url=args.url, temperature=args.temperature, knockout_temperature=args.knockout_temperature)
     items = list(decisions(Path(args.scenarios)))
     # One warm-up decision so the first timing doesn't include CUDA graph setup.
     model.decide(items[0][3], items[0][4])

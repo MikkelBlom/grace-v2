@@ -370,7 +370,7 @@ impl Bench {
         {
             last["content"] = json!(format!("{said}\n\n{}", grace::tools::HINT));
         }
-        let tools = route.is_none_or(|r| r.offer_tools()).then_some(tools);
+        let tools = Some(tools);
         let mut req = ChatRequest::new(messages);
         req.max_tokens = REPLY_MAX_TOKENS;
         req.extra.insert("seed".into(), json!(seed));

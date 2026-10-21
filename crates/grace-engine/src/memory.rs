@@ -105,6 +105,8 @@ pub struct MemoryService {
     block: String,
     block_ids: HashSet<i64>,
     clock: Clock,
+    /// The system message's memory part, fixed at the first reply of the session.
+    frozen: std::sync::OnceLock<String>,
 }
 
 impl MemoryService {
@@ -149,6 +151,7 @@ impl MemoryService {
             block,
             block_ids,
             clock,
+            frozen: std::sync::OnceLock::new(),
         }))
     }
 
@@ -161,10 +164,16 @@ impl MemoryService {
         &self.block
     }
 
-    /// The memory part of the system message: the session block (fixed) and the style rules
-    /// Mikkel taught her (live: a rule learned on one turn applies from the next). Rules change
-    /// rarely, so the cached prompt prefix survives all other turns (ADR 0017).
+    /// The memory part of the system message: the session block and the style rules as they
+    /// were at the session's first reply. It stays fixed for the session: a rule learned
+    /// mid-session changed the system message, and llama-server re-read the whole conversation
+    /// (live run 8: 5,900 tokens, 2.8 s, several times). A new rule still applies from the next
+    /// turn through `style::with_reminder` on the user message, and is in here next session.
     pub fn prompt_block(&self) -> String {
+        self.frozen.get_or_init(|| self.live_prompt_block()).clone()
+    }
+
+    fn live_prompt_block(&self) -> String {
         let rules = match self.db().style_rules() {
             Ok(r) => r,
             Err(e) => {

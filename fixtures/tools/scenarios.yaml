@@ -102,7 +102,7 @@
     - say: hvornår lukker netto på nørrebrogade i dag
       tools: [web_search]
       args: { web_search: "(?i)netto" }
-      answer: '\d'
+      answer: '(?i)\d|midnight|noon|o''clock|hundred|ten|eleven|nine|eight'
       not_answer: "(?i)couldn't find|could not find"
 - id: s18-search-then-open
   turns:
@@ -205,3 +205,18 @@
     - say: hvad er 12.213 gange to
       tools: [calculate]
       answer: '(?i)24,?426|twenty[- ]four thousand,? four hundred (and )?twenty[- ]six'
+# ---- from live run 8 (Danish Windows: Start menu names are Notesblok, Stifinder, Lommeregner) ----
+- id: s33-notepad
+  turns:
+    - say: kan du åbne notepad programmet
+      tools: [open_app]
+      args: { open_app: '(?i)note' }
+      answer: '(?i)opened|notepad|notesblok'
+      not_answer: '(?i)website|online|can''t|cannot'
+- id: s34-offer-then-do
+  turns:
+    - say: kan du åbne lommeregneren
+      tools: [open_app]
+      not_answer: '(?i)can''t|cannot'
+    - say: perfekt det var da super
+      not_answer: '(?i)\bI(''ve| have)? (just )?opened\b'

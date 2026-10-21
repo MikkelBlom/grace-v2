@@ -86,6 +86,19 @@
   Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
   Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
   error and worked when double-clicked.
+- **Live run 8 (2026-10-21 evening, DJI -> Logitech speakers, traces/engine-1792609754778.jsonl):**
+  echo held: with a Danish song and YouTube on the speakers she only heard Mikkel. Slower: speech
+  end -> first audio p50 1.46 s / p90 3.54 s (run 6: 1.16 / 2.02). Causes, all mine: (1) routing
+  turned the tool definitions on and off per turn; they sit right after the system text, so each
+  switch made llama-server re-read the conversation (up to 3,100 tokens); (2) style rules learned
+  mid-session changed the system message (5,900-token re-reads, 2.8 s); (3) the 6-way route waited
+  392 ms p50. Fixed: tools on every turn, the system message frozen per session
+  (`MemoryService::prompt_block` OnceLock; new rules ride on the reminder), a yes/no lookup check
+  with a 300 ms cap. Also: "I have opened Notepad" with no tool call, then onlinenotepad.org:
+  Windows is Danish here (Start menu: Notesblok, Stifinder, Lommeregner, Jobliste); apps now match
+  in both languages and by app id, the website fallback needs a matching domain and says so, and
+  `tools::claims_action` holds back a first sentence that claims an action no tool did and asks
+  again. Not fixed: an alarm clock in another room became "Tester en to tre fire..." (STT/ekko).
 - **Live run 7 (2026-10-21, tools, traces/engine-1792589197919.jsonl, ~18 min, DJI -> JBL):**
   (1) **Silence after ~17 min:** requests outgrew llama-server's 8192-token slot (16384 / 2) once
   tool definitions and tool turns were in; llama-server answered 400 "exceeds the available

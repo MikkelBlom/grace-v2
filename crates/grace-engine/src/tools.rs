@@ -24,51 +24,38 @@ use tokio::{
 };
 use tracing::{Span, info, info_span, warn};
 
-/// The hint must not hold up the reply: it runs next to memory recall and is dropped if late.
-pub const HINT_TIMEOUT: Duration = Duration::from_millis(400);
+/// The hint must not hold up the reply: it runs next to memory recall (p50 124 ms, p90 285 ms
+/// live) and is dropped if late. Live run 8 waited 392 ms p50 for a 6-way route decision.
+pub const HINT_TIMEOUT: Duration = Duration::from_millis(300);
 /// The lookup loop's own budget is 12 s; this only guards against a hung server.
 pub const TOOL_TIMEOUT: Duration = Duration::from_secs(25);
 /// Checker probability of "search" above which the user message gets the hint (fixtures/decide:
 /// Gemma searched 17/17 lookup requests with a hint, 14/17 without, 0/33 others either way).
 pub const HINT_AT: f64 = 0.5;
-/// Checker probability of "no tool" above which the request goes without tool definitions:
-/// with them in the prompt, Gemma asked for facts her memory already listed (chat bench 02:
-/// 131/132 -> 123/132 hard checks). At 0.8 no tool request of 45 was routed to "none", and 24 of
-/// 39 chat turns went without tools (fixtures/decide + fixtures/tools + chat lines, 2026-10-21).
-pub const SKIP_TOOLS_AT: f64 = 0.8;
+// Tools are offered on every turn. Leaving them out of chat turns (a "none" route) changed the
+// prompt right after the system message from turn to turn, and llama-server re-read the whole
+// conversation each time (live run 8: up to 3,100 tokens, 1.5 s); chat bench 02 scored the same
+// with and without it (123/132 hard).
 pub const HINT: &str = "[This likely needs a web lookup.]";
 /// Tool calls per reply: find a file, then open it; search, then search again.
 pub const MAX_CALLS: usize = 3;
 
-const ROUTE_Q: &str = "Mikkel said this to his voice assistant. Which tool does it need, if any?";
-
-/// The checker's options for [`ROUTE_Q`].
-fn route_options() -> Value {
-    json!({
-        "search": "Look something up: news, facts it may not know, a film or show, opening hours, prices, current events.",
-        "weather": "The weather forecast.",
-        "calculate": "Arithmetic or maths with numbers.",
-        "open": "Open a program, app or web page.",
-        "files": "Find, list or open files and folders on his computer.",
-        "none": "No tool: chat, opinions, advice, general knowledge, things about Mikkel, or something no tool can do (messages, timers).",
-    })
-}
+/// One yes/no decision: shorter than a 6-way choice, so faster on the Arc (fixtures/decide:
+/// 17/17 lookup requests searched with its hint, 0/33 others).
+const LOOKUP_Q: &str = "Mikkel spoke this request to his voice assistant. Does answering it need a \
+lookup (web, a store's hours, prices, news, anything current or obscure) rather than general \
+knowledge, maths, advice or chat?";
 
 /// What the checker thinks a request needs.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Route {
     /// Probability that it needs a web lookup (drives the hint).
     pub search: f64,
-    /// Probability that it needs no tool at all (drives leaving the tools out).
-    pub none: f64,
 }
 
 impl Route {
     pub fn hint(&self) -> bool {
         self.search > HINT_AT
-    }
-    pub fn offer_tools(&self) -> bool {
-        self.none < SKIP_TOOLS_AT
     }
 }
 
@@ -147,14 +134,12 @@ impl Tools {
                 "kind": "decide",
                 "key": "route",
                 "state": format!("Mikkel said: \"{said}\""),
-                "question": { "type": "choice", "instructions": ROUTE_Q, "criteria": route_options() },
+                "question": { "type": "noul", "instructions": LOOKUP_Q },
             }),
         )
         .await?;
-        let p = &v["answer"]["probabilities"];
         Ok(Route {
-            search: p["search"].as_f64().context("no probability")?,
-            none: p["none"].as_f64().context("no probability")?,
+            search: v["answer"]["noul"].as_f64().context("no probability")?,
         })
     }
 
@@ -202,7 +187,7 @@ impl Tools {
         let cell = self.hint_cell(said);
         match tokio::time::timeout(HINT_TIMEOUT, cell.get_or_init(|| self.checked(said))).await {
             Ok(Some(r)) => {
-                info!(parent: span, search = r.search, none = r.none, "lookup check");
+                info!(parent: span, search = r.search, "lookup check");
                 Some(*r)
             }
             Ok(None) => None,
@@ -245,6 +230,18 @@ fn shrink(messages: &mut Vec<Value>) -> bool {
     true
 }
 
+/// A sentence that says Grace did something on the PC ("I have opened Notepad", "Spotify is now
+/// open"). Only acting verbs: "I found it on Fandom" after an earlier search is a fair answer.
+pub fn claims_action(text: &str) -> bool {
+    static CLAIM: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)\bI(?:'ve| have)?\s+(?:just\s+|now\s+)?(?:opened|launched|started|played|paused|skipped|turned (?:it |the volume )?(?:up|down)|muted)\b|\b(?:is|are) now (?:open|opened|playing|running)\b|\b(?:is|are) (?:playing|running)\b|\bhas been (?:opened|started|launched)\b",
+        )
+        .expect("claim regex")
+    });
+    CLAIM.is_match(text)
+}
+
 /// What the reply loop needs from its caller: where the words go and whether it may go on.
 pub trait Sink {
     /// Streamed reply text.
@@ -277,9 +274,15 @@ pub async fn reply<S: Sink + Send>(
         req.tools = t.manifest.clone();
     }
     let mut calls_made = 0;
+    let mut retried_claim = false;
     loop {
         // (id, name, arguments) per tool call index, assembled from their pieces.
         let mut calls: Vec<(String, String, String)> = Vec::new();
+        // Until a tool has run, the first sentence is held back and checked: live runs 7 and 8
+        // said "I have opened Notepad" / "the projects folder" without calling anything.
+        let mut guard = tools.is_some() && calls_made == 0 && !retried_claim;
+        let mut pending = String::new();
+        let mut claimed = false;
         let mut opened = llm.stream(&req).await;
         // Live run 7: after 17 minutes the request outgrew the context and every reply after
         // that was silence. Drop the oldest half of the conversation and try again.
@@ -305,6 +308,17 @@ pub async fn reply<S: Sink + Send>(
                     return;
                 }
                 match delta {
+                    Some(Ok(Delta::Content(text))) if guard => {
+                        pending.push_str(&text);
+                        if pending.contains(['.', '!', '?']) || pending.len() > 200 {
+                            if claims_action(&pending) {
+                                claimed = true;
+                                break;
+                            }
+                            guard = false;
+                            sink.text(&std::mem::take(&mut pending));
+                        }
+                    }
                     Some(Ok(Delta::Content(text))) => sink.text(&text),
                     Some(Ok(Delta::ToolCall {
                         index,
@@ -336,6 +350,24 @@ pub async fn reply<S: Sink + Send>(
                 warn!(parent: span, error = %e, "llm request failed");
                 return;
             }
+        }
+        if guard && !pending.is_empty() {
+            if claims_action(&pending) && calls.is_empty() {
+                claimed = true;
+            } else {
+                sink.text(&std::mem::take(&mut pending));
+            }
+        }
+        if claimed {
+            warn!(parent: span, text = %pending, "claimed an action without a tool, asking again");
+            retried_claim = true;
+            if let Some(last) = req.messages.iter_mut().rev().find(|m| m["role"] == "user") {
+                let content = last["content"].as_str().unwrap_or("").to_owned();
+                last["content"] = json!(format!(
+                    "{content}\n\n[Nothing has been done yet. To do it, call the tool now; if no tool can, say so.]"
+                ));
+            }
+            continue;
         }
         calls.retain(|c| !c.1.is_empty());
         let Some(tools) = tools else { return };
@@ -527,6 +559,17 @@ mod tests {
         assert!(m.len() < 22);
         let mut only = vec![json!({ "role": "system" }), json!({ "role": "user" })];
         assert!(!shrink(&mut only));
+    }
+
+    #[test]
+    fn claims_are_acting_verbs_only() {
+        assert!(claims_action("I have opened Notepad for you."));
+        assert!(claims_action("Notepad is now open."));
+        assert!(claims_action("I opened the projects folder."));
+        assert!(claims_action("Spotify is playing."));
+        assert!(!claims_action("I found that on The Mentalist Wiki."));
+        assert!(!claims_action("I can open that for you."));
+        assert!(!claims_action("The store is open until ten."));
     }
 
     #[test]

@@ -455,20 +455,38 @@ class Apps:
         except Exception as e:
             log("app list failed:", e)
 
+    # Windows here is Danish, so built-in apps have Danish Start menu names (Notesblok, Stifinder,
+    # Lommeregner); each name below is tried in both languages (live run 8: "Notepad" wasn't found).
+    ALIASES = {
+        "vs code": ["visual studio code"], "vscode": ["visual studio code"], "code": ["visual studio code"],
+        "chrome": ["google chrome"], "browser": ["google chrome"], "browseren": ["google chrome"],
+        "notepad": ["notesblok", "notepad"], "notesblok": ["notesblok", "notepad"],
+        "calculator": ["lommeregner", "calculator"], "lommeregner": ["lommeregner", "calculator"],
+        "file explorer": ["stifinder", "file explorer"], "explorer": ["stifinder", "file explorer"],
+        "stifinder": ["stifinder", "file explorer"], "finder": ["stifinder", "file explorer"],
+        "settings": ["indstillinger", "settings"], "indstillinger": ["indstillinger", "settings"],
+        "paint": ["paint"], "terminal": ["terminal"], "task manager": ["jobliste", "task manager"],
+        "jobliste": ["jobliste", "task manager"], "snipping tool": ["klippeværktøj", "snipping tool"],
+    }
+
     def find(self, name):
         n = name.lower().strip()
-        aliases = {"vs code": "visual studio code", "vscode": "visual studio code", "code": "visual studio code",
-                   "word": "word", "chrome": "google chrome", "browser": "google chrome",
-                   "browseren": "google chrome", "lommeregner": "calculator", "notesblok": "notepad",
-                   "stifinder": "file explorer", "explorer": "file explorer", "indstillinger": "settings"}
-        n = aliases.get(n, n)
         names = [a[0].lower() for a in self.apps]
-        for i, a in enumerate(names):
-            if a == n:
-                return self.apps[i]
-        starts = [i for i, a in enumerate(names) if a.startswith(n) or n in a.split()]
-        if starts:
-            return self.apps[min(starts, key=lambda i: len(names[i]))]
+        for cand in self.ALIASES.get(n, []) + [n]:
+            for i, a in enumerate(names):
+                if a == cand:
+                    return self.apps[i]
+        for cand in self.ALIASES.get(n, []) + [n]:
+            starts = [i for i, a in enumerate(names) if a.startswith(cand) or cand in a.split()]
+            if starts:
+                return self.apps[min(starts, key=lambda i: len(names[i]))]
+        # The app id carries the English name even in a Danish Windows:
+        # Microsoft.WindowsNotepad_..., Microsoft.WindowsCalculator_...
+        key = re.sub(r"[^a-z0-9]", "", n)
+        if len(key) >= 4:
+            ids = [i for i, a in enumerate(self.apps) if key in re.sub(r"[^a-z0-9]", "", a[1].lower())]
+            if ids:
+                return self.apps[min(ids, key=lambda i: len(self.apps[i][1]))]
         close = difflib.get_close_matches(n, names, n=1, cutoff=0.75)
         return self.apps[names.index(close[0])] if close else None
 
@@ -867,11 +885,17 @@ class Tools:
         name = (a.get("name") or "").strip()
         app = self.apps.find(name)
         if not app:
-            # "åbn youtube" came in as open_app (tools sim): no such program, so open the site.
-            out = self.t_open_url({"target": name}, alive)
-            if out["ok"]:
-                out["detail"]["fallback"] = "no program, opened the website"
-            return out
+            # "åbn youtube" came in as open_app (tools sim): no such program, so open the site, but
+            # only when a site of that name exists (live run 8 opened onlinenotepad.org for
+            # "Notepad"), and say that it was the website.
+            key = re.sub(r"[^a-z0-9]", "", name.lower())
+            url = resolve_url(name)
+            host = urllib.parse.urlsplit(url).netloc.lower().replace("www.", "")
+            if not key or not host.startswith(key[:6]):
+                return {"ok": False, "result": f"No program called {name!r} is installed. Say so."}
+            open_in_chrome(url, self.dry)
+            return {"ok": True, "detail": {"url": url, "dry_run": self.dry, "fallback": "website"},
+                    "result": f"There's no {name} program, so I opened {host} in a new Chrome tab."}
         launch_app(app[1], self.dry)
         return {"ok": True, "detail": {"app": app[0], "dry_run": self.dry}, "result": f"Opened {app[0]}."}
 

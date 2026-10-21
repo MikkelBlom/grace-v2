@@ -185,8 +185,7 @@ async fn main() -> anyhow::Result<()> {
                 };
                 tools::reply(
                     &llm,
-                    hint.is_none_or(|r| r.offer_tools())
-                        .then_some(tools.as_ref()),
+                    Some(tools.as_ref()),
                     req,
                     seed,
                     &turn.say,
@@ -275,11 +274,10 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .collect();
                 println!(
-                    "{mark} {} s{seed} t{} search={:.2} none={:.2} {:.1}s | {} | tools={called:?}{}{}{}",
+                    "{mark} {} s{seed} t{} search={:.2} {:.1}s | {} | tools={called:?}{}{}{}",
                     sc.id,
                     ti + 1,
                     hint.map_or(-1.0, |r| r.search),
-                    hint.map_or(-1.0, |r| r.none),
                     total,
                     turn.say,
                     if t_ok { "" } else { " [TOOLS]" },
@@ -300,7 +298,7 @@ async fn main() -> anyhow::Result<()> {
                 ));
                 rows.push(json!({
                     "scenario": sc.id, "seed": seed, "turn": ti + 1, "say": turn.say,
-                    "route": hint.map(|r| json!({ "search": r.search, "none": r.none })),
+                    "route": hint.map(|r| json!({ "search": r.search })),
                     "tools": called, "calls": sink.calls.iter().map(|c| json!({"name": c.0, "args": c.1, "status": c.2["status"], "ok": c.2["ok"], "ms": c.2["ms"], "result": c.2["result"]})).collect::<Vec<_>>(),
                     "reply": reply, "total_s": total, "first_text_s": sink.first_text,
                     "tools_ok": t_ok, "args_ok": a_ok, "answer_ok": r_ok, "english_ok": e_ok,

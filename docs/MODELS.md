@@ -715,3 +715,13 @@ post-run-7 tool rules in the prompt, **0.949** with them moved into the tool res
 216 -> 231); scenario 02 alone A/B against the pre-run-7 prompt: 18/18 vs 17-18/18 judge, so
 the remaining gap to 0.966 is judge noise. Style bench: 18/18 learned, 2/144 false changes.
 llama-server at -c 32768 (16k per slot): Gemma 13.0 GB VRAM (10.1 GB at 16k).
+
+### After live run 8 (2026-10-21, night): latency and claimed actions
+
+Tools offered on every turn, the system message frozen per session, a yes/no lookup check with a
+300 ms cap, Danish-Windows app names, and `claims_action` holding back an unbacked "I have
+opened ...". grace-tools-sim 34 scenarios / 44 lines x 3 seeds: **130/132** (the 2 misses were
+right answers spelled in words because of a learned rule "use words for numbers", dropped);
+english 132/132. Chat bench with tools 0.938; in the whole chat bench run llama-server re-read
+more than 1,500 prompt tokens 3 times in 301 requests (once per scenario start), where live run 8
+did it several times per session. Style bench 18/18 learned, 2/144 false changes.

@@ -915,11 +915,9 @@ async fn speak_reply(
         ttft: &mut ttft,
         tool_notes: &tool_notes,
     };
-    // Plain conversation goes without tool definitions (see tools::SKIP_TOOLS_AT).
-    let offer = needs_lookup.is_none_or(|r| r.offer_tools());
     crate::tools::reply(
         &svc.llm,
-        svc.tools.as_deref().filter(|_| offer),
+        svc.tools.as_deref(),
         req,
         reply,
         &last.1,

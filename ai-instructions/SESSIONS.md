@@ -191,3 +191,12 @@ release build pass.
 the chat bench without learned rules; the combination is not benched yet.
 **Next steps:** live session with DJI + JBL (docs/research/2026-10-20-turn-taking-live-check.md
 plus style feedback, then check it holds the next session); `rules:` field in grace-chat-bench.
+
+## 2026-10-21 — Claude Code (Opus 5.5): live run 5 on merged main
+**Summary:** Live test on main after merging turn-taking, style rules and personality (DJI Mic 2
+-> JBL Tune 777NC). Latency p50 1.28 s / p90 2.04 s (run 4: 1.38 / 3.66); merging continuations
+works (23 reopens, half-answers retracted). Findings in WORKING_NOTES "Live run 5".
+**Issues encountered:** a >30 s reopened turn lost its start (ring unpinned on Respond); resumed
+stories restart the cut sentence; style learning stored 5 poor rules + junk facts and a
+"continue the story" commitment in the real DB; invented movie facts.
+**Next steps:** Mikkel decides which fixes to do and whether to drop the learned rules/facts.

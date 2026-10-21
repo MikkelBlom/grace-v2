@@ -69,6 +69,34 @@
 - `ekko-v1-tiny` licence is a custom composite (NVIDIA Open Model + CoRal + CC-BY); read before
   depending on it.
 
+- **Live run 5 (2026-10-21, DJI Mic 2 -> JBL, traces/engine-1792543884343.jsonl, ~9 min, 31
+  replies played; first run on merged main: turn-taking + style rules + persona).**
+  Speech end -> first audio p50 1.28 s, p90 2.04 s, 5/31 under 800 ms (run 4: 1.38 / 3.66 / 0 of 48);
+  the 2.0 s cluster (12 turns) is the long-wait cap. 23 reopened turns, 22 retracted early replies,
+  14 interruptions, 1 "carries on"; no echo triggers. Mikkel: "a very good test".
+  Findings:
+  (1) **Bug: a long reopened turn loses its start.** t76-116 s ("Jeg tænker på om øh jeg skal se den
+  her film...") is >30 s; `Respond` unpins the ring, the next `ReopenTurn` re-pins too late, so the
+  re-transcription at 111 s starts at "Hm øh jeg skal se..." and at 113 s at "Den hedder Runner".
+  Fix: don't unpin on Respond; unpin when the reply finishes or the merge window closes.
+  (2) **Resuming a cut story restarts the sentence.** History keeps the cut sentence by share of
+  played samples, but Grace re-says the whole sentence ("Every time he tried to fix a bug...") 3x;
+  Mikkel wants her to continue from the exact word. Needs word-level progress (TTS has no word
+  timings) and a resume that hands her the exact cut point.
+  (3) **Style rules learned 5 rules, ~0 good:** #1 "Listen carefully to every part..." (vague),
+  #2 "Write long stories when asked" (a request, not feedback), #3 "Don't assume a story is a
+  comedy" (one-off), #4/#5 continuity (an engine problem a rule can't fix). They are in
+  data/memory.db and will shape the next session. Plus junk facts (50 "long bedtime story of at
+  least 100 words", 52 "aware of the movie Runner", 54) and commitment 2 "Continue the story about
+  the engineer", which she will bring up next session.
+  (4) **Invented facts:** "Runner from 2013 ... sci-fi about a man hunted" (it is *Runner Runner*,
+  2013, Ben Affleck + Justin Timberlake, casino); answered character names when he asked for the
+  actor; Shawn Fanning vs Sean Parker flip-flop. The honesty rule doesn't hold for movie trivia.
+  (5) **Persona leftovers:** "That sounds like a very specific scene" (banned opener), long
+  egg-cake recipe with a question tail, "Got it. I'll make sure to keep those instructions in mind".
+  (6) Two "Okay." replies 0.2 s apart at 252.7 s (both after "stop stop stop"); merged speech
+  "hold din kæft ... nej du skal ikke holde kæft, fortæl en godnathistorie" was answered as one
+  turn (good).
 - **Live run 4 (2026-10-20, headset, traces/engine-1792475469070.jsonl, 48 answered turns).**
   Speech end → first audio p50 1.38 s, p90 3.66 s, 0/48 under 800 ms (issue #35): turn-end wait
   p50 590 ms (11/48 hit the ~3 s timeout on low Smart Turn scores), Pocket TTS first audio p50

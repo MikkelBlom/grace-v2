@@ -271,32 +271,67 @@ def page_text(url, timeout):
         return ""
 
 
+def story_time(when):
+    """'2026-10-21 07:00' (or with seconds/zone) -> epoch seconds, or None."""
+    try:
+        return datetime.strptime(when[:16], "%Y-%m-%d %H:%M").timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
 def news(checker, question, query, language, alive):
-    """Headlines from the news sites a search finds, read from their front pages now."""
+    """Stories from the news sites a search finds, read from their front pages now, newest first,
+    each with its publication time (live run 7: a September verdict was told as news from the last
+    24 hours). When he asks for recent news, stories older than two days are left out."""
     t0 = time.perf_counter()
-    hits, engine = search(query, language)
-    sites = [h for h in hits if not re.search(r"wikipedia|reddit|facebook|youtube|weather|vejr|tutiempo", h[1], re.I)][:4]
-    log(f"news [{engine}] {query!r}: reading {[urllib.parse.urlsplit(h[1]).netloc for h in sites]}")
-    with ThreadPoolExecutor(4) as pool:
-        pages = list(pool.map(lambda h: page_text(h[1], 6), sites))
-        evidence = []
-        for (title, url, _), page in zip(sites, pages):
-            if not alive():
-                break
-            hs = headlines(page, url)
-            if len(hs) < 3:
-                continue
-            # The front page doesn't say when a story is from (live run 7: a September verdict was
-            # told as news from the last 24 hours), so read the top stories' publication times.
-            dates = list(pool.map(lambda h: published(page_text(h[1], 4)), hs[:4]))
-            lines = []
-            for i, (head, link) in enumerate(hs[:8]):
-                when = dates[i] if i < len(dates) and dates[i] else "date unknown"
-                lines.append(f"- {head} [{when}] {link}")
-            evidence.append(dict(title=title, url=url, p=1.0,
-                                 text="Front-page stories right now, with publication time where known:\n" + "\n".join(lines)))
-            if len(evidence) >= 2:
-                break
+    recent = bool(re.search(r"døgn|i dag|seneste|sidste|last|latest|today|recent|24", question + " " + query, re.I))
+    stories = []  # (epoch or None, headline, link, site, date text)
+    # The sites a search turns up vary (tools sim: "nyheder Odense sidste 24 timer" found only sites
+    # whose front pages gave no dated stories), so read more of them, and if that gives nothing,
+    # search again without the time words.
+    simple = re.sub(r"(?i)(sidste|seneste|døgn|i dag|24|timer|last|latest|hours?|today|news|nyheder)", " ", query)
+    def enough():
+        # When he asks for recent news, only stories from the last two days count.
+        return sum(1 for st in stories if st[0] and (not recent or time.time() - st[0] < 2 * 86400))
+
+    for q in dict.fromkeys([query, f"{' '.join(simple.split())} nyheder".strip()]):
+        hits, engine = search(q, language)
+        seen_sites = {st[3] for st in stories}
+        sites = [h for h in hits if not re.search(r"wikipedia|reddit|facebook|youtube|weather|vejr|tutiempo", h[1], re.I)
+                 and urllib.parse.urlsplit(h[1]).netloc not in seen_sites][:6]
+        log(f"news [{engine}] {q!r}: reading {[urllib.parse.urlsplit(h[1]).netloc for h in sites]}")
+        with ThreadPoolExecutor(6) as pool:
+            pages = list(pool.map(lambda h: page_text(h[1], 6), sites))
+            for (title, url, _), page in zip(sites, pages):
+                if not alive():
+                    break
+                hs = headlines(page, url)[:6]
+                if len(hs) < 3:
+                    continue
+                dates = list(pool.map(lambda h: published(page_text(h[1], 4)), hs))
+                site = urllib.parse.urlsplit(url).netloc
+                stories += [(story_time(d), head, link, site, d) for (head, link), d in zip(hs, dates)]
+                if enough() >= 6:
+                    break
+        if enough() >= 3 or not alive():
+            break
+    now = time.time()
+    stale = ""
+    if recent:
+        fresh = [st for st in stories if st[0] is None or now - st[0] < 2 * 86400]
+        if not fresh and stories:
+            stale = " None is from the last two days; these are the newest found."
+        else:
+            stories = fresh
+    stories.sort(key=lambda st: -(st[0] or 0))
+    lines = [f"- {head} [{d or 'date unknown'}] ({site}) {link}" for _, head, link, site, d in stories[:8]]
+    evidence = []
+    if lines:
+        dated = sum(1 for st in stories[:8] if st[0])
+        evidence.append(dict(title="News", url=sites[0][1] if sites else "", p=1.0,
+                             text=(f"Stories from the news sites' front pages right now, newest first ({dated} with a "
+                                   f"publication time; current time {datetime.now():%Y-%m-%d %H:%M}).{stale} Say when a story is "
+                                   f"from; never call one recent if its date is unknown:\n") + "\n".join(lines)))
     status = "answered" if evidence else "not_found"
     return dict(status=status, kind="news", evidence=evidence, queries=[query], rounds=1, decisions=0,
                 ms=round((time.perf_counter() - t0) * 1000, 1))
@@ -371,8 +406,10 @@ def lookup(checker, question, query, kind, language, alive):
                 "You are helping a voice assistant search the web. The question is:\n"
                 f"{question}\n\nQueries tried so far: {queries}\nBest snippets found so far (they did "
                 "not clearly answer it):\n" + "\n".join(f"- {s[:200]}" for s in ([b[3] for b in best] + [f["text"] for f in found])[:4])
-                + "\n\nWrite one better, specific web search query. Use exact names you learned from "
-                  "the snippets. Reply with the query only.", 32).strip('"').split("\n")[0][:150]
+                + "\n\nWrite one better, specific web search query about exactly what the question asks. "
+                  "Keep the exact title or name from the question in double quotes; never switch to a "
+                  "similarly named film, person or thing from the snippets (tools sim: Runner Runner drifted "
+                  "to Runner (2026)). Reply with the query only.", 40).split("\n")[0][:150]
         except Exception as e:
             log("query refinement failed:", e)
             break
@@ -655,6 +692,40 @@ def from_danish(spoken):
     return expr if re.search(r"\d[-+*/]", expr) else None
 
 
+WMO = {0: "clear sky", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "freezing fog",
+       51: "light drizzle", 53: "drizzle", 55: "heavy drizzle", 56: "freezing drizzle", 57: "freezing drizzle",
+       61: "light rain", 63: "rain", 65: "heavy rain", 66: "freezing rain", 67: "freezing rain",
+       71: "light snow", 73: "snow", 75: "heavy snow", 77: "snow grains", 80: "light showers", 81: "showers",
+       82: "heavy showers", 85: "snow showers", 86: "heavy snow showers", 95: "thunderstorm",
+       96: "thunderstorm with hail", 99: "thunderstorm with hail"}
+
+
+def weather(place, day):
+    """Open-Meteo's forecast for a place: now, today, tomorrow or the day after."""
+    g = json.loads(get("https://geocoding-api.open-meteo.com/v1/search?" + urllib.parse.urlencode(
+        {"name": place, "count": 1, "language": "da"}), 8)).get("results")
+    if not g:
+        return None
+    g = g[0]
+    f = json.loads(get("https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
+        "latitude": g["latitude"], "longitude": g["longitude"],
+        "current": "temperature_2m,weather_code,wind_speed_10m",
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max",
+        "timezone": "Europe/Copenhagen", "forecast_days": 3, "wind_speed_unit": "ms"}), 8))
+    where = f"{g['name']} ({g.get('country', '')})"
+    if day == "now":
+        c = f["current"]
+        return (f"{where} right now: {WMO.get(c['weather_code'], 'weather code ' + str(c['weather_code']))}, "
+                f"{c['temperature_2m']:.0f} degrees, wind {c['wind_speed_10m']:.0f} m/s.")
+    i = {"today": 0, "tomorrow": 1, "day_after": 2}.get(day, 0)
+    d = f["daily"]
+    return (f"{where}, {['today', 'tomorrow', 'the day after tomorrow'][i]} ({d['time'][i]}): "
+            f"{WMO.get(d['weather_code'][i], 'weather code ' + str(d['weather_code'][i]))}, "
+            f"{d['temperature_2m_min'][i]:.0f} to {d['temperature_2m_max'][i]:.0f} degrees, "
+            f"{d['precipitation_probability_max'][i]}% chance of rain ({d['precipitation_sum'][i]:.1f} mm), "
+            f"wind up to {d['wind_speed_10m_max'][i]:.0f} m/s.")
+
+
 def safe_eval(expr):
     """Arithmetic only: numbers, + - * / // % ** and parentheses (no names, no calls)."""
     import ast
@@ -766,7 +837,8 @@ class Tools:
             return {"ok": False, "result": f"Couldn't calculate {expr!r} ({e}). Say so."}
         text = f"{value:,.6g}" if isinstance(value, float) and not float(value).is_integer() else f"{int(value)}"
         return {"ok": True, "detail": {"expression": expr, "value": value},
-                "result": f"{expr} = {text} (exact; if he disputes it, say it again and how you read his numbers)"}
+                "result": f"{expr} = {text} (exact). If he disputes it, repeat this number and how you read his "
+                          f"numbers (\"I read it as {expr}, which is {text}\"); don't agree with a different number."}
 
     def t_media(self, a, alive):
         action = a.get("action") or "play_pause"

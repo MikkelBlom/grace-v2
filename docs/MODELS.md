@@ -701,3 +701,17 @@ code apart from the memory block's place: **first 213/246**, last 202/246 (prese
 probe 54 vs 51, invalidated 7 vs 5 of 10). Both are below the 225 from earlier on 2026-10-21 with
 the pre-tools prompt; "present" alone moved by 4 between these two runs, so that gap isn't
 attributed yet.
+
+### After live run 7 (2026-10-21, evening)
+
+grace-tools-sim grew to 32 scenarios / 41 lines (follow-ups on tool results, opening an article
+from a real link, no claimed actions, standing by a calculation, Danish thousands, media, Danish
+app names). With tool results kept in the history, news sorted by publication time, the
+calculator reading the transcript and numbers spoken as words: 119-120/123 (3 seeds), english
+123/123; remaining misses were news-search variance (fixed: more sites, a second simpler search,
+stop only on recent dated stories; 5/5 and 5/5 after) and one "I don't know that show".
+Lookup bench 18/18 (first hit 9/18), p50 1.8 s. Chat bench with tools: 0.919 with the long
+post-run-7 tool rules in the prompt, **0.949** with them moved into the tool results (judge
+216 -> 231); scenario 02 alone A/B against the pre-run-7 prompt: 18/18 vs 17-18/18 judge, so
+the remaining gap to 0.966 is judge noise. Style bench: 18/18 learned, 2/144 false changes.
+llama-server at -c 32768 (16k per slot): Gemma 13.0 GB VRAM (10.1 GB at 16k).

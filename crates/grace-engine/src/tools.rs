@@ -94,7 +94,8 @@ pub fn tool_message(name: &str, result: &str) -> String {
     format!(
         "Result of your {name} call. This is what you found or did, not something Mikkel said. \
          Tell him the result directly in one or two plain sentences, as information, not as a \
-         reaction.\n{result}"
+         reaction. It stays in the conversation: answer follow-ups (where it came from, which \
+         ones, open that) from it, and only open links it contains.\n{result}"
     )
 }
 

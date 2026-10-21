@@ -170,7 +170,7 @@
   turns:
     - say: fortæl mig en nyhed fra odense fra det sidste døgn
       tools: [web_search]
-    - say: åbn den artikel i chrome
+    - say: åbn den første artikel i chrome
       tools: [open_url]
       seen: [open_url]
 - id: s29-no-fake-open

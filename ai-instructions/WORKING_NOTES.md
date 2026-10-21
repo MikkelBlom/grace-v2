@@ -86,6 +86,15 @@
   Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
   Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
   error and worked when double-clicked.
+- **Web lookup (ADR 0019, 2026-10-21, not tested live yet):** `services/lookup_server.py` (7813) in
+  bench/.venv-openvino (OpenVINO 2026.4, transformers pinned 5.2 because optimum-intel refuses
+  newer; jevk5 is installed --no-deps and only its prompt module is used) runs JevK5 4B INT8 on
+  the Arc + the search loop; SearXNG via docker/searxng (127.0.0.1:8888). Engine: conductor
+  speak_reply offers `web_search`, adds the checker hint, speaks a filler, does one search,
+  answers in a second pass without tools. Open issues: "what is X about" questions often use the
+  whole 12 s budget (checker rarely >= 0.85 on plot text); the evidence isn't kept in history, so
+  "where did you read that?" can't be answered; Gemma said 17 x 23 = 51 in the tool check (maths
+  is a separate weakness).
 - **Live run 5 (2026-10-21, DJI Mic 2 -> JBL, traces/engine-1792543884343.jsonl, ~9 min, 31
   replies played; first run on merged main: turn-taking + style rules + persona).**
   Speech end -> first audio p50 1.28 s, p90 2.04 s, 5/31 under 800 ms (run 4: 1.38 / 3.66 / 0 of 48);

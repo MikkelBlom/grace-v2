@@ -47,6 +47,8 @@ pub struct Services {
     pub played: Played,
     pub system_prompt: PathBuf,
     pub memory: Arc<crate::memory::MemoryService>,
+    /// Web lookup and the decision checker (None: the lookup server isn't running).
+    pub lookup: Option<Arc<crate::lookup::Lookup>>,
     /// Where each turn's STT input is saved for diagnosis (None = don't save).
     pub turn_audio_dir: Option<PathBuf>,
 }
@@ -700,16 +702,40 @@ async fn speak_reply(
             .map(|(r, t)| json!({ "role": r, "content": t })),
     );
     // Recall goes on the current user message only: the cached prefix before it is untouched.
-    let recall_span =
-        info_span!(parent: &span, "stage", stage = "memory.recall", model = "harrier-270m");
-    let recalled = match svc.memory.recall(&last.1).await {
-        Ok(facts) => facts,
-        Err(e) => {
-            warn!(parent: &span, error = %e, "memory recall failed");
-            Vec::new()
+    // The checker's "needs a lookup?" runs next to recall and is dropped if it is late: with
+    // its hint Gemma searched on 17/17 lookup requests instead of 14/17 (ADR 0019).
+    let hint = async {
+        let lookup = svc.lookup.as_ref()?;
+        let _stage =
+            info_span!(parent: &span, "stage", stage = "lookup.check", model = "jevk5-4b-arc");
+        match tokio::time::timeout(crate::lookup::HINT_TIMEOUT, lookup.needs_lookup(&last.1)).await
+        {
+            Ok(Ok(p)) => Some(p),
+            Ok(Err(e)) => {
+                warn!(parent: &span, error = %e, "lookup check failed");
+                None
+            }
+            Err(_) => {
+                warn!(parent: &span, "lookup check too slow, skipped");
+                None
+            }
         }
     };
-    drop(recall_span);
+    let recall = async {
+        let _stage =
+            info_span!(parent: &span, "stage", stage = "memory.recall", model = "harrier-270m");
+        match svc.memory.recall(&last.1).await {
+            Ok(facts) => facts,
+            Err(e) => {
+                warn!(parent: &span, error = %e, "memory recall failed");
+                Vec::new()
+            }
+        }
+    };
+    let (recalled, needs_lookup) = tokio::join!(recall, hint);
+    if let Some(p) = needs_lookup {
+        info!(parent: &span, p, "lookup check");
+    }
     if !recalled.is_empty() {
         let texts: Vec<&str> = recalled.iter().map(|f| f.text.as_str()).collect();
         info!(parent: &span, recalled = ?texts, "memory recalled");
@@ -717,11 +743,17 @@ async fn speak_reply(
     // The style rules are restated next to his words, for this turn only: in the system block
     // alone, a "fewer questions" rule held in-session but not in the next one (ADR 0017).
     let rules = svc.memory.style_rules().unwrap_or_default();
-    let content =
+    let mut content =
         crate::style::with_reminder(&crate::memory::with_recall(&last.1, &recalled), &rules);
+    if needs_lookup.is_some_and(|p| p > crate::lookup::HINT_AT) {
+        content = format!("{content}\n\n{}", crate::lookup::HINT);
+    }
     messages.push(json!({ "role": "user", "content": content }));
     let mut req = ChatRequest::new(messages);
     req.max_tokens = 300;
+    if svc.lookup.is_some() {
+        req.tools = vec![crate::lookup::tool()];
+    }
 
     // Sentences flow to a TTS worker as soon as they are complete.
     let (sent_tx, mut sent_rx) = mpsc::unbounded_channel::<String>();
@@ -816,32 +848,102 @@ async fn speak_reply(
     let mut splitter = SentenceSplitter::default();
     let mut full = String::new();
     let mut llm_gate = gate.clone();
-    match svc.llm.stream(&req).await {
-        Ok(mut stream) => loop {
-            let delta = tokio::select! {
-                d = stream.next() => d,
-                _ = llm_gate.wait_for(|g| *g == Gate::Cancelled) => None,
-            };
-            if cancelled(&llm_gate) {
-                break;
-            }
-            match delta {
-                Some(Ok(Delta::Content(text))) => {
-                    ttft.take();
-                    full.push_str(&text);
-                    for piece in splitter.push(&text) {
-                        let _ = sent_tx.send(piece);
-                    }
-                }
-                Some(Ok(Delta::Done { .. })) | None => break,
-                Some(Ok(_)) => {}
-                Some(Err(e)) => {
-                    warn!(parent: &span, error = %e, "llm stream error");
+    // At most one search per reply: the second pass answers from its result, without tools.
+    for pass in 0..2 {
+        // (id, name, arguments) of a tool call, assembled from its pieces.
+        let mut call: Option<(String, String, String)> = None;
+        match svc.llm.stream(&req).await {
+            Ok(mut stream) => loop {
+                let delta = tokio::select! {
+                    d = stream.next() => d,
+                    _ = llm_gate.wait_for(|g| *g == Gate::Cancelled) => None,
+                };
+                if cancelled(&llm_gate) {
                     break;
                 }
+                match delta {
+                    Some(Ok(Delta::Content(text))) => {
+                        ttft.take();
+                        full.push_str(&text);
+                        for piece in splitter.push(&text) {
+                            let _ = sent_tx.send(piece);
+                        }
+                    }
+                    Some(Ok(Delta::ToolCall {
+                        id,
+                        name,
+                        arguments,
+                        ..
+                    })) => {
+                        ttft.take();
+                        let c = call.get_or_insert_with(Default::default);
+                        if let Some(id) = id {
+                            c.0 = id;
+                        }
+                        if let Some(name) = name {
+                            c.1 = name;
+                        }
+                        c.2.push_str(&arguments);
+                    }
+                    Some(Ok(Delta::Done { .. })) | None => break,
+                    Some(Ok(_)) => {}
+                    Some(Err(e)) => {
+                        warn!(parent: &span, error = %e, "llm stream error");
+                        break;
+                    }
+                }
+            },
+            Err(e) => warn!(parent: &span, error = %e, "llm request failed"),
+        }
+        let (Some((id, name, args)), Some(lookup), 0) = (call, svc.lookup.as_ref(), pass) else {
+            break;
+        };
+        if cancelled(&gate) || name != crate::lookup::TOOL_NAME {
+            break;
+        }
+        // Say something while searching, unless she already started talking.
+        if full.trim().is_empty() {
+            let line = crate::lookup::filler(reply);
+            full.push_str(line);
+            full.push(' ');
+            let _ = sent_tx.send(line.to_owned());
+        }
+        let (question, query) = crate::lookup::arguments(&args, &last.1);
+        let stage =
+            info_span!(parent: &span, "stage", stage = "lookup.search", model = "searxng+jevk5");
+        let found = tokio::select! {
+            r = tokio::time::timeout(crate::lookup::SEARCH_TIMEOUT, lookup.search(&question, &query)) => r,
+            _ = llm_gate.wait_for(|g| *g == Gate::Cancelled) => break,
+        };
+        drop(stage);
+        let result = match found {
+            Ok(Ok(out)) => {
+                info!(parent: &span, query = %query, status = %out["status"], rounds = %out["rounds"], ms = %out["ms"], "web search");
+                crate::lookup::result_text(&out)
             }
-        },
-        Err(e) => warn!(parent: &span, error = %e, "llm request failed"),
+            Ok(Err(e)) => {
+                warn!(parent: &span, error = %e, "web search failed");
+                "The search failed. Say you couldn't look it up right now.".to_owned()
+            }
+            Err(_) => {
+                warn!(parent: &span, "web search timed out");
+                "The search took too long. Say you couldn't look it up right now.".to_owned()
+            }
+        };
+        let call_id = if id.is_empty() {
+            "call_0".to_owned()
+        } else {
+            id
+        };
+        req.messages.push(json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{ "id": call_id, "type": "function",
+                             "function": { "name": name, "arguments": args } }],
+        }));
+        req.messages
+            .push(json!({ "role": "tool", "tool_call_id": call_id, "content": result }));
+        req.tools.clear();
     }
     if !cancelled(&gate)
         && let Some(rest) = splitter.finish()

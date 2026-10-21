@@ -45,9 +45,26 @@ if (-not (Test-Port 7812)) {
     Start-Process -WindowStyle Hidden -FilePath bench\.venv-embed\Scripts\python.exe -ArgumentList 'services\embed_server.py' `
         -RedirectStandardError logs\embed-server.log -RedirectStandardOutput logs\embed-server.out.log
 }
+# Web lookup (ADR 0019): SearXNG in Docker + the lookup server (JevK5 4B on the Arc iGPU).
+# Grace still runs without them: no Docker means DuckDuckGo/Wikipedia only, no lookup server
+# means no web search this session.
+if (-not (Test-Port 8888)) {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host 'starting SearXNG (web search) ...'
+        docker compose -f docker/searxng/docker-compose.yml up -d *> logs\searxng.log
+    } else { Write-Host 'Docker is not running: web search falls back to DuckDuckGo and Wikipedia' }
+}
+$lookupVenv = Test-Path bench\.venv-openvino\Scripts\python.exe
+if ($lookupVenv -and -not (Test-Port 7813)) {
+    Write-Host 'starting lookup server (JevK5 4B on the Arc iGPU, web lookup) ...'
+    Start-Process -WindowStyle Hidden -FilePath bench\.venv-openvino\Scripts\python.exe -ArgumentList 'services\lookup_server.py' `
+        -RedirectStandardError logs\lookup-server.log -RedirectStandardOutput logs\lookup-server.out.log
+}
 Wait-Port 8080 'llama-server' 120
 Wait-Port 7811 'speech server' 120
 Wait-Port 7812 'embed server' 120
+if ($lookupVenv) { Wait-Port 7813 'lookup server' 120 }
 # llama-server opens its port before the model is loaded; wait for /health.
 while ($true) { try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/health).StatusCode -eq 200) { break } } catch {} ; Start-Sleep -Milliseconds 500 }
 

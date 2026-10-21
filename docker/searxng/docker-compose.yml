@@ -1,0 +1,15 @@
+# Grace's local web search (ADR 0019). Started by scripts/grace.ps1 when Docker is running.
+#   docker compose -f docker/searxng/docker-compose.yml up -d
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: grace-searxng
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8888:8080"
+    volumes:
+      - ./config:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+      # Local, single-user instance: the rate limiter and bot detection only get in Grace's way.
+      - SEARXNG_LIMITER=false

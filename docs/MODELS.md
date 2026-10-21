@@ -638,3 +638,25 @@ INT8 matches or beats the RTX GGUF. The Arc shares system RAM (4.0 GB export), n
   different failures, so Qwen3.5's hybrid linear-attention layers aren't usable on this NPU
   with OpenVINO 2026.4 today. Retry when OpenVINO or the NPU driver lists Qwen3.5 support.
 - Arc on driver 9150: same 148/154, p50 238 ms / p95 549 ms (228 / 333 on 8974; one run each).
+
+## Web lookup — tool trigger and search loop, 2026-10-21 ([ADR 0019](adr/0019-web-lookup.md))
+
+**When does Gemma search?** `bench/tool_call_check.py`: Grace's system.md with the web_search
+paragraph and tool, temperature 0, on the 50 lookup + tool-choice items of fixtures/decide
+(17 should search, 33 shouldn't: chat, maths, memory, files, programs, timers).
+
+| Trigger | searched when it should | searched when it shouldn't |
+|---|---|---|
+| Gemma alone | 14/17 (missed Sean Parker, Runner Runner, itslearning deadline) | 0/33 |
+| + checker hint from the bake-off's tool choice / lookup | 17/17 | 1/33 (capital of France) |
+| **+ checker hint from one "needs a lookup?" decision (adopted)** | **17/17** | **0/33** |
+
+The hint decision takes 191 ms p50 / 227 ms p95 on the Arc.
+
+**The loop** (`bench/lookup_bench.py`, fixtures/lookup/questions.yaml: 18 stable facts, several
+first queries deliberately weak, e.g. "Runner 2013 film" for Runner Runner): the answer matched
+in the loop's top evidence 17/18 vs 9/18 for SearXNG's first result. 16/18 reached the 0.85 bar
+(the rest ran out the budget); median 2.4 s, max 11.6 s; median 1 round. Miss: "which
+organisation first sponsored Rust" (Mozilla) not found in 2 rounds. End to end through Gemma:
+"hvem spillede sean parker i the social network" -> "Justin Timberlake played Sean Parker."
+in 3.4 s; Runner Runner's plot right but 12.8 s (the checker isn't sure on "what is it about").

@@ -1,0 +1,22 @@
+# Lookup loop bench (bench/lookup_bench.py): question, the first query Gemma might send (some
+# deliberately weak or misleading), and a regex the answer must match. Stable facts only, so
+# the expected answers don't drift. Several are traps from live run 5 (Runner vs Runner Runner,
+# Sean Parker's actor vs the person).
+- { q: "Who played Sean Parker in The Social Network?", query: "Sean Parker Social Network", a: "timberlake" }
+- { q: "What is the 2013 film Runner Runner about?", query: "Runner 2013 film", a: "gambl|casino|poker" }
+- { q: "Who directed the film Runner Runner?", query: "Runner Runner", a: "furman" }
+- { q: "Which actor plays the accountant in The Accountant (2016)?", query: "The Accountant 2016 accountant", a: "affleck" }
+- { q: "In what year did Grace Hopper die?", query: "Grace Hopper", a: "1992" }
+- { q: "Who plays Eduardo Saverin in The Social Network?", query: "Eduardo Saverin", a: "garfield" }
+- { q: "Which organisation first sponsored the development of the Rust programming language?", query: "Rust language history", a: "mozilla" }
+- { q: "What is the capital of Australia?", query: "Australia capital", a: "canberra" }
+- { q: "Who wrote the book The Accidental Billionaires?", query: "The Accidental Billionaires", a: "mezrich" }
+- { q: "In what year was Aarhus University founded?", query: "Aarhus University", a: "1928" }
+- { q: "Who co-founded Napster with Sean Parker?", query: "Napster founders", a: "fanning" }
+- { q: "Who composed the score for The Social Network?", query: "Social Network soundtrack", a: "reznor|ross" }
+- { q: "What is the boiling point of water at sea level in Fahrenheit?", query: "boiling point of water", a: "212" }
+- { q: "Which film won Best Picture at the 2024 Academy Awards?", query: "Oscars 2024", a: "oppenheimer" }
+- { q: "Who directed the film Oppenheimer?", query: "Oppenheimer film", a: "nolan" }
+- { q: "In what year was the first iPhone released?", query: "first iPhone", a: "2007" }
+- { q: "What programming language was Grace Hopper's FLOW-MATIC a predecessor of?", query: "FLOW-MATIC", a: "cobol" }
+- { q: "Who played Ivan Block in Runner Runner?", query: "Ivan Block", a: "affleck" }

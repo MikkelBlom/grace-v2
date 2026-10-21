@@ -1,0 +1,19 @@
+# Minimal SearXNG config for Grace (copied from Grace v1). The JSON API is off by default in
+# SearXNG; Grace queries http://localhost:8888/search?q=...&format=json.
+# Bound to 127.0.0.1 only (docker-compose.yml), so the secret key below protects nothing
+# reachable from outside; change it before ever exposing the instance.
+use_default_settings: true
+
+server:
+  secret_key: "grace-local-searxng-not-exposed"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+ui:
+  infinite_scroll: false

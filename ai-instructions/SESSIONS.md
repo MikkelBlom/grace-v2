@@ -220,3 +220,10 @@ generates; a busy checker slows Gemma 50 -> 33 tok/s. Errors of Gemma and the 4B
 **Drivers + NPU retry (same day):** Mikkel updated NPU, Arc, Wi-Fi and Bluetooth drivers (script +
 one manual graphics install). The NPU now compiles JevK5 4B but crashes on inference in three
 ways; stopped. Arc on the new driver: same 148/154, ~240 ms. The checker's home is the Arc iGPU.
+
+## 2026-10-21 — Claude Code (Opus 5.5): web lookup (ADR 0019)
+**Summary:** SearXNG in Docker, `services/lookup_server.py` (JevK5 4B on the Arc + search loop),
+engine `lookup.rs` + speak_reply tool pass, grace.ps1 starts it all. Measured: tool trigger 17/17
+and 0/33 with the checker hint (14/17 without); loop 17/18 vs first hit 9/18, median 2.4 s.
+**Issues encountered:** optimum-intel needs transformers <= 5.2; plot questions hit the budget.
+**Next steps:** live test with Mikkel; then the speaker/echo run; then more tools (#19-#21).

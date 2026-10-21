@@ -24,5 +24,6 @@ edit history.
 | [0016](0016-hallucination-check-by-transducer.md) | Drop invented transcripts when ekko hears nothing | Accepted |
 | [0017](0017-style-rules-and-review-queue.md) | Style rules learned from feedback; review queue for flagged replies | Accepted |
 | [0018](0018-recoverable-turn-ends.md) | Recoverable turn ends: merge continuations, prepare replies early | Proposed |
+| [0019](0019-web-lookup.md) | Web lookup: web_search tool, JevK5 checker on the Arc, search loop | Accepted |
 
 Template: [0000-template.md](0000-template.md).

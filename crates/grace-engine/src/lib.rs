@@ -6,6 +6,7 @@ pub mod clock;
 pub mod conductor;
 pub mod delay;
 pub mod frontend;
+pub mod lookup;
 pub mod memory;
 pub mod speech;
 pub mod style;

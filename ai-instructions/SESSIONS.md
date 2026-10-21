@@ -227,3 +227,7 @@ engine `lookup.rs` + speak_reply tool pass, grace.ps1 starts it all. Measured: t
 and 0/33 with the checker hint (14/17 without); loop 17/18 vs first hit 9/18, median 2.4 s.
 **Issues encountered:** optimum-intel needs transformers <= 5.2; plot questions hit the budget.
 **Next steps:** live test with Mikkel; then the speaker/echo run; then more tools (#19-#21).
+**Live run 6 (same day):** first live use of web search. Latency fine (p50 1.16 s). Problems:
+didn't search for The Mentalist (said "don't know" instead), reacted to search results as if
+Mikkel said them, news searches failed (wrong search category), plot lookups slow, speculative
+searches for discarded replies. Details in WORKING_NOTES.

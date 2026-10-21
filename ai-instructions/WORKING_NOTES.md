@@ -86,6 +86,19 @@
   Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
   Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
   error and worked when double-clicked.
+- **Live run 6 (2026-10-21, web search, traces/engine-1792557402975.jsonl, ~7.5 min, 36 replies):**
+  speech end -> first audio p50 1.16 s / p90 2.02 s; checker 279 ms p50 / 401 p90 next to recall
+  138 / 288 (10 % hit the 400 ms cap). Findings: (1) The Mentalist: checker hint 0.64 but Gemma
+  said "I don't know that show" instead of searching, then improvised opinions; the honesty
+  rule ("say I don't know that one") competes with searching. (2) She reacted to search results
+  as if Mikkel said them ("That sounds intense. So Jane got kidnapped?"). (3) News ("nyhed i
+  Odense den sidste time/24 timer"): general web search, 3 rounds, not_found in 11 s twice; needs
+  SearXNG's news category with a time range. (4) Episode plot questions: not_found after 9-10 s
+  though she then answered right. (5) Prepared (held) replies started searches that were thrown
+  away (3 at once at 219-222 s), and the server keeps running a dropped lookup to the end.
+  (6) Style learning added rules #6-#10; #8 (from a garbled transcript) and #10 ("don't take
+  offense" from "capability issue") look false. Memory stored junk facts 60-62, 66, 70, 72.
+  (7) Files/programs: she correctly said she can't.
 - **Web lookup (ADR 0019, 2026-10-21, not tested live yet):** `services/lookup_server.py` (7813) in
   bench/.venv-openvino (OpenVINO 2026.4, transformers pinned 5.2 because optimum-intel refuses
   newer; jevk5 is installed --no-deps and only its prompt module is used) runs JevK5 4B INT8 on

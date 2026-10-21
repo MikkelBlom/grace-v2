@@ -200,3 +200,9 @@ works (23 reopens, half-answers retracted). Findings in WORKING_NOTES "Live run 
 stories restart the cut sentence; style learning stored 5 poor rules + junk facts and a
 "continue the story" commitment in the real DB; invented movie facts.
 **Next steps:** Mikkel decides which fixes to do and whether to drop the learned rules/facts.
+**Fixes the same day (2026-10-21):** long reopened turns keep their start (ring pinned until
+the reply finishes); memory cleaned (5 rules, facts 50-56, commitment 2); style classifier must
+name a rule's category and code keeps only manner (style bench 08: 17/27 -> 27/27, full: 18/18
+learned, 0/144 false); honesty rule for unknown films/trivia (scenario 16) and no question
+tails or compliance announcements (chat bench 0.942 -> 0.956). #39 filed (exact-word resume),
+#36 closed. Echo was untested (headset).

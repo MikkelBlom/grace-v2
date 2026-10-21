@@ -544,3 +544,25 @@ list contained some bench lines word for word. Small talk is still weak (judge 6
 ends in a question). Caveat: v2 and v3 were tuned against this held-out set, so it is no longer
 held out; the next round needs new lines.
 
+
+## Fixes from live run 5, 2026-10-21
+
+**Style classifier** (`grace-style-bench`, 8 scenarios × 3 seeds, learning on). New scenario 08 =
+run 5's five false rules, paraphrased (didn't listen, a story of N words, "not a comedy",
+resuming after an interruption).
+
+| Classifier | 08 checks | false rule changes in 08 | full: feedback turns learned | full: false changes | full checks |
+|---|---|---|---|---|---|
+| main (ADR 0017) | 17/27 | 7/24 | — | — | — |
+| + prompt lines for those cases | 20/27 | 5/24 | — | — | — |
+| + required `about` category, code keeps manner only | 27/27 | 0/24 | 15/18 | 0/144 | 255/270 |
+| + "an update keeps the old rule's untouched parts" (adopted) | 27/27 | 0/24 | **18/18** | **0/144** | **265/270** |
+
+Scenario 04 (update, not pile up) was 33/33 on main and 29/33 before the last line; 02 (fewer
+questions) is 42-43/48 on both, so its misses are her replies, not the classifier.
+
+**Persona prompt** (`grace-chat-bench`, 16 scenarios × 3 seeds, same day, same binary): previous
+system.md 0.942 (hard 1104/1122) → honesty + no question tail + no compliance announcements
+0.956 (hard 1107/1122, judge 233/252). New scenario 16 (two made-up titles, two actor questions):
+invented plots 3/3 → "I don't know that one" 3/3; "who played Sean Parker" is Andrew Garfield in
+3/3 on both prompts (it's Justin Timberlake), a knowledge gap, not a prompt one.

@@ -73,7 +73,9 @@
   replies played; first run on merged main: turn-taking + style rules + persona).**
   Speech end -> first audio p50 1.28 s, p90 2.04 s, 5/31 under 800 ms (run 4: 1.38 / 3.66 / 0 of 48);
   the 2.0 s cluster (12 turns) is the long-wait cap. 23 reopened turns, 22 retracted early replies,
-  14 interruptions, 1 "carries on"; no echo triggers. Mikkel: "a very good test".
+  14 interruptions, 1 "carries on". Echo is **untested** in this run: on the headset her voice
+  can't reach the mic, so "no echo triggers" proves nothing; the speakers path (and #32) still
+  needs a live run. Mikkel: "a very good test".
   Findings:
   (1) **Bug: a long reopened turn loses its start.** t76-116 s ("Jeg tænker på om øh jeg skal se den
   her film...") is >30 s; `Respond` unpins the ring, the next `ReopenTurn` re-pins too late, so the
@@ -94,6 +96,19 @@
   actor; Shawn Fanning vs Sean Parker flip-flop. The honesty rule doesn't hold for movie trivia.
   (5) **Persona leftovers:** "That sounds like a very specific scene" (banned opener), long
   egg-cake recipe with a question tail, "Got it. I'll make sure to keep those instructions in mind".
+  **Fixed 2026-10-21:** (1) the ring stays pinned from Respond until the reply finishes
+  (`finish` unpins); (3) rules dropped by hand, junk facts 50-56 invalidated, commitment 2
+  cancelled (backup: %TEMP%/memory-backup-run5.db), and the classifier now has to name what a
+  rule is `about`; code keeps only manner categories (length, tone, humour, questions, phrasing,
+  formality). grace-style-bench: new 08 (run 5's false rules, paraphrased) 17/27 -> 27/27; full
+  bench 18/18 feedback turns learned, 0/144 false rule changes. Prompt wording alone only went
+  7 -> 5 of 24 false: Gemma follows an enum better than prose. Updates also had to be told to keep
+  the old rule's untouched parts (04 dropped "short" from the rule until then). (4) honesty rule
+  for films/people/trivia + chat scenario 16 (two made-up titles): invented plots 3/3 -> "I don't
+  know that one" 3/3; Gemma still says Andrew Garfield played Sean Parker (3/3), a knowledge
+  gap for web search (#18). (5) no question tail after long answers, no announcing compliance
+  (banned phrases added). Chat bench, 16 scenarios, same day: old prompt 0.942, new 0.956.
+  (2) exact-word resume filed as #39 (not a priority).
   (6) Two "Okay." replies 0.2 s apart at 252.7 s (both after "stop stop stop"); merged speech
   "hold din kæft ... nej du skal ikke holde kæft, fortæl en godnathistorie" was answered as one
   turn (good).

@@ -1,0 +1,17 @@
+id: 08-not-rules-run5
+intent: >
+  Precision, from live run 5's false rules (paraphrased): a complaint that she didn't listen, a
+  task with a length ("a story of at least 200 words"), a one-topic correction ("it's not a
+  comedy"), and complaints about how she resumes after an interruption (an engine problem) are
+  not rules about how she talks. No rule may be learned.
+sessions:
+  - turns:
+      - user: fortæl mig om en film du godt kan lide
+      - user: det forstår jeg ikke hørte du overhovedet efter hvad jeg sagde
+      - user: fortæl mig en lang historie på mindst 200 ord om en pirat
+      - user: nej det er ikke en komedie det er en thriller
+      - user: fortsæt historien præcis hvor du slap
+      - user: nej du startede forfra du skulle fortsætte midt i sætningen hvor du slap
+      - user: du skal vide præcis hvor meget du nåede at sige før jeg afbrød dig
+      - user: okay hej igen Grace
+rules_count: 0

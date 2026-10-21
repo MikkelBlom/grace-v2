@@ -107,14 +107,44 @@ Decide:
 - 'complaint': true when he says her previous reply was bad, wrong, annoying, too long, off, or not what he wanted.
 - 'ops' on the rules:
   'add' (id 0) when he asks Grace to change how she talks in general ('giv mig kortere svar', 'stop med at stille så mange spørgsmål', 'du må gerne være lidt mere fræk'), or praises something and wants more of it ('det var sjovt, mere af det').
-  'update' (an existing id) when his feedback changes, sharpens or contradicts that rule: the update replaces it. An exception to a rule ('but for programming, long answers are fine') is an update that writes the exception into that rule, not a new rule. Never leave two rules that conflict or cover the same thing.
+  'update' (an existing id) when his feedback changes, sharpens or contradicts that rule: the update replaces it, so its text is the whole new rule, keeping every part of the old one he didn't take back. An exception to a rule ('but for programming, long answers are fine') is an update that writes the exception into that rule, not a new rule. Never leave two rules that conflict or cover the same thing.
   'remove' (an existing id) when he takes a rule back ('du må godt stille spørgsmål igen', 'glem reglen om ...'). To drop every rule, remove each id.
   A request for silence or a pause ('hold kæft', 'stille', 'vent') is never a rule, even right after a long reply: he wants quiet now, not shorter answers forever.
   Rules are only about the manner of Grace's speech: length, tone, humour, questions, phrasing. Never about facts or accuracy, what she should tell him and when (weather, calendar), units, names or nicknames: those belong to her memory, not to rules.
+  A rule must apply to many future replies on any topic. If it only makes sense for this conversation, this topic or this one task, it is not a rule.
+  Not a rule, though 'complaint' can still be true: saying she didn't listen, misheard or misunderstood him ('hørte du ikke efter', 'det forstår jeg ikke'); a task with a length or format for this one answer ('en historie på mindst 200 ord'); correcting what she assumed about one topic ('det er ikke en komedie'); and how she continues after he interrupted her ('fortsæt hvor du slap', 'du startede forfra'), which the system handles, not her manner.
   Not a rule: requests for this moment or this one reply only ('sig det igen', 'skru op', 'vent', 'hold kæft', 'stille', 'snak lidt langsommere' during one answer), what he wants to talk about, facts about his life, and asking which rules Grace has.
+Each op's 'about' names what it concerns: length, tone, humour, questions, phrasing or formality (her manner), or listening (she missed or misunderstood what he said), resuming (how she continues after he interrupted her), one_task (a request for this one answer, like a story of a given length), one_topic (a correction about one subject), facts, other. Only manner ops become rules, so pick the honest category. For 'update' and 'remove', 'about' is the category of the rule being changed and 'id' is that rule's id from the list.
 Each rule: one specific instruction to Grace in English, imperative, concrete enough to check in a single reply, at most 25 words ('Keep replies to one or two short sentences unless Mikkel asks for detail.', never 'Be better.'). Base it on what he actually objected to or liked in the previous reply. 'evidence' copies Mikkel's words exactly.
 Only Mikkel's words are a source. Never add or change a rule because Grace's reply broke a rule or looks wrong to you: if he didn't comment on it, there is nothing to do. A rule that already covers his feedback needs no new rule.
 Most exchanges contain no feedback: then feedback false, complaint false and an empty list.";
+
+/// What a proposed rule is about. The classifier must pick one; code keeps only [`MANNER`].
+/// Live run 5: Gemma turned "hørte du ikke efter", "en historie på mindst 100 ord", "det er ikke
+/// en comedy" and complaints about resuming after an interruption into rules (5 of 5 false), and
+/// prompt wording alone cut that only from 7 to 5 of 24 turns in grace-style-bench 08.
+const ABOUT: &[&str] = &[
+    "length",
+    "tone",
+    "humour",
+    "questions",
+    "phrasing",
+    "formality",
+    "listening",
+    "resuming",
+    "one_task",
+    "one_topic",
+    "facts",
+    "other",
+];
+const MANNER: &[&str] = &[
+    "length",
+    "tone",
+    "humour",
+    "questions",
+    "phrasing",
+    "formality",
+];
 
 fn schema() -> Value {
     json!({
@@ -129,10 +159,11 @@ fn schema() -> Value {
                     "properties": {
                         "op": { "type": "string", "enum": ["add", "update", "remove"] },
                         "id": { "type": "integer" },
+                        "about": { "type": "string", "enum": ABOUT },
                         "evidence": { "type": "string" },
                         "rule": { "type": "string" }
                     },
-                    "required": ["op", "id", "evidence", "rule"]
+                    "required": ["op", "id", "about", "evidence", "rule"]
                 }
             }
         },
@@ -200,6 +231,13 @@ pub fn apply(
         if !supported_by(evidence, user) {
             o.refused.push(format!(
                 "{name} {id}: evidence not in Mikkel's words: {evidence}"
+            ));
+            continue;
+        }
+        let about = op["about"].as_str().unwrap_or("");
+        if matches!(name, "add" | "update") && !MANNER.contains(&about) {
+            o.refused.push(format!(
+                "{name} {id}: about {about:?}, not how she talks: {rule}"
             ));
             continue;
         }
@@ -323,9 +361,9 @@ mod tests {
         let s = m.start_session(0.0).unwrap();
         let t = m.add_turn(s, "user", SAID, 0.5).unwrap();
         let out = json!({ "feedback": true, "complaint": true, "ops": [
-            { "op": "add", "id": 0, "evidence": "kortere svar", "rule": "Keep replies to one or two sentences." },
-            { "op": "add", "id": 0, "evidence": "be funnier", "rule": "Be funny." },
-            { "op": "add", "id": 0, "evidence": "alt for langt", "rule": "x".repeat(300) },
+            { "op": "add", "id": 0, "about": "length", "evidence": "kortere svar", "rule": "Keep replies to one or two sentences." },
+            { "op": "add", "id": 0, "about": "length", "evidence": "be funnier", "rule": "Be funny." },
+            { "op": "add", "id": 0, "about": "length", "evidence": "alt for langt", "rule": "x".repeat(300) },
         ]});
         let o = apply(&mut m, &out, SAID, Some("A very long reply."), Some(t), 1.0).unwrap();
         assert_eq!(o.added.len(), 1);
@@ -343,7 +381,7 @@ mod tests {
             .add_style_rule("Keep replies short.", "kort", None, None, 0.0)
             .unwrap();
         let out = json!({ "feedback": true, "complaint": false, "ops": [
-            { "op": "update", "id": a, "evidence": "kortere svar", "rule": "Keep replies to one sentence." },
+            { "op": "update", "id": a, "about": "length", "evidence": "kortere svar", "rule": "Keep replies to one sentence." },
             { "op": "remove", "id": 99, "evidence": "kortere svar", "rule": "" },
             { "op": "remove", "id": a, "evidence": "kortere svar", "rule": "" },
         ]});
@@ -357,6 +395,21 @@ mod tests {
         let rules = m.style_rules().unwrap();
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].text, "Keep replies to one sentence.");
+    }
+
+    #[test]
+    fn only_manner_becomes_a_rule() {
+        let mut m = db();
+        let said = "hørte du ikke efter og fortæl en historie på mindst 100 ord";
+        let out = json!({ "feedback": true, "complaint": true, "ops": [
+            { "op": "add", "id": 0, "about": "listening", "evidence": "hørte du ikke efter", "rule": "Listen carefully." },
+            { "op": "add", "id": 0, "about": "one_task", "evidence": "mindst 100 ord", "rule": "Write long stories." },
+            { "op": "add", "id": 0, "evidence": "hørte du ikke efter", "rule": "No category given." },
+        ]});
+        let o = apply(&mut m, &out, said, None, None, 1.0).unwrap();
+        assert!(o.added.is_empty());
+        assert_eq!(o.refused.len(), 3, "{:?}", o.refused);
+        assert!(o.complaint, "still a complaint for the review queue");
     }
 
     #[test]
@@ -383,7 +436,7 @@ mod tests {
         }
         let first = m.style_rules().unwrap()[0].id;
         let out = json!({ "feedback": true, "complaint": false, "ops": [
-            { "op": "add", "id": 0, "evidence": "kortere svar", "rule": "Newest rule." },
+            { "op": "add", "id": 0, "about": "length", "evidence": "kortere svar", "rule": "Newest rule." },
         ]});
         let o = apply(&mut m, &out, SAID, None, None, 100.0).unwrap();
         assert_eq!(o.retired, vec![first]);
@@ -399,7 +452,7 @@ mod tests {
         assert!(!only_hush("hold dine svar korte"));
         let mut m = db();
         let out = json!({ "feedback": true, "complaint": true, "ops": [
-            { "op": "add", "id": 0, "evidence": "hold lige kæft", "rule": "Keep replies concise." },
+            { "op": "add", "id": 0, "about": "length", "evidence": "hold lige kæft", "rule": "Keep replies concise." },
         ]});
         let o = apply(&mut m, &out, "hold lige kæft", None, None, 1.0).unwrap();
         assert!(!o.changed() && o.refused.len() == 1);
@@ -409,7 +462,7 @@ mod tests {
     fn ops_without_feedback_are_ignored() {
         let mut m = db();
         let out = json!({ "feedback": false, "complaint": false, "ops": [
-            { "op": "add", "id": 0, "evidence": "kortere svar", "rule": "Keep replies short." },
+            { "op": "add", "id": 0, "about": "length", "evidence": "kortere svar", "rule": "Keep replies short." },
         ]});
         let o = apply(&mut m, &out, SAID, None, None, 1.0).unwrap();
         assert!(!o.changed());
@@ -433,7 +486,7 @@ mod tests {
     fn update_of_an_unknown_id_becomes_an_add() {
         let mut m = db();
         let out = json!({ "feedback": true, "complaint": false, "ops": [
-            { "op": "update", "id": 0, "evidence": "kortere svar", "rule": "Keep replies short." },
+            { "op": "update", "id": 0, "about": "length", "evidence": "kortere svar", "rule": "Keep replies short." },
         ]});
         let o = apply(&mut m, &out, SAID, None, None, 1.0).unwrap();
         assert_eq!(o.added.len(), 1);

@@ -331,6 +331,7 @@ impl Conductor {
     /// The reply is over: the conversation and memory get what Mikkel heard of it.
     fn finish(&mut self, r: Reply, heard: String, cut: bool) {
         r.gate.send_replace(Gate::Cancelled); // stops generation if it was still running
+        self.unpin(r.turn);
         info!(parent: &r.span, text = %heard, cut, "reply heard");
         if !heard.is_empty() {
             self.history.push(("assistant", heard.clone()));
@@ -445,7 +446,9 @@ impl Conductor {
                 self.prepared = Some(reply);
             }
             Command::Respond { turn, text } => {
-                self.unpin(turn);
+                // Stay pinned until the reply is done: he may go on talking and reopen the turn,
+                // and its re-transcription needs the audio from the start. Live run 5 lost the
+                // first 4 s of a 35 s turn when this unpinned here and the ring evicted them.
                 println!("you:   {text}");
                 if let Some(old) = self.current.take() {
                     // The machine retracts or cancels first; this is only a safety net.

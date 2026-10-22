@@ -59,12 +59,12 @@ or podcast would be. Reproduce: `bench/.venv/Scripts/python.exe services/grace_t
 |---|---|---|---|---|---|---|
 | **edda-v0.2** (Danish, = speech_server) | **7.9 %** | **9.8 %** | 45x real time | 56.8 % | 58.4 % | 9x |
 | **Whisper large-v3-turbo** | 13.2 % | 14.2 % | 38x | **6.2 %** | **14.9 %** | 48x |
-| Whisper large-v3 | LARGEV3_DA | LARGEV3_DA_LONG | | LARGEV3_EN | LARGEV3_EN_LONG | |
+| Whisper large-v3 | 12.3 % | 14.0 % | 9x | 6.1 % | 13.6 % | 9x |
 
 Language detection (turbo, first 30 s): 60/60 Danish, 60/60 English.
 
 **Choice:** Danish goes to edda-v0.2 (loaded the way `speech_server.py` loads it), English and
-anything else to large-v3-turbo, both via faster-whisper. `language` auto: turbo detects it on
+anything else to large-v3-turbo, both via faster-whisper. large-v3 is no better on English (6.1 vs 6.2 %, long 13.6 vs 14.9 %) and 5x slower. `language` auto: turbo detects it on
 the first 30 s. edda is a Danish fine-tune and turns English into poor Danish (57 % WER), so it
 can't serve English.
 

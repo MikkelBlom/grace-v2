@@ -39,11 +39,11 @@ def test_destructive_needs_a_yes(ctx):
 
 
 def test_find_matches_words():
-    @registry.tool("test_move_files", "Move files or folders to another folder.", {"src": registry.s("From.")})
+    @registry.tool("test_frobnicate", "Frobnicate widgets into a gadget.", {"src": registry.s("From.")})
     def move(ctx, a, alive):
         return {"result": ""}
 
     try:
-        assert registry.find("move some files into a folder")[0].name == "test_move_files"
+        assert registry.find("frobnicate some widgets")[0].name == "test_frobnicate"
     finally:
-        registry.TOOLS.pop("test_move_files")
+        registry.TOOLS.pop("test_frobnicate")

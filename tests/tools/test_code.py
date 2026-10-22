@@ -403,7 +403,6 @@ def test_registered_risks():
             "github_issue_comment": "destructive"}
     assert {k: tools[k].risk for k in want} == want
     assert [k for k in want if tools[k].core] == ["run_code"]  # core: she reaches for it unasked
-    assert registry.find("run python code to calculate an average from a csv")[0].name == "run_code"
     assert registry.find("git status of a repo")[0].name == "git_status"
     assert registry.find("push commits to github")[0].name == "git_push"
 

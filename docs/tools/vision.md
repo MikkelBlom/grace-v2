@@ -105,6 +105,12 @@ Notepad was replaced by a Tk window, maximised and topmost, for the "on top" tes
 Notepad opens new files as tabs in an already running Notepad (one was open), so "close only
 the one I opened" could not be guaranteed. A topmost window is the stronger test anyway.
 
+On-screen testing then stopped because it got in Mikkel's way. From now on the window is checked
+headlessly: `win::tests` creates a real overlay-style window off-screen at 1x1 and zero alpha, and
+checks the five extended styles, HWND_TOPMOST after `topmost()`, HTTRANSPARENT and MA_NOACTIVATE,
+and that the foreground window never changes. **Still to do in a live session:** check that it
+stays on top of a maximised Notepad.
+
 **Known limits.** Exclusive-fullscreen games (and some video players in exclusive mode) bypass
 DWM and cover the overlay. Secure desktops (UAC, lock screen) are never covered.
 

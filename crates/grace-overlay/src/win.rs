@@ -35,8 +35,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetMessageW, HTTRANSPARENT, HWND_TOPMOST, KillTimer, MA_NOACTIVATE, MSG, PostQuitMessage,
     PostThreadMessageW, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE,
     SWP_NOOWNERZORDER, SWP_NOSIZE, SetTimer, SetWindowDisplayAffinity, SetWindowPos, ShowWindow,
-    ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WINEVENT_OUTOFCONTEXT, WM_APP,
-    WM_DISPLAYCHANGE, WM_DPICHANGED, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_TIMER, WNDCLASSEXW,
+    ULW_ALPHA, UpdateLayeredWindow, WDA_EXCLUDEFROMCAPTURE, WINDOW_EX_STYLE, WINEVENT_OUTOFCONTEXT,
+    WM_APP, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_MOUSEACTIVATE, WM_NCHITTEST, WM_TIMER, WNDCLASSEXW,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{BOOL, PCWSTR, w};
@@ -57,6 +57,15 @@ const CLASS: PCWSTR = w!("GraceOverlay");
 const LABEL_PT: i32 = 11;
 
 type Res<T> = Result<T, String>;
+
+/// Click-through, never activated, above normal windows, not in Alt-Tab, per-pixel alpha.
+const OVERLAY_EX: WINDOW_EX_STYLE = WINDOW_EX_STYLE(
+    WS_EX_LAYERED.0
+        | WS_EX_TRANSPARENT.0
+        | WS_EX_TOPMOST.0
+        | WS_EX_NOACTIVATE.0
+        | WS_EX_TOOLWINDOW.0,
+);
 
 fn err(what: &str) -> impl Fn(windows::core::Error) -> String + '_ {
     move |e| format!("{what}: {e}")
@@ -206,8 +215,7 @@ fn monitors(capturable: bool) -> Res<Vec<Monitor>> {
         );
     }
     let hinst = unsafe { GetModuleHandleW(None) }.map_err(err("GetModuleHandleW"))?;
-    let ex =
-        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+    let ex = OVERLAY_EX;
     let mut out = Vec::new();
     for h in handles {
         let mut info = MONITORINFO {
@@ -559,4 +567,92 @@ pub fn run(port: u16, capturable: bool) -> Res<()> {
     }
     APP.with(|a| a.borrow_mut().take());
     Ok(())
+}
+
+/// Headless window check: a real overlay-style window, created off-screen at 1x1 and painted
+/// fully transparent, so nothing ever shows on the desktop. Checks the styles, topmost z-order,
+/// click-through hit testing and that it never takes the foreground.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetForegroundWindow, GetWindowLongW, SendMessageW,
+    };
+
+    #[test]
+    fn overlay_window_is_layered_topmost_click_through_and_never_foreground() {
+        unsafe {
+            let hinst = GetModuleHandleW(None).unwrap();
+            let class = WNDCLASSEXW {
+                cbSize: size_of::<WNDCLASSEXW>() as u32,
+                lpfnWndProc: Some(wndproc),
+                hInstance: hinst.into(),
+                lpszClassName: w!("GraceOverlayTest"),
+                ..Default::default()
+            };
+            assert_ne!(RegisterClassExW(&class), 0);
+            let fg_before = GetForegroundWindow();
+            let hwnd = CreateWindowExW(
+                OVERLAY_EX,
+                w!("GraceOverlayTest"),
+                w!("Grace overlay test"),
+                WS_POPUP,
+                -32000,
+                -32000,
+                1,
+                1,
+                None,
+                None,
+                Some(hinst.into()),
+                None,
+            )
+            .unwrap();
+            let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+            // Zero-alpha pixel: a layered window needs one UpdateLayeredWindow before it shows.
+            let surface = Surface::new(1, 1).unwrap();
+            let blend = BLENDFUNCTION {
+                BlendOp: AC_SRC_OVER as u8,
+                BlendFlags: 0,
+                SourceConstantAlpha: 0,
+                AlphaFormat: AC_SRC_ALPHA as u8,
+            };
+            let screen = GetDC(None);
+            UpdateLayeredWindow(
+                hwnd,
+                Some(screen),
+                Some(&POINT {
+                    x: -32000,
+                    y: -32000,
+                }),
+                Some(&SIZE { cx: 1, cy: 1 }),
+                Some(surface.dc),
+                Some(&POINT { x: 0, y: 0 }),
+                COLORREF(0),
+                Some(&blend),
+                ULW_ALPHA,
+            )
+            .unwrap();
+            ReleaseDC(None, screen);
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            topmost(hwnd);
+
+            let ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+            for (flag, name) in [
+                (WS_EX_LAYERED, "LAYERED"),
+                (WS_EX_TRANSPARENT, "TRANSPARENT"),
+                (WS_EX_TOPMOST, "TOPMOST"),
+                (WS_EX_NOACTIVATE, "NOACTIVATE"),
+                (WS_EX_TOOLWINDOW, "TOOLWINDOW"),
+            ] {
+                assert!(ex & flag.0 != 0, "missing WS_EX_{name}: {ex:#x}");
+            }
+            let hit = SendMessageW(hwnd, WM_NCHITTEST, None, None);
+            assert_eq!(hit.0, HTTRANSPARENT as isize);
+            let act = SendMessageW(hwnd, WM_MOUSEACTIVATE, None, None);
+            assert_eq!(act.0, MA_NOACTIVATE as isize);
+            assert_ne!(GetForegroundWindow(), hwnd);
+            assert_eq!(GetForegroundWindow(), fg_before);
+            let _ = DestroyWindow(hwnd);
+        }
+    }
 }

@@ -220,3 +220,34 @@
       not_answer: '(?i)can''t|cannot'
     - say: perfekt det var da super
       not_answer: '(?i)\bI(''ve| have)? (just )?opened\b'
+# ---- from live run 9 ----
+- id: s35-play-song
+  turns:
+    - say: kan du afspille peace and love af gilli på spotify
+      tools: [media]
+      args: { media: '(?i)"play"' }
+      answer: '(?i)playing|peace'
+- id: s36-warm-today
+  memory: "What you know about Mikkel:\n- He lives in Odense.\n"
+  turns:
+    - say: hvor varmt var der i dag
+      tools: [weather]
+- id: s37-folder-count
+  turns:
+    - say: hvor mange mapper er der i min projects mappe på skrivebordet
+      tools: [list_folder]
+      answer: '(?i)\b34\b|thirty[- ]four'
+- id: s38-no-empty-promise
+  turns:
+    - say: hvor mange mapper er der i min projects mappe på skrivebordet
+      tools: [list_folder]
+    - say: det tror jeg ikke på kan du dobbelttjekke det
+      tools: [list_folder]
+      answer: '(?i)\b34\b|thirty[- ]four'
+- id: s39-summarise-article
+  turns:
+    - say: find en tech nyhed fra den sidste uge
+      tools: [web_search]
+    - say: kan du læse den første artikel og opsummere den
+      tools: [read_page]
+      seen: [read_page]

@@ -250,3 +250,12 @@ told an old story as today's news, read "22" as "20 20", and caved on a correct 
 Fixed all (32k context + retry, tool results in history, article links + dates, numbers to words
 before TTS, stale checker requests dropped, calculator reads the transcript, media tool) and
 added 7 multi-turn scenarios to grace-tools-sim for them.
+
+## 2026-10-21/22 — Claude Code (Opus 5.5): live runs 7-9 and their fixes
+**Summary:** Run 7 (silence from context overflow, invented follow-ups, old news, wrong number
+reading), run 8 (slower from prompt-cache misses, Danish app names, claimed actions) and run 9
+(latency from the hint wait and the claim guard, Spotify, folder counts, empty promises) each
+fixed and added to grace-tools-sim (39 scenarios / 51 lines). Tool roadmap vs Grace v1 in
+docs/TOOLS-ROADMAP.md.
+**Next steps:** live run 10; then P1 tools from the roadmap (clipboard, type text, reminders,
+notes, read documents, active window/screen, system controls).

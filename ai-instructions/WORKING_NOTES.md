@@ -86,6 +86,20 @@
   Intel drivers updated 2026-10-21 via scripts/update-intel-drivers.ps1 (NPU 5540, Arc 9150,
   Wi-Fi/BT 24.70); the Arc installer failed once from the script with a bogus "integrity check"
   error and worked when double-clicked.
+- **Live run 9 (2026-10-22, DJI -> Logitech, traces/engine-1792639797496.jsonl, ~15 min):** cache
+  held (1 big re-read in 60). Latency p50 1.55 s / p90 2.62 s: the lookup check waited 288 ms
+  p50 (recall 121) and the new claim guard held speech until a full stop (TTFT 279 -> 518 ms).
+  Fixed: the check gets 80 ms past recall; the guard passes clauses to the voice while it checks
+  the first two sentences, and also catches promises ("let me double check" with no tool).
+  Spotify: play_pause only resumed the loaded song while Grace claimed she started the requested
+  one; `media play` now finds the track via search (site:open.spotify.com/track) and opens
+  spotify:track:ID, which plays it, and reads Spotify's window title ("Artist - Song") to say
+  what is really playing. list_folder listed 25 of 34 names and Gemma counted names: all names,
+  the count first; "skrivebordet/projects" resolves via the folder aliases. open_file reuses the
+  open Explorer window (Shell.Application Navigate2). read_page reads an article. "hvor varmt var
+  der" went to a 10.8 s web search: weather "now" includes today's range and the descriptions
+  point weather questions to the weather tool. Mikkel asked for clipboard, typing at the cursor
+  and a list of all tools vs v1: docs/TOOLS-ROADMAP.md.
 - **Live run 8 (2026-10-21 evening, DJI -> Logitech speakers, traces/engine-1792609754778.jsonl):**
   echo held: with a Danish song and YouTube on the speakers she only heard Mikkel. Slower: speech
   end -> first audio p50 1.46 s / p90 3.54 s (run 6: 1.16 / 2.02). Causes, all mine: (1) routing
@@ -406,3 +420,5 @@
   diagnosing misheard turns; TurnMachine waits the long timeout when a transcript ends on a
   hanging word (øh, og, men, altså …). Personality guidance moved into config/prompts/system.md.
 - Mikkel's local memory cleaned by hand again: closed 14, 16, 17, 22–26; fact 13 → followup.
+
+- Run-9 fixes, final regression: tools sim 152/153 (one miss: s31 math dispute, 1 of 3 samples, she did not repeat the number), chat bench with tools 0.93.

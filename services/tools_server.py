@@ -289,7 +289,7 @@ def news(checker, question, query, language, alive):
     # The sites a search turns up vary (tools sim: "nyheder Odense sidste 24 timer" found only sites
     # whose front pages gave no dated stories), so read more of them, and if that gives nothing,
     # search again without the time words.
-    simple = re.sub(r"(?i)(sidste|seneste|døgn|i dag|24|timer|last|latest|hours?|today|news|nyheder)", " ", query)
+    simple = re.sub(r"(?i)\b(sidste|seneste|døgn|i dag|24|timer|last|latest|hours?|today|news|nyheder)\b", " ", query)
     def enough():
         # When he asks for recent news, only stories from the last two days count.
         return sum(1 for st in stories if st[0] and (not recent or time.time() - st[0] < 2 * 86400))
@@ -491,6 +491,19 @@ class Apps:
         return self.apps[names.index(close[0])] if close else None
 
 
+def spotify_title():
+    """'Artist - Song' while Spotify plays; None when it is paused or closed (the window is then
+    titled "Spotify" / "Spotify Premium")."""
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-Process Spotify -ErrorAction "
+                              "SilentlyContinue | Where-Object MainWindowTitle | Select-Object -First 1).MainWindowTitle"],
+                             capture_output=True, text=True, timeout=10, encoding="utf-8").stdout.strip()
+    except Exception:
+        return None
+    return out if out and not out.lower().startswith("spotify") else None
+
+
 def launch_app(app_id, dry):
     if dry:
         return
@@ -610,6 +623,18 @@ def _mtime(p):
         return os.path.getmtime(p)
     except OSError:
         return 0.0
+
+
+def explorer_navigate(path):
+    """Shows `path` in the most recent File Explorer window. False if none is open."""
+    ps = ("$w = @((New-Object -ComObject Shell.Application).Windows()) | Where-Object { $_.FullName -like '*explorer.exe' } "
+          "| Select-Object -Last 1; if ($w) { $w.Navigate2($env:GRACE_PATH); $w.Visible = $true; 'ok' }")
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, timeout=10,
+                             env={**os.environ, "GRACE_PATH": str(path)})
+        return out.stdout.strip() == "ok"
+    except Exception:
+        return False
 
 
 def inside_roots(path):
@@ -733,8 +758,11 @@ def weather(place, day):
     where = f"{g['name']} ({g.get('country', '')})"
     if day == "now":
         c = f["current"]
+        d = f["daily"]
+        # Today's range too: "hvor varmt var der" went to a 10.8 s web search (live run 9).
         return (f"{where} right now: {WMO.get(c['weather_code'], 'weather code ' + str(c['weather_code']))}, "
-                f"{c['temperature_2m']:.0f} degrees, wind {c['wind_speed_10m']:.0f} m/s.")
+                f"{c['temperature_2m']:.0f} degrees, wind {c['wind_speed_10m']:.0f} m/s. Today: "
+                f"{d['temperature_2m_min'][0]:.0f} to {d['temperature_2m_max'][0]:.0f} degrees.")
     i = {"today": 0, "tomorrow": 1, "day_after": 2}.get(day, 0)
     d = f["daily"]
     return (f"{where}, {['today', 'tomorrow', 'the day after tomorrow'][i]} ({d['time'][i]}): "
@@ -771,7 +799,8 @@ def manifest():
         "name": name, "description": desc, "parameters": {"type": "object", "properties": props, "required": req}}}
     s = lambda d, enum=None: {"type": "string", "description": d, **({"enum": enum} if enum else {})}
     return [
-        fn("web_search", "Search the web and read the best pages. For anything current or local (news, opening hours, "
+        fn("web_search", "Search the web and read the best pages (not for weather: use the weather tool). For anything "
+           "current or local (news, opening hours, "
            "prices, who holds a job now), details you don't clearly know (a specific film, series, episode, person, "
            "product) and whenever he asks you to look something up. One search per question.",
            {"question": s("Mikkel's question as one full English sentence."),
@@ -781,17 +810,22 @@ def manifest():
                       ["fact", "overview", "live", "news"]),
             "language": s("da for Danish local searches, otherwise en.", ["en", "da"])},
            ["query", "type"]),
-        fn("weather", "The weather forecast for a place: now, today, tomorrow or the day after. Use it for any weather question.",
+        fn("weather", "Weather for a place: now, today, tomorrow or the day after, with temperature (min and max), "
+           "rain and wind. Use it for every weather or temperature question, also 'how warm was it today'.",
            {"place": s("Town or city, e.g. Aarhus. If he doesn't say, use where he lives from your memory."),
             "day": s("When.", ["now", "today", "tomorrow", "day_after"])}, ["place", "day"]),
         fn("calculate", "Work out any arithmetic beyond the trivial exactly (never in your head). Pass his words in "
            "`spoken`; the tool reads Danish numbers itself.",
            {"spoken": s("Mikkel's words, exactly as he said them, e.g. 'hvad er sytten gange treogtyve'."),
             "expression": s("The same as digits, e.g. 17*23 (used only if the words can't be read).")}, ["spoken"]),
-        fn("media", "Control music and video playing on the PC (Spotify, YouTube...): play or pause, next, "
-           "previous, volume up or down, mute. 'search' opens a Spotify search for `query`.",
-           {"action": s("What to do.", ["play_pause", "next", "previous", "volume_up", "volume_down", "mute", "search"]),
-            "query": s("For search: what to look for in Spotify.")}, ["action"]),
+        fn("read_page", "Read a web page or article (a link from an earlier result) and return its text, to summarise "
+           "or answer questions about it.", {"url": s("The page's link, from an earlier tool result.")}, ["url"]),
+        fn("media", "Music and video on the PC. play: play a song or artist on Spotify now (query = song and/or "
+           "artist). play_pause, next, previous, volume_up, volume_down, mute act on whatever is playing. "
+           "now_playing says what Spotify is playing. search opens a Spotify search.",
+           {"action": s("What to do.", ["play", "play_pause", "next", "previous", "volume_up", "volume_down", "mute",
+                                         "now_playing", "search"]),
+            "query": s("For play/search: the song and/or artist, e.g. 'Peace and Love Gilli'.")}, ["action"]),
         fn("open_app", "Open a program on Mikkel's PC by name (Spotify, Discord, VS Code, Word, Chrome...). "
            "Danish names work too: stifinder (File Explorer), lommeregner, indstillinger, notesblok.",
            {"name": s("The program's name.")}, ["name"]),
@@ -809,7 +843,7 @@ def manifest():
     ]
 
 
-SLOW = ["web_search", "find_files"]
+SLOW = ["web_search", "find_files", "read_page"]
 
 
 class Tools:
@@ -858,14 +892,54 @@ class Tools:
                 "result": f"{expr} = {text} (exact). If he disputes it, repeat this number and how you read his "
                           f"numbers (\"I read it as {expr}, which is {text}\"); don't agree with a different number."}
 
+    def t_read_page(self, a, alive):
+        url = (a.get("url") or "").strip()
+        if not re.match(r"(?i)^https?://", url):
+            return {"ok": False, "result": "That isn't a link. Use one from an earlier result."}
+        page = page_text(url, 8)
+        title = strip_tags((re.search(r"(?is)<title[^>]*>(.*?)</title>", page) or [None, ""])[1])
+        text = text_of(page)
+        if len(text) < 200:
+            return {"ok": False, "result": "The page had no readable text. Say so."}
+        return {"ok": True, "detail": {"url": url}, "result": f"{title}\n{text[:4000]}"}
+
     def t_media(self, a, alive):
         action = a.get("action") or "play_pause"
+        q = re.sub(r"(?i)\b(by|af|med)\b", " ", (a.get("query") or "")).strip()
+        q = " ".join(q.split())
+        if action == "now_playing":
+            title = spotify_title()
+            return {"ok": True, "result": f"Spotify is playing: {title}." if title else "Spotify isn't playing anything."}
+        if action == "play":
+            # Live run 9: play_pause only resumed whatever was loaded, and Grace said she had started
+            # the song he asked for. Opening a track link makes the Spotify app play that track.
+            if not q:
+                return {"ok": False, "result": "No song or artist was given. Ask what to play."}
+            hits, _ = search(f"site:open.spotify.com/track {q}")
+            tracks = [(t, u) for t, u, _ in hits if "open.spotify.com/track/" in u]
+            if not tracks:
+                return {"ok": False, "result": f"Couldn't find {q} on Spotify. Say so."}
+            title, url = tracks[0]
+            track_id = url.split("/track/")[1].split("?")[0].split("/")[0]
+            if self.dry:
+                return {"ok": True, "detail": {"track": url, "dry_run": True},
+                        "result": f"Now playing: {title.split(' - song')[0]}."}
+            os.startfile(f"spotify:track:{track_id}")
+            for _ in range(10):
+                time.sleep(0.5)
+                playing = spotify_title()
+                if playing:
+                    break
+            if not playing:
+                return {"ok": False, "detail": {"track": url},
+                        "result": "Opened the song in Spotify, but it isn't playing. Say so."}
+            return {"ok": True, "detail": {"track": url}, "result": f"Now playing: {playing}."}
         if action == "search":
-            q = (a.get("query") or "").strip()
             if not q:
                 return {"ok": False, "result": "Nothing to search for. Ask what to play."}
             if not self.dry:
-                os.startfile("spotify:search:" + urllib.parse.quote(q))
+                # Spaces as they are: the Spotify app showed "%20"-encoded words as "plus" (live run 9).
+                os.startfile("spotify:search:" + q)
             return {"ok": True, "detail": {"dry_run": self.dry}, "result": f"Opened a Spotify search for {q}."}
         keys = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1, "volume_up": 0xAF, "volume_down": 0xAE, "mute": 0xAD}
         if action not in keys:
@@ -876,7 +950,12 @@ class Tools:
             for _ in range(5 if action.startswith("volume") else 1):  # one press is only 2 %
                 ctypes.windll.user32.keybd_event(keys[action], 0, 0, 0)
                 ctypes.windll.user32.keybd_event(keys[action], 0, 2, 0)
-        said = {"play_pause": "Pressed play/pause.", "next": "Skipped to the next track.",
+        if action == "play_pause" and not self.dry:
+            time.sleep(0.6)
+            playing = spotify_title()
+            return {"ok": True, "result": (f"Pressed play/pause; Spotify is now playing {playing}." if playing else
+                                           "Pressed play/pause; Spotify is paused now. This doesn't choose a song.")}
+        said = {"play_pause": "Pressed play/pause. This doesn't choose a song.", "next": "Skipped to the next track.",
                 "previous": "Went back a track.", "volume_up": "Turned the volume up.",
                 "volume_down": "Turned the volume down.", "mute": "Toggled mute."}[action]
         return {"ok": True, "detail": {"dry_run": self.dry}, "result": said}
@@ -943,19 +1022,37 @@ class Tools:
         f = (a.get("folder") or "").strip()
         path = FOLDER_ALIASES.get(f.lower().strip(" /\\"))
         if path is None:
+            # "skrivebordet/projects", "skrivebord projects": a known folder, then names below it
+            # (tools sim: the file index matched "Semesterprojekt og Projektbeskrivelse" instead).
+            parts = [x for x in re.split(r"[/\\]+|\s+", f.lower()) if x]
+            if len(parts) > 1 and parts[0] in FOLDER_ALIASES:
+                p = FOLDER_ALIASES[parts[0]]
+                for part in parts[1:]:
+                    subs = {c.name.lower(): c for c in p.iterdir() if c.is_dir()} if p.is_dir() else {}
+                    p = subs.get(part) or next((v for k, v in subs.items() if k.startswith(part)), None)
+                    if p is None:
+                        break
+                path = p
+        if path is None:
             p = Path(os.path.expandvars(f.replace("~", str(HOME))))
             if p.is_dir() and inside_roots(p):
                 path = p
             else:
                 hits = [c for c in self.files.candidates(f, 50) if c[2]]
-                path = Path(hits[0][1]) if hits else None
+                # A folder named exactly what he said beats one that only contains the words.
+                exact = [c for c in hits if Path(c[1]).name.lower() == f.lower().split("/")[-1].strip()]
+                path = Path((exact or hits)[0][1]) if hits else None
         if path is None or not path.is_dir():
             return {"ok": False, "result": f"No folder called {f!r} was found. Say so."}
         items = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
         dirs = [p.name for p in items if p.is_dir()]
         files = [p.name for p in items if p.is_file() and p.name.lower() != "desktop.ini"]
-        text = (f"{path.name}: {len(dirs)} folders and {len(files)} files.\nFolders: {', '.join(dirs[:25]) or 'none'}\n"
-                f"Files: {', '.join(files[:25]) or 'none'}")
+        # Live run 9: 34 folders were listed as 25 names, and Grace counted the names.
+        shown_d, shown_f = dirs[:120], files[:60]
+        text = (f"{path.name} has exactly {len(dirs)} folders and {len(files)} files (count these numbers, not the "
+                f"names below).\nFolders{' (first ' + str(len(shown_d)) + ')' if len(shown_d) < len(dirs) else ''}: "
+                f"{', '.join(shown_d) or 'none'}\nFiles{' (first ' + str(len(shown_f)) + ')' if len(shown_f) < len(files) else ''}: "
+                f"{', '.join(shown_f) or 'none'}")
         return {"ok": True, "detail": {"path": str(path), "folders": len(dirs), "files": len(files)}, "result": text}
 
     def t_open_file(self, a, alive):
@@ -969,7 +1066,10 @@ class Tools:
         if p.suffix.lower() in NO_OPEN:
             return {"ok": False, "result": "That is a program or script, which I don't open from here. Say so."}
         if not self.dry:
-            os.startfile(str(p))
+            # A folder goes into the Explorer window that is already open (live run 9: every folder
+            # opened a new window); otherwise a new one.
+            if not (p.is_dir() and explorer_navigate(p)):
+                os.startfile(str(p))
         return {"ok": True, "detail": {"path": str(p), "dry_run": self.dry}, "result": f"Opened {p.name}."}
 
 

@@ -777,12 +777,6 @@ async fn speak_reply(
     // Recall goes on the current user message only: the cached prefix before it is untouched.
     // The checker's "needs a lookup?" runs next to recall and is dropped if it is late: with
     // its hint Gemma searched on 17/17 lookup requests instead of 14/17 (ADR 0019).
-    let hint = async {
-        match svc.tools.as_ref() {
-            Some(t) => t.hint(&last.1, &span).await,
-            None => None,
-        }
-    };
     let recall = async {
         let _stage =
             info_span!(parent: &span, "stage", stage = "memory.recall", model = "harrier-270m");
@@ -794,7 +788,23 @@ async fn speak_reply(
             }
         }
     };
-    let (recalled, needs_lookup) = tokio::join!(recall, hint);
+    // The hint may finish a little after recall, never much: live run 9 waited 288 ms p50 for it
+    // while recall took 121 ms.
+    let hint = tokio::spawn({
+        let (svc, said, span) = (svc.clone(), last.1.clone(), span.clone());
+        async move {
+            match svc.tools.as_ref() {
+                Some(t) => t.hint(&said, &span).await,
+                None => None,
+            }
+        }
+    });
+    let recalled = recall.await;
+    let needs_lookup = tokio::time::timeout(std::time::Duration::from_millis(80), hint)
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten();
     if !recalled.is_empty() {
         let texts: Vec<&str> = recalled.iter().map(|f| f.text.as_str()).collect();
         info!(parent: &span, recalled = ?texts, "memory recalled");

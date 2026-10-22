@@ -242,6 +242,19 @@ pub fn claims_action(text: &str) -> bool {
     CLAIM.is_match(text)
 }
 
+/// A sentence that promises a tool action instead of doing it ("Let me double check that for
+/// you", "I'll look it up"): live run 9 promised to double-check three times and never called a
+/// tool.
+pub fn promises_action(text: &str) -> bool {
+    static PROMISE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(
+            r"(?i)\b(?:I(?:'ll| will| am going to|'m going to)|let me)\s+(?:now\s+|just\s+|quickly\s+)?(?:double[- ]?check|check|look(?: it)? up|look|search|find|open|list|play|count)\b",
+        )
+        .expect("promise regex")
+    });
+    PROMISE.is_match(text)
+}
+
 /// What the reply loop needs from its caller: where the words go and whether it may go on.
 pub trait Sink {
     /// Streamed reply text.
@@ -282,7 +295,12 @@ pub async fn reply<S: Sink + Send>(
         // said "I have opened Notepad" / "the projects folder" without calling anything.
         let mut guard = tools.is_some() && calls_made == 0 && !retried_claim;
         let mut pending = String::new();
+        // All of this pass's text so far: the check reads the whole first sentence, while its
+        // clauses already go to the voice (tools sim: "Okay, I will double check that" passed
+        // when only "Okay," was checked).
+        let mut seen = String::new();
         let mut claimed = false;
+        let mut suspect = false;
         let mut opened = llm.stream(&req).await;
         // Live run 7: after 17 minutes the request outgrew the context and every reply after
         // that was silence. Drop the oldest half of the conversation and try again.
@@ -310,11 +328,23 @@ pub async fn reply<S: Sink + Send>(
                 match delta {
                     Some(Ok(Delta::Content(text))) if guard => {
                         pending.push_str(&text);
-                        if pending.contains(['.', '!', '?']) || pending.len() > 200 {
-                            if claims_action(&pending) {
-                                claimed = true;
-                                break;
-                            }
+                        seen.push_str(&text);
+                        if suspect {
+                            continue;
+                        }
+                        if claims_action(&seen) || promises_action(&seen) {
+                            // Hold the rest to the end: a tool call may still follow the words.
+                            suspect = true;
+                            continue;
+                        }
+                        // Clauses go to the voice as they finish (waiting for the full stop
+                        // delayed the first audio: live run 9, TTFT p50 279 -> 518 ms); the
+                        // check stops after the first sentence.
+                        if pending.contains(['.', '!', '?', ',', ';', ':']) || pending.len() > 48 {
+                            sink.text(&std::mem::take(&mut pending));
+                        }
+                        // Two sentences: "Okay. Let me double check that for you." (tools sim).
+                        if seen.matches(['.', '!', '?']).count() >= 2 || seen.len() > 200 {
                             guard = false;
                             sink.text(&std::mem::take(&mut pending));
                         }
@@ -351,20 +381,26 @@ pub async fn reply<S: Sink + Send>(
                 return;
             }
         }
-        if guard && !pending.is_empty() {
-            if claims_action(&pending) && calls.is_empty() {
+        if guard && !seen.is_empty() {
+            let unbacked = claims_action(&seen) || promises_action(&seen);
+            if unbacked && calls.iter().all(|c| c.1.is_empty()) {
                 claimed = true;
-            } else {
+            } else if !(unbacked && calls.iter().any(|c| !c.1.is_empty())) {
+                // A promise followed by its tool call: the filler line says it instead.
                 sink.text(&std::mem::take(&mut pending));
             }
         }
         if claimed {
-            warn!(parent: span, text = %pending, "claimed an action without a tool, asking again");
+            warn!(parent: span, text = %seen, "claimed an action without a tool, asking again");
             retried_claim = true;
+            // Words already spoken ("Okay.") and the new answer need a space between them.
+            if seen.len() > pending.len() {
+                sink.text(" ");
+            }
             if let Some(last) = req.messages.iter_mut().rev().find(|m| m["role"] == "user") {
                 let content = last["content"].as_str().unwrap_or("").to_owned();
                 last["content"] = json!(format!(
-                    "{content}\n\n[Nothing has been done yet. To do it, call the tool now; if no tool can, say so.]"
+                    "{content}\n\n[Nothing has been done yet, and promising doesn't do it. Call the tool now; if no tool can do it, say so.]"
                 ));
             }
             continue;
@@ -570,6 +606,11 @@ mod tests {
         assert!(!claims_action("I found that on The Mentalist Wiki."));
         assert!(!claims_action("I can open that for you."));
         assert!(!claims_action("The store is open until ten."));
+        assert!(promises_action("Let me double check that for you."));
+        assert!(promises_action("I will look it up."));
+        assert!(promises_action("I'll open it now."));
+        assert!(!promises_action("I will keep it shorter."));
+        assert!(!promises_action("Let me know what you think."));
     }
 
     #[test]

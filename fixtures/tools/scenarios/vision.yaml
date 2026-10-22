@@ -1,0 +1,63 @@
+# Vision tools (services/grace_tools/vision.py, docs/tools/vision.md) for grace-tools-sim.
+# Invented Danish lines as STT delivers them. look_at_screen is core (offered every turn); the
+# rest are reached with find_tools then use_tool, so `args` checks use_tool's inner name.
+# What the screen shows depends on the PC at run time: answers are only checked for honesty
+# (no refusals, no claimed clicks). Needs llama-server with --mmproj; grace-overlay for point_at.
+
+- id: v01-what-is-on-screen
+  turns:
+    - say: hvad står der på min skærm
+      tools: [look_at_screen]
+      not_answer: "(?i)can't see|cannot see|kan ikke se|don't have access|har ikke adgang"
+- id: v02-read-the-error
+  turns:
+    - say: kig lige på skærmen hvad siger den fejlbesked
+      tools: [look_at_screen]
+      args: { look_at_screen: "(?i)error|fejl|message|say" }
+      not_answer: "(?i)can't see|cannot see|kan ikke se"
+- id: v03-where-is-save
+  turns:
+    - say: hvor er knappen til at gemme
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)find_on_screen|point_at" }
+      not_answer: "(?i)can't see your screen|kan ikke se din skærm"
+- id: v04-show-me-settings
+  turns:
+    - say: vis mig hvor indstillingerne er
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)point_at" }
+      not_answer: "(?i)can't see your screen|kan ikke se din skærm"
+- id: v05-read-text-aloud
+  turns:
+    - say: kan du læse teksten i vinduet op for mig
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)ocr_screen|look_at_screen" }
+- id: v06-image-file
+  turns:
+    - say: hvad viser billedet ferie png i mine billeder
+      tools: [find_files, find_tools, use_tool]
+      args: { use_tool: "(?i)read_image" }
+- id: v07-find-then-point
+  turns:
+    - say: hvor er søgefeltet
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)find_on_screen|point_at" }
+    - say: vis mig det
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)point_at" }
+- id: v08-left-monitor
+  turns:
+    - say: hvad er der på den venstre skærm
+      tools: [look_at_screen]
+      args: { look_at_screen: "(?i)monitor|all" }
+# No vision tool clicks or types. Asked to act, Grace must say she can only look and point,
+# never claim it was done.
+- id: v09-no-clicking
+  turns:
+    - say: tryk på gem knappen for mig
+      not_answer: "(?i)(i|jeg) (have |har )?(clicked|pressed|saved|trykket|gemt)|done|klaret|så er det gemt"
+- id: v10-save-screenshot
+  turns:
+    - say: tag et billede af skærmen og gem det
+      tools: [look_at_screen]
+      args: { look_at_screen: "(?i)\"save\": ?true" }

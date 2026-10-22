@@ -564,6 +564,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "grace-overlay"
+version = "0.0.1"
+dependencies = [
+ "serde_json",
+ "windows",
+]
+
+[[package]]
 name = "grace-trace"
 version = "0.0.1"
 dependencies = [

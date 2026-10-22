@@ -39,6 +39,9 @@ pub const HINT_AT: f64 = 0.5;
 // conversation each time (live run 8: up to 3,100 tokens, 1.5 s); chat bench 02 scored the same
 // with and without it (123/132 hard).
 pub const HINT: &str = "[This likely needs a web lookup.]";
+/// How long the reply waits for the tool suggestions (started at transcript time, ~50 ms).
+pub const SUGGEST_TIMEOUT: Duration = Duration::from_millis(150);
+
 /// Tool calls per reply. Mikkel wants her to work a task out herself (2026-10-22): find the
 /// tool, find the file, read it, write the result, open it; find_tools + use_tool alone are two.
 pub const MAX_CALLS: usize = 8;
@@ -102,6 +105,8 @@ pub struct Tools {
     hints: Mutex<HashMap<String, Arc<tokio::sync::OnceCell<Option<Route>>>>>,
     /// A destructive call waiting for his yes (ADR 0021): only his next utterance can answer it.
     pending: Mutex<Option<Pending>>,
+    /// The registry tools that fit each transcript, by meaning (ADR 0021), started with the hint.
+    suggestions: Mutex<HashMap<String, Arc<tokio::sync::OnceCell<Option<String>>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -154,6 +159,7 @@ impl Tools {
             slow,
             hints: Mutex::new(HashMap::new()),
             pending: Mutex::new(None),
+            suggestions: Mutex::new(HashMap::new()),
         })
     }
 
@@ -234,8 +240,40 @@ impl Tools {
         }
     }
 
+    fn suggest_cell(&self, said: &str) -> Arc<tokio::sync::OnceCell<Option<String>>> {
+        let mut s = self.suggestions.lock().expect("suggestions poisoned");
+        if s.len() > 64 {
+            s.clear();
+        }
+        s.entry(said.to_owned()).or_default().clone()
+    }
+
+    async fn fetch_suggestion(&self, said: &str) -> Option<String> {
+        match call(&self.addr, json!({ "kind": "suggest", "said": said })).await {
+            Ok(v) => v["text"].as_str().filter(|t| !t.is_empty()).map(str::to_owned),
+            Err(e) => {
+                warn!(error = %e, "tool suggestions failed");
+                None
+            }
+        }
+    }
+
+    /// The tools that may fit `said`, as text for his message, or None (none fit, or late).
+    pub async fn suggestion(&self, said: &str) -> Option<String> {
+        let cell = self.suggest_cell(said);
+        tokio::time::timeout(SUGGEST_TIMEOUT, cell.get_or_init(|| self.fetch_suggestion(said)))
+            .await
+            .ok()
+            .and_then(Option::clone)
+    }
+
     /// Starts the needs-lookup check for a fresh transcript, so the reply finds it done.
     pub fn prefetch(self: &Arc<Self>, said: &str) {
+        let cell = self.suggest_cell(said);
+        let (me, s) = (self.clone(), said.to_owned());
+        tokio::spawn(async move {
+            cell.get_or_init(|| me.fetch_suggestion(&s)).await;
+        });
         let cell = self.hint_cell(said);
         let (me, said) = (self.clone(), said.to_owned());
         tokio::spawn(async move {
@@ -351,6 +389,18 @@ pub async fn reply<S: Sink + Send>(
         req.tools = t.manifest.clone();
     }
     let mut calls_made = 0;
+    // The tools that fit his words go into his (uncached) message: on her own Gemma rarely
+    // looked past the fixed list (tools sim, files + code groups: 18/74).
+    if let Some(t) = tools
+        && let Some(text) = t.suggestion(said).await
+        && let Some(last) = req.messages.iter_mut().rev().find(|m| m["role"] == "user")
+    {
+        info!(parent: span, tools = %text.lines().filter_map(|l| l.strip_prefix("- ")?.split(':').next()).collect::<Vec<_>>().join(","), "tool suggestions");
+        let content = last["content"].as_str().unwrap_or("").to_owned();
+        last["content"] = json!(format!(
+            "{content}\n\n[Tools that may fit; run one with use_tool if it does what he asked:\n{text}]"
+        ));
+    }
     // His answer to a destructive call she asked about last turn.
     if let Some(t) = tools
         && let Some((name, args, out)) = t.settle(said, span).await

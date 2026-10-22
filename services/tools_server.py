@@ -881,6 +881,48 @@ def full_manifest(all_tools=False):
     return manifest() + reg + ([] if all_tools or len(registry.TOOLS) == len(reg) else discovery_tools())
 
 
+EMBED = ("127.0.0.1", 7812)
+TOOL_INSTRUCT = "Instruct: Given a request spoken to a voice assistant, retrieve the tool that carries it out\nQuery: "
+SUGGEST_N = 4
+SUGGEST_MIN = 0.42  # cosine below this: no tool fits well enough to mention
+
+
+def embed(texts, kind, instruct=None):
+    with socket.create_connection(EMBED, timeout=5) as s:
+        s.sendall((json.dumps({"id": 1, "kind": kind, "texts": texts,
+                               **({"instruct": instruct} if instruct else {})}) + "\n").encode())
+        line = s.makefile("rb").readline()
+    d = json.loads(line)
+    if "error" in d:
+        raise RuntimeError(d["error"])
+    return np.array(d["vectors"], dtype=np.float32)
+
+
+class Suggester:
+    """The registry tools that fit what he said, by meaning (live sims: Gemma rarely called
+    find_tools on her own, 18/74). They go into his message, which is never cached, so the tool
+    list itself stays fixed. Danish words, English descriptions: the embedder is multilingual."""
+
+    def __init__(self):
+        self.names, self.vecs, self.lock = [], None, threading.Lock()
+
+    def ready(self):
+        with self.lock:
+            if self.vecs is None:
+                tools = [t for t in registry.TOOLS.values() if not t.core]
+                self.names = [t.name for t in tools]
+                self.vecs = embed([f"{t.name.replace('_', ' ')}: {t.description}" for t in tools], "document")
+                log(f"suggester: {len(tools)} tools embedded")
+        return self.vecs
+
+    def suggest(self, said, n=SUGGEST_N):
+        vecs = self.ready()
+        q = embed([said], "query", TOOL_INSTRUCT)[0]
+        sims = vecs @ q
+        best = np.argsort(-sims)[:n]
+        return [(self.names[i], float(sims[i])) for i in best if sims[i] >= SUGGEST_MIN]
+
+
 def describe_tool(t):
     params = "; ".join(f"{k}: {v.get('description', '')}" + (f" (one of {', '.join(v['enum'])})" if v.get("enum") else "")
                        + ("" if k in t.required else " [optional]") for k, v in t.params.items())
@@ -1186,6 +1228,9 @@ class Handler(socketserver.StreamRequestHandler):
                 out = {"tools": full_manifest(srv.all_tools),
                        "slow": SLOW + [t.name for t in registry.TOOLS.values() if t.slow],
                        "risk": {**BUILTIN_RISK, **{t.name: t.risk for t in registry.TOOLS.values()}}}
+            elif kind == "suggest":  # tools for this transcript, as text for his message
+                hits = srv.suggester.suggest(req["said"])
+                out = {"tools": hits, "text": "\n".join(describe_tool(registry.TOOLS[n]) for n, _ in hits)}
             elif kind == "events":  # due reminders, timers, watchers (grace_tools.time, docs/tools/time.md)
                 from grace_tools import time as gt
                 acked = [i for i in req.get("ack") or [] if gt.ack_event(srv.tools, i)]
@@ -1226,6 +1271,13 @@ class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
+def _try(f):
+    try:
+        f()
+    except Exception as e:
+        log("suggester not ready:", repr(e))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="report what open_* would do, don't do it")
@@ -1237,6 +1289,8 @@ def main():
     server.checker = Checker()
     server.keys, server.keys_lock = {}, threading.Lock()
     server.all_tools = args.all_tools
+    server.suggester = Suggester()
+    threading.Thread(target=lambda: _try(server.suggester.ready), daemon=True).start()
     server.tools = Tools(server.checker, args.dry_run)
     log(f"tools server listening on 127.0.0.1:{args.port}{' (dry run)' if args.dry_run else ''}")
     server.serve_forever()

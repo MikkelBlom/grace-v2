@@ -169,7 +169,7 @@ def made_files(job, before):
        "network": b("Give the job internet, only to install a package inside it (pip install --user, npm install). "
                     "Off by default; needs a reason."),
        "reason": s("Why the job needs the network (required with network).")},
-      ["language", "code"], risk="visible", slow=True)
+      ["language", "code"], risk="visible", slow=True, core=True)
 def run_code(ctx, a, alive):
     language = (a.get("language") or "python").strip().lower()
     language = ALIASES.get(language, language)

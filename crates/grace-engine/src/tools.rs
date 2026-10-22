@@ -29,6 +29,8 @@ use tracing::{Span, info, info_span, warn};
 pub const HINT_TIMEOUT: Duration = Duration::from_millis(300);
 /// The lookup loop's own budget is 12 s; this only guards against a hung server.
 pub const TOOL_TIMEOUT: Duration = Duration::from_secs(25);
+/// Slow tools may run longer: run_code's sandbox allows up to 300 s, research about 3 minutes.
+pub const SLOW_TOOL_TIMEOUT: Duration = Duration::from_secs(320);
 /// Checker probability of "search" above which the user message gets the hint (fixtures/decide:
 /// Gemma searched 17/17 lookup requests with a hint, 14/17 without, 0/33 others either way).
 pub const HINT_AT: f64 = 0.5;
@@ -515,7 +517,10 @@ pub async fn reply<S: Sink + Send>(
             }
             let stage = info_span!(parent: span, "stage", stage = "tool", model = name.as_str());
             let out = tokio::select! {
-                r = tokio::time::timeout(TOOL_TIMEOUT, tools.run(&name, &parsed)) => r,
+                r = tokio::time::timeout(
+                    if tools.is_slow(inner) { SLOW_TOOL_TIMEOUT } else { TOOL_TIMEOUT },
+                    tools.run(&name, &parsed),
+                ) => r,
                 _ = sink.cancelled() => return,
             };
             drop(stage);

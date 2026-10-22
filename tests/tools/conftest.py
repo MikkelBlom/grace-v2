@@ -22,6 +22,10 @@ from grace_tools import registry  # noqa: E402
 RECORDED = ROOT / "fixtures/tools/recorded"
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "docker: needs Docker Desktop running (skipped when it is down)")
+
+
 @pytest.fixture(autouse=True)
 def no_internet(monkeypatch):
     real = socket.socket.connect
@@ -66,7 +70,7 @@ def dry_ctx(tmp_path):
     return Ctx(tmp_path, dry=True)
 
 
-def call(ctx, name, alive=lambda: True, confirmed=False, **args):
+def call(ctx, name, /, alive=lambda: True, confirmed=False, **args):
     """Runs a registered tool as the server would (risk rules included)."""
     import grace_tools
     grace_tools.load()

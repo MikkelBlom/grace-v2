@@ -1,0 +1,99 @@
+# The system group (services/grace_tools/system.py, docs/tools/system.md) in grace-tools-sim.
+# Invented Danish lines as STT delivers them. focus_window and system_status are core (offered
+# every turn); the rest are reached with find_tools then use_tool, so `args` checks use_tool's
+# JSON ({"name": ..., "args": {...}}). Run the tools server with --dry-run: windows, settings and
+# processes must not change. Destructive cases must end with Grace asking, never claiming it's done.
+
+- id: sys01-switch-window
+  turns:
+    - say: skift til chrome
+      tools: [focus_window]
+      args: { focus_window: "(?i)chrome" }
+      not_answer: "(?i)can't|cannot|open_app"
+- id: sys02-headphones
+  turns:
+    - say: skift lyden til mine høretelefoner
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)audio_output.*switch|switch.*audio_output" }
+      not_answer: "(?i)can't|cannot"
+- id: sys03-close-chrome-asks
+  turns:
+    - say: luk chrome
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)close_window|end_process" }
+      answer: "(?i)\\?|okay|sure|want me"
+      not_answer: "(?i)\\b(i've|i have|have been|has been|is now) (closed|ended|killed)|\\bclosed (it|chrome)\\b"
+- id: sys04-top-ram
+  turns:
+    - say: hvad bruger mest ram lige nu
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)top_processes.*ram" }
+      answer: "(?i)gb|mb|gigabyte|megabyte"
+- id: sys05-internet-down
+  turns:
+    - say: er internettet nede
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)network_status|site_up|ping_host" }
+      not_answer: "(?i)can't check|cannot check"
+- id: sys06-battery
+  turns:
+    - say: hvor meget batteri har jeg tilbage
+      tools: [system_status]
+      answer: "(?i)\\d+ ?(%|percent)|percent"
+- id: sys07-app-volume
+  turns:
+    - say: skru lidt ned for spotify
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)volume.*spotify|spotify.*volume" }
+      not_answer: "(?i)can't|cannot"
+- id: sys08-dark-mode
+  turns:
+    - say: slå mørk tilstand til
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)dark_mode" }
+- id: sys09-wifi-off-asks
+  turns:
+    - say: sluk for wifi
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)wifi.*off" }
+      answer: "(?i)\\?|okay|sure|want me"
+      not_answer: "(?i)\\b(i've|i have) turned|\\bwi-?fi is (now )?off\\b|turned (it|wi-?fi) off"
+- id: sys10-kill-hung-app
+  turns:
+    - say: word hænger dræb det
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)end_process.*(word|winword)" }
+      answer: "(?i)\\?|okay|sure|want me|unsaved"
+      not_answer: "(?i)\\b(i've|i have) (ended|killed|closed)|\\bhas been (ended|killed|closed)"
+- id: sys11-snap-two
+  turns:
+    - say: sæt chrome til venstre og spotify til højre
+      tools: [find_tools, use_tool, use_tool]
+      args: { use_tool: "(?i)window_action.*snap_(left|right)" }
+- id: sys12-site-down
+  turns:
+    - say: er facebook nede eller er det bare mig
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)site_up.*facebook" }
+      answer: "(?i)facebook"
+- id: sys13-gpu-busy
+  turns:
+    - say: hvor varm er grafikkortet
+      tools: [system_status]
+      answer: "(?i)°|degree|celsius"
+- id: sys14-running-then-close
+  turns:
+    - say: kører spotify stadig
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)is_running.*spotify" }
+      answer: "(?i)yes|running|spotify"
+    - say: så luk den
+      tools: [use_tool]
+      args: { use_tool: "(?i)(close_window|end_process).*spotify" }
+- id: sys15-dictate-asks
+  turns:
+    - say: skriv hej jeg kommer lidt senere i det vindue jeg har åbent
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?i)type_text.*(hej|kommer)" }
+      answer: "(?i)\\?|okay|sure|want me"
+      not_answer: "(?i)\\b(i've|i have) typed|\\bhas been typed"

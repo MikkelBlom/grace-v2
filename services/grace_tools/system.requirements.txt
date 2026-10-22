@@ -1,0 +1,7 @@
+# The system group's packages, installed into bench/.venv-openvino (psutil was there already).
+pycaw==20260927
+comtypes==1.4.17
+winrt-runtime==3.2.1
+winrt-Windows.Devices.Radios==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1

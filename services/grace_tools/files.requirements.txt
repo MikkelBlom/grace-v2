@@ -1,0 +1,10 @@
+# The files group (files.py, files_docs.py). Installed in bench/.venv-openvino with
+#   bench/.venv-openvino/Scripts/python.exe -m pip install -r services/grace_tools/files.requirements.txt
+# Pillow and numpy were already there.
+python-docx==1.2.0
+openpyxl==3.1.5
+python-pptx==1.0.2
+pypdf==6.21.2
+fpdf2==2.8.9
+matplotlib==3.11.2
+Send2Trash==2.1.0

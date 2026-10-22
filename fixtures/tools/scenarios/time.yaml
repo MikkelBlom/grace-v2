@@ -1,0 +1,102 @@
+# The time group (services/grace_tools/time.py, docs/tools/time.md) for grace-tools-sim.
+# Invented Danish lines as STT delivers them. time_now and set_reminder are core (offered every
+# turn); the rest are reached with find_tools then use_tool, and `args` checks use_tool's inner
+# name. Run the tools server with --dry-run: nothing is stored, so later turns can't depend on
+# what an earlier turn saved, and answers that depend on today's date aren't checked.
+
+- id: t01-remind-mom
+  turns:
+    - say: mind mig om at ringe til mor om en time
+      tools: [set_reminder]
+      args: { set_reminder: "(?i)om en time|1 hour|an hour|60 min" }
+      answer: "(?i)remind|hour"
+      not_answer: "(?i)can't|cannot|don't have"
+- id: t02-days-to-christmas
+  turns:
+    - say: hvor mange dage er der til jul
+      tools: [find_tools, use_tool]
+      args: { use_tool: "date_info" }
+      answer: "(?i)\\d+ days"
+      not_answer: "(?i)can't|cannot"
+- id: t03-download-done
+  turns:
+    - say: sig til når min download er færdig
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?s)watch_file.*download_done" }
+      not_answer: "(?i)can't|cannot|not able"
+- id: t04-delete-all-todos
+  turns:
+    - say: slet alle mine todos
+      tools: [find_tools, use_tool]
+      args: { use_tool: "todo_delete" }
+      answer: "(?i)\\?|okay|sure|want me"
+      not_answer: "(?i)(have|i've|are) (been )?deleted|all gone|done\\b"
+- id: t05-halv-fire
+  turns:
+    - say: mind mig om at tage kagen ud halv fire
+      tools: [set_reminder]
+      args: { set_reminder: "(?i)halv fire|15:30" }
+      answer: "(?i)3:30|15:30|half past three"
+      not_answer: "(?i)4:30|16:30|half past four"
+- id: t06-timer
+  turns:
+    - say: sæt en timer på ti minutter
+      tools: [set_reminder]
+      args: { set_reminder: "(?i)ti minutter|10 min|ten min" }
+      answer: "(?i)\\b(10|ten)\\b"
+- id: t07-what-time
+  turns:
+    - say: hvad er klokken
+      tools: [time_now]
+      answer: "(?i)\\d{1,2}[:.]\\d{2}|o'clock|half past|quarter"
+- id: t08-weekday
+  turns:
+    - say: hvilken ugedag er den tredje december tyve seksogtyve
+      tools: [find_tools, use_tool]
+      args: { use_tool: "date_info" }
+      answer: "(?i)thursday|torsdag"
+- id: t09-friday-nine
+  turns:
+    - say: mind mig om at betale husleje på fredag klokken ni
+      tools: [set_reminder]
+      args: { set_reminder: "(?i)fredag|friday" }
+      answer: "(?i)friday|fredag"
+- id: t10-shopping-list
+  turns:
+    - say: skriv mælk på indkøbslisten
+      tools: [find_tools, use_tool]
+      args: { use_tool: "todo_add" }
+      not_answer: "(?i)can't|cannot"
+    - say: og hvad står der så på den
+      tools: [use_tool]
+      args: { use_tool: "todo_list" }
+- id: t11-currency
+  turns:
+    - say: hvad er hundrede euro i danske kroner
+      tools: [find_tools, use_tool]
+      args: { use_tool: "convert_currency" }
+      answer: "(?i)\\d{3}|kroner|kr"
+- id: t12-units
+  turns:
+    - say: hvor mange centimeter er fem fod
+      tools: [find_tools, use_tool]
+      args: { use_tool: "convert_units" }
+      answer: "152"
+- id: t13-ci-and-reminder
+  turns:
+    - say: giv mig besked når github actions er færdig på grace v2
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?s)watch_github.*grace" }
+    - say: og hvis det ikke er færdigt om en halv time så mind mig om at kigge på det
+      tools: [set_reminder]
+      args: { set_reminder: "(?i)halv time|30 min|half an hour" }
+- id: t14-focus
+  turns:
+    - say: start en pomodoro på femogtyve minutter
+      tools: [find_tools, use_tool]
+      args: { use_tool: "(?s)focus_start.*25" }
+- id: t15-week-number
+  turns:
+    - say: hvilken uge er det
+      tools: [time_now]
+      answer: "(?i)week \\d+|uge \\d+"

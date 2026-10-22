@@ -161,6 +161,12 @@ impl Tools {
         self.slow.contains(name)
     }
 
+    /// Due reminders, timers and fired watchers (grace_tools.time); `ack` marks spoken ones.
+    pub async fn events(&self, ack: &[i64]) -> anyhow::Result<Vec<Value>> {
+        let v = call(&self.addr, json!({ "kind": "events", "ack": ack })).await?;
+        Ok(v["events"].as_array().cloned().unwrap_or_default())
+    }
+
     /// Drops a question waiting for his yes (a new conversation in the sims).
     pub fn forget_pending(&self) {
         self.pending.lock().expect("pending poisoned").take();
@@ -506,8 +512,11 @@ pub async fn reply<S: Sink + Send>(
             let mut parsed: Value = serde_json::from_str(&args).unwrap_or_else(|_| json!({}));
             // The calculator reads his own transcribed words: Gemma rewrote "12.213" as
             // "tolv tusinde to hundrede treogtyve" (grace-tools-sim, live run 7).
-            if name == "calculate"
-                && let Some(o) = parsed.as_object_mut()
+            // set_reminder too: "halv fire" is 15:30, and Gemma writes "half four" (16:30).
+            let target = if name == "use_tool" { parsed["name"].as_str().unwrap_or("").to_owned() } else { name.clone() };
+            let slot = if name == "use_tool" { parsed.get_mut("args") } else { Some(&mut parsed) };
+            if matches!(target.as_str(), "calculate" | "set_reminder")
+                && let Some(o) = slot.and_then(Value::as_object_mut)
             {
                 o.insert("heard".into(), json!(said));
             }

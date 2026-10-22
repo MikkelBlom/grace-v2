@@ -68,7 +68,13 @@ enum Done {
     },
     /// A reply's generation ended: all its audio is queued (or it was cancelled).
     Generated { reply: u64, any_audio: bool },
+    /// A reminder or watcher line was spoken unprompted (or `said` is None: nothing was due).
+    Announced { said: Option<String> },
 }
+
+/// Quiet needed before Grace speaks up on her own: a due reminder soon, a watcher at a pause.
+const QUIET_NOW_S: f64 = 1.0;
+const QUIET_PAUSE_S: f64 = 4.0;
 
 struct Turn {
     span: Span,
@@ -153,6 +159,10 @@ struct Conductor {
     last_speech_start: f64,
     /// The open turn whose audio the rings keep whole, however long it runs.
     pinned: Option<u64>,
+    speaking: bool,
+    last_speech_stop: f64,
+    /// An unprompted line (reminder, watcher) is being fetched or spoken.
+    announcing: bool,
 }
 
 pub async fn run(
@@ -175,15 +185,21 @@ pub async fn run(
         unsure: HashSet::new(),
         last_speech_start: t0,
         pinned: None,
+        speaking: false,
+        last_speech_stop: t0,
+        announcing: false,
     };
     let mut tick = tokio::time::interval(Duration::from_millis(30));
+    let mut events_tick = tokio::time::interval(Duration::from_secs(1));
     let rel = |t: f64| Duration::from_secs_f64((t - t0).max(0.0));
 
     while !shutdown.load(std::sync::atomic::Ordering::Relaxed) {
         let (input, now) = tokio::select! {
             Some(ev) = front.recv() => match ev {
-                FrontEvent::SpeechStarted { time } => { c.last_speech_start = time; (Some(Input::SpeechStarted), time) }
+                FrontEvent::SpeechStarted { time } => { c.last_speech_start = time; c.speaking = true; (Some(Input::SpeechStarted), time) }
                 FrontEvent::SpeechStopped { time } => {
+                    c.speaking = false;
+                    c.last_speech_stop = time;
                     if let Some(t) = c.turns.values_mut().max_by(|a, b| a.start.total_cmp(&b.start)) { t.stop = time; }
                     (Some(Input::SpeechStopped), time)
                 }
@@ -210,7 +226,19 @@ pub async fn run(
                     (current.then_some(Input::Transcript { turn, text }), clock::now())
                 }
                 Done::Generated { reply, any_audio } => (c.generated(reply, any_audio), clock::now()),
+                Done::Announced { said } => {
+                    c.announcing = false;
+                    if let Some(said) = said {
+                        // So "udsæt den" / "hvad sagde du" has something to refer to.
+                        c.history.push(("assistant", said));
+                    }
+                    (None, clock::now())
+                }
             },
+            _ = events_tick.tick() => {
+                c.maybe_announce(clock::now());
+                (None, clock::now())
+            }
             _ = tick.tick() => (Some(Input::Tick), clock::now()),
         };
         let mut inputs: VecDeque<Input> = input.into_iter().collect();
@@ -224,6 +252,26 @@ pub async fn run(
 }
 
 impl Conductor {
+    /// Speaks a due reminder or a fired watcher when nobody is talking and no reply is under
+    /// way. The line goes straight to TTS (it is already a sentence), so it costs no LLM time.
+    fn maybe_announce(&mut self, now: f64) {
+        let Some(tools) = self.svc.tools.clone() else { return };
+        let quiet = now - self.last_speech_stop.max(self.last_speech_start);
+        if self.announcing || self.speaking || self.current.is_some() || self.prepared.is_some()
+            || quiet < QUIET_NOW_S
+        {
+            return;
+        }
+        self.announcing = true;
+        let id = self.next_reply;
+        self.next_reply += 1;
+        let (svc, done) = (self.svc.clone(), self.done_tx.clone());
+        tokio::spawn(async move {
+            let said = announce(&svc, &tools, id, quiet).await;
+            let _ = done.send(Done::Announced { said });
+        });
+    }
+
     fn render(&self, cmd: RenderCmd) {
         let _ = self.svc.render.send(cmd);
     }
@@ -747,6 +795,37 @@ impl crate::tools::Sink for ReplySink<'_> {
 /// Streams the LLM reply into TTS and the speakers, one sentence at a time. A held reply
 /// (prepared before the commit) synthesizes only its first sentence and keeps the audio until
 /// it is released.
+async fn announce(svc: &Services, tools: &crate::tools::Tools, reply: u64, quiet: f64) -> Option<String> {
+    let events = match tools.events(&[]).await {
+        Ok(e) => e,
+        Err(e) => {
+            warn!(error = %e, "events poll failed");
+            return None;
+        }
+    };
+    let ev = events.into_iter().find(|e| e["priority"] == "now" || quiet >= QUIET_PAUSE_S)?;
+    let say = ev["say"].as_str()?.to_owned();
+    info!(source = %ev["source"], say = %say, "announcing");
+    let (id, mut audio) = svc.tts.speak(&crate::spoken::numbers_to_words(&say)).await.ok()?;
+    let _ = id;
+    while let Some(ev) = audio.recv().await {
+        match ev {
+            TtsEvent::Audio { rate, pcm } => {
+                let _ = svc.render.send(RenderCmd::Enqueue { reply, samples: resample(&pcm, rate, RATE) });
+            }
+            TtsEvent::Done { .. } => break,
+        }
+    }
+    let _ = svc.render.send(RenderCmd::EndOfTurn { reply });
+    // Acked once it is queued to play: at-least-once until then (a crash re-announces it).
+    if let Some(n) = ev["id"].as_i64()
+        && let Err(e) = tools.events(&[n]).await
+    {
+        warn!(error = %e, "events ack failed");
+    }
+    Some(say)
+}
+
 async fn speak_reply(
     svc: Arc<Services>,
     done: mpsc::UnboundedSender<Done>,

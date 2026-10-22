@@ -1186,6 +1186,10 @@ class Handler(socketserver.StreamRequestHandler):
                 out = {"tools": full_manifest(srv.all_tools),
                        "slow": SLOW + [t.name for t in registry.TOOLS.values() if t.slow],
                        "risk": {**BUILTIN_RISK, **{t.name: t.risk for t in registry.TOOLS.values()}}}
+            elif kind == "events":  # due reminders, timers, watchers (grace_tools.time, docs/tools/time.md)
+                from grace_tools import time as gt
+                acked = [i for i in req.get("ack") or [] if gt.ack_event(srv.tools, i)]
+                out = {"acked": acked, "events": gt.pending_events(srv.tools)}
             elif kind == "confirm":  # the engine heard his yes to a destructive call
                 out = srv.tools.confirm(req["token"], peer_alive(self.connection))
             elif kind == "decide":

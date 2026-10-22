@@ -1,0 +1,106 @@
+# The files group (services/grace_tools/files.py, files_docs.py; docs/tools/files.md) for
+# grace-tools-sim. Same format as fixtures/tools/scenarios.yaml. Invented Danish lines as STT
+# writes them. write_file and read_document are core (called directly); the rest go through
+# find_tools + use_tool, so `args` checks use_tool's inner name (key order in the JSON varies,
+# hence the two-way regexes). Run the tools server with --dry-run: then nothing is written, so a
+# later turn may not find the file an earlier one "made"; the checks are on the calls.
+
+- id: f01-word-then-pdf
+  turns:
+    - say: lav et word dokument med en indkøbsliste mælk æg rugbrød og kaffe
+      tools: [find_tools, use_tool]
+      args: { use_tool: '(?s)(create_document.*docx|docx.*create_document)' }
+      not_answer: "(?i)can't|cannot|kan ikke"
+    - say: lav det om til pdf
+      tools: [use_tool]
+      args: { use_tool: '(?s)(convert_file.*pdf|pdf.*convert_file)' }
+- id: f02-note-then-append
+  turns:
+    - say: skriv en note om at jeg skal ringe til tandlægen på mandag
+      tools: [write_file]
+      args: { write_file: '(?i)tandl' }
+      not_answer: "(?i)can't|cannot"
+    - say: tilføj at jeg også skal købe kaffe
+      tools: [use_tool]
+      args: { use_tool: '(?s)(append_to_file.*kaffe|kaffe.*append_to_file)' }
+- id: f03-delete-asks-first
+  turns:
+    - say: lav en tekstfil der hedder test med ordet hej
+      tools: [write_file]
+      args: { write_file: '(?i)test' }
+    - say: slet den igen
+      tools: [use_tool]
+      args: { use_tool: 'delete_files' }
+      answer: '(?i)\?|okay|sure|confirm|vil du|skal jeg'
+      not_answer: "(?i)(i've|i have|has been|is now) (deleted|removed)|er slettet|it's gone"
+- id: f04-read-newest-pdf
+  turns:
+    - say: læs den nyeste pdf i mine overførsler og fortæl kort hvad den handler om
+      tools: [use_tool, read_document]
+      args: { use_tool: '(?s)(recent_files.*pdf|pdf.*recent_files)' }
+      seen: [read_document]
+- id: f05-chart
+  turns:
+    - say: lav et søjlediagram over mine udgifter husleje otte tusind mad tre tusind og transport tusind
+      tools: [find_tools, use_tool]
+      args: { use_tool: '(?s)(make_chart|create_document).*8000|8000.*(make_chart|create_document)' }
+- id: f06-budget-excel-to-csv
+  turns:
+    - say: lav et regneark med mit budget husleje otte tusind fem hundrede og mad tre tusind
+      tools: [find_tools, use_tool]
+      args: { use_tool: '(?s)(create_document.*xlsx|xlsx.*create_document)' }
+    - say: gem det også som csv
+      tools: [use_tool]
+      args: { use_tool: '(?s)(convert_file.*csv|csv.*convert_file)' }
+- id: f07-powerpoint
+  turns:
+    - say: lav en powerpoint med tre slides om hvorfor man skal spise grøntsager
+      tools: [find_tools, use_tool]
+      args: { use_tool: '(?s)(create_document.*pptx|pptx.*create_document)' }
+      not_answer: "(?i)can't|cannot"
+- id: f08-search-inside
+  turns:
+    - say: find den fil hvor jeg skrev noget om husleje
+      tools: [find_tools, use_tool]
+      args: { use_tool: '(?s)(search_in_files.*husleje|husleje.*search_in_files)' }
+      not_answer: 'C:[/\\]'
+- id: f09-move-then-undo
+  turns:
+    - say: skriv en indkøbsliste med mælk og smør
+      tools: [write_file]
+    - say: flyt den til skrivebordet
+      tools: [use_tool]
+      args: { use_tool: '(?s)(move_file.*(skrivebord|Desktop)|(skrivebord|Desktop).*move_file)' }
+    - say: nej fortryd det
+      tools: [use_tool]
+      args: { use_tool: 'undo_last' }
+- id: f10-markdown-recipe-to-word
+  turns:
+    - say: skriv en opskrift på pandekager som en markdown fil
+      tools: [write_file]
+      args: { write_file: '(?i)pandekage' }
+    - say: lav den om til et word dokument
+      tools: [use_tool]
+      args: { use_tool: '(?s)(convert_file.*docx|docx.*convert_file)' }
+- id: f11-compare-versions
+  turns:
+    - say: sammenlign mine to cv filer og fortæl hvad forskellen er
+      tools: [find_files, use_tool]
+      args: { use_tool: 'compare_files' }
+- id: f12-folder-and-zip
+  turns:
+    - say: lav en mappe på skrivebordet der hedder ferie
+      tools: [find_tools, use_tool]
+      args: { use_tool: '(?s)(make_folder.*(?i:ferie)|(?i:ferie).*make_folder)' }
+    - say: pak mappen ferie ned i en zip fil
+      tools: [use_tool]
+      args: { use_tool: 'zip_files' }
+- id: f13-edit-asks-first
+  turns:
+    - say: skriv en note der siger mødet er på fredag
+      tools: [write_file]
+    - say: ret fredag til lørdag i den note
+      tools: [use_tool]
+      args: { use_tool: '(?s)edit_file' }
+      answer: '(?i)\?|okay|sure|confirm|vil du|skal jeg'
+      not_answer: "(?i)(i've|i have) (changed|updated)|er rettet"

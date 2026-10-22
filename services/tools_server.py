@@ -38,6 +38,9 @@ import openvino as ov
 from jevk5.prompt import LETTERS, answer, decision_options, prompt_text
 from transformers import AutoTokenizer
 
+import grace_tools
+from grace_tools import registry
+
 ROOT = Path(__file__).resolve().parent.parent
 MODEL = ROOT / ".runtime/models/jevk5-ov/4b-int8-stateless"
 DEVICE = "GPU.0"  # the Arc iGPU: keeps the RTX for Gemma (decode 50 -> 48.5 tok/s, vs 33 on the RTX)
@@ -844,6 +847,45 @@ def manifest():
 
 
 SLOW = ["web_search", "find_files", "read_page"]
+BUILTIN_RISK = {"web_search": "read", "read_page": "read", "weather": "read", "calculate": "read",
+                "find_files": "read", "list_folder": "read", "media": "visible", "open_app": "visible",
+                "open_url": "visible", "open_file": "visible"}
+
+
+def discovery_tools():
+    s = registry.s
+    return [
+        {"type": "function", "function": {
+            "name": "find_tools",
+            "description": "You have many more tools than the ones listed: files (write, edit, move, compare, "
+                           "convert), documents (Word, PDF, Excel, PowerPoint, charts), running code, git, "
+                           "windows, system settings, network, processes, reminders and timers, watching things, "
+                           "research, translation, downloads, transcription, the screen. Find the ones for a "
+                           "task here, then run one with use_tool. Do this yourself; never ask him which tool.",
+            "parameters": {"type": "object", "properties": {
+                "need": s("What you need to do, in English, e.g. 'move files to a folder'.")}, "required": ["need"]}}},
+        {"type": "function", "function": {
+            "name": "use_tool",
+            "description": "Run a tool found with find_tools.",
+            "parameters": {"type": "object", "properties": {
+                "name": s("The tool's name from find_tools."),
+                "args": {"type": "object", "description": "Its arguments, as find_tools described them."}},
+                "required": ["name", "args"]}}},
+    ]
+
+
+def full_manifest(all_tools=False):
+    """The tools offered on every turn: the built-in ones, the core registry tools and the
+    discovery pair (ADR 0021). all_tools offers every tool directly (for measuring the two)."""
+    reg = [t.definition() for t in registry.TOOLS.values() if t.core or all_tools]
+    return manifest() + reg + ([] if all_tools or len(registry.TOOLS) == len(reg) else discovery_tools())
+
+
+def describe_tool(t):
+    params = "; ".join(f"{k}: {v.get('description', '')}" + (f" (one of {', '.join(v['enum'])})" if v.get("enum") else "")
+                       + ("" if k in t.required else " [optional]") for k, v in t.params.items())
+    ask = " Needs his yes first (the tool asks)." if t.risk == "destructive" else ""
+    return f"- {t.name}: {t.description}{ask} Args: {params or 'none'}"
 
 
 class Tools:
@@ -851,12 +893,51 @@ class Tools:
         self.checker, self.dry = checker, dry
         self.apps = Apps()
         self.files = Files()
+        self.confirmations = registry.Confirmations()
+        self.data_dir = ROOT / ".runtime/grace-data"
+        self.scratch_dir = self.data_dir / "scratch"
+        self.scratch_dir.mkdir(parents=True, exist_ok=True)
+        self.gemma = gemma
 
-    def run(self, name, args, alive):
+    def run(self, name, args, alive, confirmed=False):
         f = getattr(self, f"t_{name}", None)
-        if f is None:
-            return {"ok": False, "result": f"There is no tool called {name}."}
-        return f(args, alive)
+        if f is not None:
+            return f(args, alive)
+        if name == "use_tool":
+            inner = (args.get("name") or "").strip()
+            if inner in ("use_tool", "find_tools"):
+                return {"ok": False, "result": "use_tool runs tools found with find_tools."}
+            if getattr(self, f"t_{inner}", None) is not None:
+                return getattr(self, f"t_{inner}")(args.get("args") or {}, alive)
+            name, args = inner, args.get("args") or {}
+        try:
+            out = registry.run(self, name, args, alive, confirmed)
+        except Exception as e:
+            log(f"tool {name} failed: {e!r}")
+            return {"ok": False, "result": f"The {name} tool failed: {e}. Say it didn't work, or try another way."}
+        if out is None:
+            hits = registry.find(name.replace("_", " "), 3)
+            alt = f" Maybe: {', '.join(t.name for t in hits)}." if hits else ""
+            return {"ok": False, "result": f"There is no tool called {name}. Use find_tools.{alt}"}
+        return out
+
+    def confirm(self, token, alive):
+        v = self.confirmations.take(token)
+        if v is None:
+            return {"ok": False, "result": "That confirmation has expired; nothing was done. Ask again if he still wants it."}
+        name, args, summary, _ = v
+        log(f"confirmed: {name} ({summary})")
+        out = self.run(name, args, alive, confirmed=True)
+        out["confirmed"] = summary
+        return out
+
+    def t_find_tools(self, a, alive):
+        need = (a.get("need") or "").strip()
+        hits = registry.find(need)
+        if not hits:
+            return {"ok": True, "result": "No tool matches that. Say you can't do it yet."}
+        return {"ok": True, "tools": [t.name for t in hits],
+                "result": "Tools you can run with use_tool:\n" + "\n".join(describe_tool(t) for t in hits)}
 
     def t_web_search(self, a, alive):
         query = (a.get("query") or a.get("question") or "").strip()
@@ -1102,7 +1183,11 @@ class Handler(socketserver.StreamRequestHandler):
         try:
             kind = req["kind"]
             if kind == "manifest":
-                out = {"tools": manifest(), "slow": SLOW}
+                out = {"tools": full_manifest(srv.all_tools),
+                       "slow": SLOW + [t.name for t in registry.TOOLS.values() if t.slow],
+                       "risk": {**BUILTIN_RISK, **{t.name: t.risk for t in registry.TOOLS.values()}}}
+            elif kind == "confirm":  # the engine heard his yes to a destructive call
+                out = srv.tools.confirm(req["token"], peer_alive(self.connection))
             elif kind == "decide":
                 # The engine checks every partial transcript; once a newer one for the same key is
                 # waiting, an older one is pointless (live run 7: 1 in 4 hints came too late).
@@ -1141,10 +1226,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="report what open_* would do, don't do it")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--all-tools", action="store_true", help="offer every tool directly (no find_tools)")
     args = ap.parse_args()
+    grace_tools.load()
     server = Server(("127.0.0.1", args.port), Handler)
     server.checker = Checker()
     server.keys, server.keys_lock = {}, threading.Lock()
+    server.all_tools = args.all_tools
     server.tools = Tools(server.checker, args.dry_run)
     log(f"tools server listening on 127.0.0.1:{args.port}{' (dry run)' if args.dry_run else ''}")
     server.serve_forever()

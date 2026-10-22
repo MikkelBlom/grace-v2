@@ -37,8 +37,9 @@ pub const HINT_AT: f64 = 0.5;
 // conversation each time (live run 8: up to 3,100 tokens, 1.5 s); chat bench 02 scored the same
 // with and without it (123/132 hard).
 pub const HINT: &str = "[This likely needs a web lookup.]";
-/// Tool calls per reply: find a file, then open it; search, then search again.
-pub const MAX_CALLS: usize = 3;
+/// Tool calls per reply. Mikkel wants her to work a task out herself (2026-10-22): find the
+/// tool, find the file, read it, write the result, open it; find_tools + use_tool alone are two.
+pub const MAX_CALLS: usize = 8;
 
 /// One yes/no decision: shorter than a 6-way choice, so faster on the Arc (fixtures/decide:
 /// 17/17 lookup requests searched with its hint, 0/33 others).
@@ -97,6 +98,38 @@ pub struct Tools {
     /// right after Gemma has generated, the shared power budget slows the Arc to 290-390 ms per
     /// decision, too close to the reply's 400 ms cap (grace-tools-sim v2: 14/48 hints late).
     hints: Mutex<HashMap<String, Arc<tokio::sync::OnceCell<Option<Route>>>>>,
+    /// A destructive call waiting for his yes (ADR 0021): only his next utterance can answer it.
+    pending: Mutex<Option<Pending>>,
+}
+
+#[derive(Debug, Clone)]
+struct Pending {
+    token: String,
+    name: String,
+    args: Value,
+    summary: String,
+}
+
+/// His answer to "I'll delete the 3 files. Okay?": Some(true) only for a short, plain yes with
+/// no "no" in it; anything else is not a yes, so the model can never talk itself into one.
+pub fn answer_to(said: &str) -> Option<bool> {
+    let lower = said.to_lowercase();
+    let words: Vec<&str> = lower
+        .split(|c: char| !c.is_alphanumeric() && c != 'æ' && c != 'ø' && c != 'å')
+        .filter(|w| !w.is_empty())
+        .collect();
+    let has = |set: &[&str]| words.iter().any(|w| set.contains(w));
+    let phrase = |p: &str| format!(" {} ", words.join(" ")).contains(&format!(" {p} "));
+    const NO: [&str; 9] = ["nej", "no", "nope", "ikke", "stop", "vent", "fortryd", "annuller", "wait"];
+    if has(&NO) || phrase("lad være") || phrase("lad vær") {
+        return Some(false);
+    }
+    const YES: [&str; 12] = [
+        "ja", "jo", "jep", "jeps", "yes", "yeah", "yep", "okay", "ok", "kør", "sure", "selvfølgelig",
+    ];
+    let yes = has(&YES) || phrase("gør det") || phrase("go ahead") || phrase("det er fint")
+        || phrase("fint nok") || phrase("bare gør");
+    if yes && words.len() <= 8 { Some(true) } else { None }
 }
 
 impl Tools {
@@ -118,11 +151,34 @@ impl Tools {
             manifest,
             slow,
             hints: Mutex::new(HashMap::new()),
+            pending: Mutex::new(None),
         })
     }
 
     pub fn is_slow(&self, name: &str) -> bool {
         self.slow.contains(name)
+    }
+
+    /// Drops a question waiting for his yes (a new conversation in the sims).
+    pub fn forget_pending(&self) {
+        self.pending.lock().expect("pending poisoned").take();
+    }
+
+    /// Settles a destructive call waiting for his yes, from what he just said: runs it on a yes
+    /// and returns the tool exchange for the model, or a note that nothing was done.
+    async fn settle(&self, said: &str, span: &Span) -> Option<(Value, Value, Value)> {
+        let p = self.pending.lock().expect("pending poisoned").take()?;
+        let answer = answer_to(said);
+        info!(parent: span, tool = %p.name, summary = %p.summary, ?answer, "confirmation");
+        let out = if answer == Some(true) {
+            call(&self.addr, json!({ "kind": "confirm", "token": p.token }))
+                .await
+                .unwrap_or_else(|e| json!({ "ok": false, "result": format!("It failed: {e}.") }))
+        } else {
+            json!({ "ok": false, "result": format!(
+                "He did not say yes to: {}. Nothing was done; don't do it unless he asks again.", p.summary) })
+        };
+        Some((json!(p.name), p.args, out))
     }
 
     /// What the checker thinks `said` needs. Requests share one key, so the server drops an
@@ -287,6 +343,25 @@ pub async fn reply<S: Sink + Send>(
         req.tools = t.manifest.clone();
     }
     let mut calls_made = 0;
+    // His answer to a destructive call she asked about last turn.
+    if let Some(t) = tools
+        && let Some((name, args, out)) = t.settle(said, span).await
+    {
+        let name = name.as_str().unwrap_or("tool").to_owned();
+        sink.tool_done(&name, &args, &out);
+        let id = "confirmed_0".to_owned();
+        let last_user = req.messages.iter().rposition(|m| m["role"] == "user");
+        let exchange = [
+            json!({ "role": "assistant", "content": "", "tool_calls": [{ "id": id, "type": "function",
+                    "function": { "name": name, "arguments": args.to_string() } }] }),
+            json!({ "role": "tool", "tool_call_id": id,
+                    "content": tool_message(&name, out["result"].as_str().unwrap_or("")) }),
+        ];
+        // After his answer, so it reads: he said yes, then it ran.
+        if let Some(i) = last_user {
+            req.messages.splice(i + 1..i + 1, exchange);
+        }
+    }
     let mut retried_claim = false;
     loop {
         // (id, name, arguments) per tool call index, assembled from their pieces.
@@ -434,7 +509,8 @@ pub async fn reply<S: Sink + Send>(
             {
                 o.insert("heard".into(), json!(said));
             }
-            if tools.is_slow(&name) && sink.silent() {
+            let inner = if name == "use_tool" { parsed["name"].as_str().unwrap_or("") } else { &name };
+            if tools.is_slow(inner) && sink.silent() {
                 sink.filler(filler(reply_id, &name));
             }
             let stage = info_span!(parent: span, "stage", stage = "tool", model = name.as_str());
@@ -455,6 +531,16 @@ pub async fn reply<S: Sink + Send>(
                 }
             };
             info!(parent: span, tool = %name, args = %parsed, ok = %out["ok"], status = %out["status"], ms = %out["ms"], said, "tool call");
+            if out["needs_confirm"] == true {
+                // She asks now; it runs only on his next utterance's yes.
+                *tools.pending.lock().expect("pending poisoned") = Some(Pending {
+                    token: out["confirm"]["token"].as_str().unwrap_or("").to_owned(),
+                    name: if name == "use_tool" { parsed["name"].as_str().unwrap_or("").to_owned() } else { name.clone() },
+                    args: if name == "use_tool" { parsed["args"].clone() } else { parsed.clone() },
+                    summary: out["confirm"]["summary"].as_str().unwrap_or("").to_owned(),
+                });
+                calls_made = MAX_CALLS;
+            }
             sink.tool_done(&name, &parsed, &out);
             tool_calls.push(json!({ "id": id, "type": "function",
                                     "function": { "name": name, "arguments": args } }));
@@ -611,6 +697,20 @@ mod tests {
         assert!(promises_action("I'll open it now."));
         assert!(!promises_action("I will keep it shorter."));
         assert!(!promises_action("Let me know what you think."));
+    }
+
+    #[test]
+    fn only_a_plain_yes_confirms() {
+        for yes in ["ja", "Ja tak.", "jep gør det", "okay", "ja det er fint", "yes go ahead", "bare gør det"] {
+            assert_eq!(answer_to(yes), Some(true), "{yes}");
+        }
+        for no in ["nej", "nej lad være", "ja nej vent", "stop", "ikke endnu", "no"] {
+            assert_eq!(answer_to(no), Some(false), "{no}");
+        }
+        for neither in ["hvad er klokken", "hvilke filer er det", "",
+                        "ja men først skal du lige fortælle mig hvad der ligger i mappen"] {
+            assert_eq!(answer_to(neither), None, "{neither}");
+        }
     }
 
     #[test]

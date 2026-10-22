@@ -88,6 +88,9 @@ struct Turn {
     /// live run 7 opened a made-up article URL.
     #[serde(default)]
     seen: Vec<String>,
+    /// true: a destructive call must have asked for his yes in this turn (and nothing ran
+    /// unconfirmed); false: nothing may ask. ADR 0021.
+    asks: Option<bool>,
 }
 
 #[derive(Default)]
@@ -128,8 +131,24 @@ impl tools::Sink for SimSink {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    // A folder means every .yaml in it (one file per tool group, fixtures/tools/scenarios/).
+    let files: Vec<PathBuf> = if args.scenarios.is_dir() {
+        let mut v: Vec<PathBuf> = std::fs::read_dir(&args.scenarios)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "yaml"))
+            .collect();
+        v.sort();
+        v
+    } else {
+        vec![args.scenarios.clone()]
+    };
+    let mut text = String::new();
+    for f in &files {
+        text.push_str(&std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?);
+        text.push('\n');
+    }
     let scenarios: Vec<Scenario> = serde_yaml::from_str(
-        &std::fs::read_to_string(&args.scenarios).context("reading scenarios")?,
+        &text,
     )?;
     let llm = LlmClient::new(LLM_URL);
     let tools = std::sync::Arc::new(tools::Tools::connect(&args.tools).await?);
@@ -155,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
             continue;
         }
         for seed in 1..=args.seeds {
+            tools.forget_pending();
             md.push_str(&format!("\n## {} (seed {seed})\n", sc.id));
             let block = format!("{}{}", sc.memory, style::render_rules(&rules));
             let system = system_message(&args.system_prompt, now, &block);
@@ -236,7 +256,9 @@ async fn main() -> anyhow::Result<()> {
                             })
                     })
                 });
-                let a_ok = a_ok && s_ok;
+                let asked = sink.calls.iter().any(|c| c.2["needs_confirm"] == true);
+                let k_ok = turn.asks.is_none_or(|want| want == asked);
+                let a_ok = a_ok && s_ok && k_ok;
                 let r_ok = turn
                     .answer
                     .as_ref()

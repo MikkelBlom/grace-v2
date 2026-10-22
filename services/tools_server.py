@@ -259,11 +259,11 @@ def passages(text, keys, n):
     return [p.strip()[:900] for p in ranked[:n] if words(p) & keys]
 
 
-def gemma(prompt, max_tokens=40):
+def gemma(prompt, max_tokens=40, timeout=10):
     body = {"messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0.3}
     req = urllib.request.Request(f"{LLM}/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
-    return json.loads(urllib.request.urlopen(req, timeout=10).read())["choices"][0]["message"]["content"].strip()
+    return json.loads(urllib.request.urlopen(req, timeout=timeout).read())["choices"][0]["message"]["content"].strip()
 
 
 def page_text(url, timeout):
@@ -930,6 +930,7 @@ class Tools:
         self.scratch_dir = self.data_dir / "scratch"
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
         self.gemma = gemma
+        self.suggester = None  # set by main() once the registry is loaded
 
     def run(self, name, args, alive, confirmed=False):
         f = getattr(self, f"t_{name}", None)
@@ -965,7 +966,14 @@ class Tools:
 
     def t_find_tools(self, a, alive):
         need = (a.get("need") or "").strip()
-        hits = registry.find(need)
+        # Gemma's pick from the catalog first (54/56 vs word overlap's misses), then word matches.
+        picks = []
+        try:
+            picks = [registry.TOOLS[n] for n in self.suggester.suggest(need)] if self.suggester else []
+        except Exception as e:
+            log("find_tools: suggester failed:", repr(e))
+        hits = picks + [t for t in registry.find(need) if t not in picks]
+        hits = hits[:5]
         if not hits:
             return {"ok": True, "result": "No tool matches that. Say you can't do it yet."}
         return {"ok": True, "tools": [t.name for t in hits],
@@ -1272,8 +1280,8 @@ def main():
     server.checker = Checker()
     server.keys, server.keys_lock = {}, threading.Lock()
     server.all_tools = args.all_tools
-    server.suggester = Suggester()
     server.tools = Tools(server.checker, args.dry_run)
+    server.suggester = server.tools.suggester = Suggester()
     log(f"tools server listening on 127.0.0.1:{args.port}{' (dry run)' if args.dry_run else ''}")
     server.serve_forever()
 

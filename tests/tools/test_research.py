@@ -529,3 +529,25 @@ def test_real_stt_on_a_public_fleurs_clip():
     data = research.run_stt(FLEURS, "da", research.Job("transcription", "fleurs", 300))
     hyp = " ".join(s[2] for s in data["segments"])
     assert data["model"] == "edda" and errors(words(ref), words(hyp)) / len(words(ref)) < 0.3, hyp
+
+
+def test_background_job_is_announced_when_done(ctx):
+    import threading
+    from grace_tools import research, time as gt
+    gate = threading.Event()
+
+    def work(job):
+        gate.wait(5)
+        return {"ok": True, "result": "It found three sources."}
+
+    out = research.start_job("research", "solar panels", 60, work, lambda: True, wait_s=0, ctx=ctx)
+    assert out["background"]
+    gate.set()
+    research.JOBS[out["job"]].done.wait(5)
+    for _ in range(50):
+        events = gt.pending_events(ctx)
+        if events:
+            break
+        threading.Event().wait(0.05)
+    assert events and events[0]["source"] == "job" and events[0]["priority"] == "next_pause"
+    assert "solar panels is done" in events[0]["say"] and "three sources" in events[0]["say"]

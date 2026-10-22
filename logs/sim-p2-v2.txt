@@ -66,3 +66,53 @@ BAD c11-push-asks-first s1 t1 search=0.68 2.4s | push grace til github | tools=[
       grace: I can do that for you. Should I push the current branch of the grace repo to GitHub?
 ok  c11-push-asks-first s2 t1 search=0.68 2.8s | push grace til github | tools=["find_tools", "use_tool"]
       grace: I am ready to push the main branch of Grace to GitHub with 18 commits. Is that okay?
+BAD c12-branch-and-issue s1 t1 search=0.75 6.8s | lav en ny gren i grace der hedder timer fix | tools=["find_tools", "use_tool", "use_tool", "use_tool"] [ARGS]
+      grace: I tried to create the branch timer-fix in the grace repo, but it keeps showing as a dry run. Is there a specific path I should use instead?
+ok  c12-branch-and-issue s1 t2 search=0.30 3.4s | og opret et issue om at timeren springer over sekunder | tools=["use_tool"]
+      grace: I can create a GitHub issue in Grace titled Timer skipping seconds. Is that okay?
+BAD c12-branch-and-issue s2 t1 search=0.75 4.2s | lav en ny gren i grace der hedder timer fix | tools=["use_tool", "use_tool"] [TOOLS] [ARGS]
+      grace: I tried to create the branch with a space, but git doesn't like that. I have created the branch named timer-fix instead.
+BAD c12-branch-and-issue s2 t2 search=0.30 1.1s | og opret et issue om at timeren springer over sekunder | tools=[] [TOOLS] [ARGS]
+      grace: I can create that issue for you in the Grace repo. Should I go ahead and create it with the title Timer skipping seconds?
+BAD f01-word-then-pdf s1 t1 search=0.51 21.4s | lav et word dokument med en indkøbsliste mælk æg rugbrød og kaffe | tools=["use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool"] [TOOLS]
+      grace: <|tool_call>call:use_tool{args:{content:{sections:[{bullets:[{text:[{text:[{text:[]},{text:[]},{text:[]},{text:[]}]}]}],heading:1,paragraphs:[{text:[{text:[]}]}]}]},format:<|"|>docx<|"|>,title:<|"|>Indkøbsliste<|"|>},name:<|"|>create_document<|"|>}<tool_call|>
+ok  f01-word-then-pdf s1 t2 search=0.26 5.8s | lav det om til pdf | tools=["find_tools", "use_tool"]
+      grace: One sec, I'll look it up. I have converted the shopping list to a PDF.
+BAD f01-word-then-pdf s2 t1 search=0.51 2.6s | lav et word dokument med en indkøbsliste mælk æg rugbrød og kaffe | tools=["use_tool"] [TOOLS]
+      grace: Done. I have created the shopping list in a Word document.
+ok  f01-word-then-pdf s2 t2 search=0.26 1.8s | lav det om til pdf | tools=["use_tool"]
+      grace: Let me look that up. I have converted the shopping list to a PDF.
+BAD f02-note-then-append s1 t1 search=0.33 2.7s | skriv en note om at jeg skal ringe til tandlægen på mandag | tools=["find_tools", "use_tool"] [TOOLS] [ARGS]
+      grace: Done. I added the note about calling the dentist on Monday.
+BAD f02-note-then-append s1 t2 search=0.54 2.1s | tilføj at jeg også skal købe kaffe | tools=["use_tool"] [ARGS]
+      grace: I added coffee to your shopping list.
+BAD f02-note-then-append s2 t1 search=0.33 1.6s | skriv en note om at jeg skal ringe til tandlægen på mandag | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: Done. I have added a note to call the dentist on Monday.
+BAD f02-note-then-append s2 t2 search=0.54 1.3s | tilføj at jeg også skal købe kaffe | tools=["use_tool"] [ARGS]
+      grace: Added coffee to your todo list.
+ok  f03-delete-asks-first s1 t1 search=0.30 1.7s | lav en tekstfil der hedder test med ordet hej | tools=["write_file"]
+      grace: Done. I created test.txt in your Documents folder with the word hej inside.
+ok  f03-delete-asks-first s1 t2 search=0.42 3.7s | slet den igen | tools=["use_tool"]
+      grace: I will move test.txt to the Recycle Bin. Is that okay?
+ok  f03-delete-asks-first s2 t1 search=0.30 2.8s | lav en tekstfil der hedder test med ordet hej | tools=["write_file"]
+      grace: Done. I created test.txt in your Documents folder.
+ok  f03-delete-asks-first s2 t2 search=0.42 2.0s | slet den igen | tools=["use_tool"]
+      grace: I will move test.txt to the Recycle Bin, is that okay?
+BAD f04-read-newest-pdf s1 t1 search=0.71 3.6s | læs den nyeste pdf i mine overførsler og fortæl kort hvad den handler om | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: I couldn't find any PDF files in your Downloads folder. Did you mean a different folder?
+BAD f04-read-newest-pdf s2 t1 search=0.71 1.6s | læs den nyeste pdf i mine overførsler og fortæl kort hvad den handler om | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: I couldn't find any PDF files in your Downloads folder. Did you mean a different folder?
+ok  f05-chart s1 t1 search=0.31 4.0s | lav et søjlediagram over mine udgifter husleje otte tusind mad tre tusind og transport tusind | tools=["find_tools", "use_tool"]
+      grace: I have created the bar chart for your expenses and saved it as Expenses.png in Documents/Grace.
+BAD f05-chart s2 t1 search=0.31 2.1s | lav et søjlediagram over mine udgifter husleje otte tusind mad tre tusind og transport tusind | tools=["use_tool"] [TOOLS]
+      grace: I have created the bar chart for your expenses and saved it as Expenses.png in your Documents folder.
+BAD f06-budget-excel-to-csv s1 t1 search=0.46 4.0s | lav et regneark med mit budget husleje otte tusind fem hundrede og mad tre tusind | tools=["use_tool", "use_tool"] [TOOLS]
+      grace: I have created the Excel workbook Budget.xlsx in your Documents folder.
+BAD f06-budget-excel-to-csv s1 t2 search=0.37 3.1s | gem det også som csv | tools=["use_tool"] [ARGS]
+      grace: I cannot create a CSV file directly. I can create an Excel file and convert it to CSV if you want, or I can write the data into a Markdown file.
+BAD f06-budget-excel-to-csv s2 t1 search=0.46 16.4s | lav et regneark med mit budget husleje otte tusind fem hundrede og mad tre tusind | tools=["use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool"] [TOOLS] [ARGS]
+      grace: <|tool_call>call:use_tool{args:{format:<|"|>xlsx<|"|>,table:[[<|"|>Category<|"|>,<|"|>Amount<|"|>],[<|"|>Rent<|"|>,8500],[<|"|>Food<|"|>,3000]],title:<|"|>Budget<|"|>},name:<|"|>create_document<|"|>}<tool_call|>
+BAD f06-budget-excel-to-csv s2 t2 search=0.37 4.7s | gem det også som csv | tools=["use_tool"] [ARGS]
+      grace: I cannot create a CSV file directly. I can create it as a Markdown or text file if you want.
+BAD f07-powerpoint s1 t1 search=0.18 36.3s | lav en powerpoint med tre slides om hvorfor man skal spise grøntsager | tools=["use_tool", "find_tools", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool", "use_tool"] [ARGS]
+      grace: <|tool_call>call:use_tool{args:{format:<|"|>pptx<|"|>,slides:[{bullets:[<|"|>Boosts your immune system with vitamins and minerals.<|"|>,<|"|>Provides essential fiber for healthy digestion.<|"|>,<|"|>Packed with antioxidants to fight off cell damage.<|"|>],title:<|"|>Immune Support<|"|>},{bullets:[<|"|>Low in calories but high in nutrients.<|"|>,<|"|>Helps maintain a healthy weight.<|"|>,<|"|>Keeps you feeling full for longer.<|"|>],title:<|"|>Weight Management<|"|>},{bullets:[<|"|>Improves skin health and glow.<|"|>,<|"|>Provides steady energy throughout the day.<|"|>,<|"|>Reduces the risk of chronic diseases.<|"|>],title:<|"|>Overall Vitality<|"|>}],title:<|"|>Why You Should Eat Vegetables<|"|>},name:<|"|>Vegetables_Presentation.pptx<|"|>}<tool_call|>

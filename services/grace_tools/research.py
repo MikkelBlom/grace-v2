@@ -74,6 +74,7 @@ class Job:
         self.kind, self.what, self.cap_s = kind, what, cap_s
         self.started = time.time()
         self.state, self.progress, self.out = "running", "", None
+        self.background = False
         self.stop, self.done = threading.Event(), threading.Event()
 
     def alive(self):
@@ -90,7 +91,7 @@ JOBS = {}  # id -> Job
 JOBS_LOCK = threading.Lock()
 
 
-def start_job(kind, what, cap_s, fn, alive, wait_s=None):
+def start_job(kind, what, cap_s, fn, alive, wait_s=None, ctx=None):
     """Runs fn(job) -> result dict on a thread. Returns its result if it ends within wait_s (while
     the engine still waits), else a 'started in the background' result."""
     with JOBS_LOCK:
@@ -107,6 +108,15 @@ def start_job(kind, what, cap_s, fn, alive, wait_s=None):
             log(f"job {job.id} failed: {e!r}")
             job.state, job.out = "failed", {"ok": False, "result": f"The {kind} of {what} failed: {e}."}
         job.done.set()
+        # A job that outlived the call is reported at his next pause (grace_tools.time events).
+        if ctx is not None and job.background:
+            try:
+                from . import time as gt
+                result = (job.out or {}).get("result", "")
+                gt.announce(ctx, f"Your {kind} of {what} is {'done' if job.state == 'done' else job.state}. {result}"[:600],
+                            "job")
+            except Exception as e:
+                log(f"job {job.id}: could not announce: {e!r}")
 
     threading.Thread(target=body, daemon=True, name=f"job-{job.id}").start()
     deadline = time.time() + (FOREGROUND_S if wait_s is None else wait_s)
@@ -114,9 +124,10 @@ def start_job(kind, what, cap_s, fn, alive, wait_s=None):
         pass
     if job.done.is_set():
         return {**job.out, "job": job.id}
+    job.background = True
     return {"ok": True, "job": job.id, "background": True,
             "result": f"Started in the background (job {job.id}): {kind} of {what}. Tell him you're on it and that "
-                      f"he can ask you how it's going; research_jobs has the result when it's done. Don't make up results."}
+                      f"you'll tell him when it's done. Don't make up results."}
 
 
 @tool("research_jobs", "Check on research, transcription, translation or download jobs started earlier (is it done, "
@@ -328,7 +339,7 @@ def deep_research(ctx, a, alive):
     if ctx.dry:
         return {"ok": True, "result": f"Dry run: would research {topic!r} for up to {cap / 60:.0f} min (plan sub-questions, "
                                       f"search, read pages) and write a report in {DOCS / 'research'}. Nothing done."}
-    return start_job("research", topic, cap, lambda job: deep_research_job(ctx, topic, language, job), alive)
+    return start_job("research", topic, cap, lambda job: deep_research_job(ctx, topic, language, job), alive, ctx=ctx)
 
 
 # ---- fact check -------------------------------------------------------------------------------
@@ -525,7 +536,7 @@ def translate_document(ctx, a, alive):
             doc.save(str(out))
         return {"ok": True, "path": str(out),
                 "result": f"Translated {src.name} into {to}: {out} (the original is unchanged)."}
-    return start_job("translation", src.name, max(120, size / 20), work, alive)
+    return start_job("translation", src.name, max(120, size / 20), work, alive, ctx=ctx)
 
 
 # ---- downloads --------------------------------------------------------------------------------
@@ -642,7 +653,7 @@ def download_file(ctx, a, alive):
                                        "download_video if it's a video page."}
     folder.mkdir(parents=True, exist_ok=True)
     return start_job("download", file_name(final, name, ctype), 3600,
-                     lambda job: download_job(url, folder, final, size, ctype, name, job), alive)
+                     lambda job: download_job(url, folder, final, size, ctype, name, job), alive, ctx=ctx)
 
 
 def ffmpeg():
@@ -711,7 +722,7 @@ def download_video(ctx, a, alive):
         return {"ok": True, "path": str(path),
                 "result": f"Downloaded {'the sound of ' if audio_only else ''}{info.get('title') or 'the video'} "
                           f"to {path}."}
-    return start_job("download", info_title(url), 3600, work, alive)
+    return start_job("download", info_title(url), 3600, work, alive, ctx=ctx)
 
 
 def info_title(url):
@@ -851,4 +862,4 @@ def transcribe(ctx, a, alive):
                                       f".srt in {where}. Nothing done."}
     size = Path(source).stat().st_size if Path(source).is_file() else 0
     cap = 600 + size / 1e5  # ~1 h of mp3 (60 MB) -> 25 min cap; the model runs ~50x real time
-    return start_job("transcription", what, cap, lambda job: transcribe_job(ctx, source, language, job), alive)
+    return start_job("transcription", what, cap, lambda job: transcribe_job(ctx, source, language, job), alive, ctx=ctx)

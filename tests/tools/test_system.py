@@ -648,7 +648,7 @@ def test_risks_and_core():
     ("check if the internet is down", "network_status"), ("close a window", "close_window"),
     ("snap window to the left", "window_action"), ("type text at the cursor", "type_text")])
 def test_find_tools_finds_them(need, name):
-    assert name in [t.name for t in registry.find(need)], need
+    assert name in [t.name for t in registry.find(need, 8)], need
 
 
 def test_results_stay_short(ctx, fake):

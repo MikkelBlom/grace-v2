@@ -226,6 +226,12 @@ def pending_events(ctx):
              "ref": r["ref"], "created": r["created"]} for r in rows]
 
 
+def announce(ctx, say, source, priority="next_pause"):
+    """Queues a line for Grace to say unprompted (a finished background job, ADR 0021)."""
+    with store(ctx).db() as c:
+        return add_event(c, now_of(ctx), priority, source, None, say)
+
+
 def ack_event(ctx, id):
     """Marks an event as said (or handed to speech). True if it was pending."""
     with store(ctx).db() as c:

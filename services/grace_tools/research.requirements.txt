@@ -1,0 +1,5 @@
+# Added to bench/.venv-openvino for the research group (python -m pip install -r this file).
+yt-dlp>=2026.10.21  # video and YouTube downloads, audio for transcription
+python-docx>=1.2.0  # docx translation (was already installed)
+# Optional fallback when ffmpeg is not on PATH: imageio-ffmpeg (not installed; winget ffmpeg 8.1 is).
+# Transcription runs in bench/.venv (faster-whisper 1.2.1, CTranslate2 4.7.1, CUDA): nothing added there.

@@ -259,3 +259,9 @@ fixed and added to grace-tools-sim (39 scenarios / 51 lines). Tool roadmap vs Gr
 docs/TOOLS-ROADMAP.md.
 **Next steps:** live run 10; then P1 tools from the roadmap (clipboard, type text, reminders,
 notes, read documents, active window/screen, system controls).
+
+## 2026-10-22 (Claude Code): tools phase 0-2
+- Built the tool registry (ADR 0021), confirm flow, announcements, overlay glow, Gemma tool
+  suggestions; six agent-built groups merged with 384 tests. Sim 57/162 (scenarios need updating).
+- Next: fix the scenario `tools:` lists, add expected-args to use_tool errors, run research
+  scenarios, then the radarsuper proposal (on his yes), then a live test with --mmproj.

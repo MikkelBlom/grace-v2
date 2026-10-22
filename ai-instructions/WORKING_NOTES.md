@@ -422,3 +422,39 @@
 - Mikkel's local memory cleaned by hand again: closed 14, 16, 17, 22–26; fact 13 → followup.
 
 - Run-9 fixes, final regression: tools sim 152/153 (one miss: s31 math dispute, 1 of 3 samples, she did not repeat the number), chat bench with tools 0.93.
+
+## Tools phase 0-2 (2026-10-22, Claude Code, agents in worktrees)
+- Registry, risk classes and discovery: ADR 0021. Six groups merged (files, code+sandbox, system,
+  time, research, vision+overlay), 384 deterministic tests (`python -m pytest tests/tools`).
+  Each group's docs: `docs/tools/<group>.md` (tools, risk, what is not verified).
+- Engine: MAX_CALLS 8; destructive calls wait for a plain yes (`tools::answer_to`) on his next
+  utterance; reminders/watchers/finished jobs spoken unprompted (`conductor::maybe_announce`);
+  edge glow while tools run; slow tools get 320 s.
+- Tool suggestions: Gemma picks from a one-line catalog (cached prefix) and the picks go into his
+  message. Hit@3 54/56 at 129 ms p50 vs embeddings 27/56 (scratchpad pick_eval/suggest_eval).
+- Sim on group scenarios (no research yet): 18/74 before suggestions, 57/162 after. Answers 156/162.
+  Most remaining BADs are the scenarios, not Grace: they demand `[find_tools, use_tool]` while she
+  now goes straight to use_tool. Rewrite `tools:` to `[use_tool]` and re-run before judging.
+  Real problems seen: loops of 8 use_tool calls (f01, f07, f10, sys11: probably wrong args, the
+  error result must show the expected args); she still answers without tools for code ("skriv en
+  python funktion", c04), csv mean (c02), compare (f11), "word hænger dræb det" (sys10); app
+  volume goes to media instead of `volume` (sys07). Research scenarios not run yet.
+- Not verified live: everything that changes the PC (system group), overlay on top of a real
+  maximised Notepad, vision on the live llama-server (needs a restart with --mmproj and -ub 1120,
+  already in grace.ps1), spoken announcements, the confirm flow by voice.
+- Decisions taken without Mikkel: run_code is core (+~150 prompt tokens/turn); dry-run still runs
+  offline sandbox code; -ub 1120 kept for vision (2/28 -> 16/28 lines of small text).
+
+## Proposal (not done): radarsuper.com antivirus popups
+Mikkel's antivirus blocks python.exe fetching radarsuper.com (flagged phishing) during benches
+("Netto åbningstider i dag", chat scenario 13 and tools sim s17), 2 fetches x 3 runs = 6 popups.
+1. Why it wins: we read SearXNG's top PAGES=3 in its merged order with no source preference, and
+   aggregator SEO pages rank high for "åbningstider" queries. Proposal: boost a result whose
+   domain matches a word of the query (netto -> netto.dk, salling.dk), demote known aggregators.
+2. "SSL: UNEXPECTED_EOF_WHILE_READING" = probably blocked by security software: log it as such,
+   remember the host for the session, never retry it (the research group already does this in
+   grace_tools/research_web; reuse that in tools_server.get).
+3. Benches should not hit the live web: record search results and pages once
+   (fixtures/tools/recorded) and add a `--replay` mode to the tools server for chat bench and
+   tools sim; live runs only on request. --dry-run today does not stop network access.
+Waiting for Mikkel's go-ahead before changing any of it.

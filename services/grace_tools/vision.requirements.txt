@@ -1,0 +1,2 @@
+# Nothing new installed: the vision tools use Pillow (ImageGrab, JPEG), already in bench/.venv-openvino.
+pillow>=13.0

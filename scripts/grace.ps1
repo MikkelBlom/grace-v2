@@ -26,8 +26,14 @@ function Wait-Port($port, $what, $seconds) {
 
 if (-not (Test-Port 8080)) {
     Write-Host 'starting llama-server (Gemma 4 12B) ...'
+    $llamaArgs = @('-m','.runtime\models\gemma-4-12b-it-qat-q4_0.gguf','-ngl','99','-c','32768','-np','2','-fa','on','-ctk','q8_0','-ctv','q8_0','--reasoning','off','--swa-full','--host','127.0.0.1','--port','8080')
+    # The vision projector lets the vision tools send screenshots (docs/tools/vision.md). -ub 1120
+    # gives an image its full token budget (capped at 512 otherwise): small screen text read
+    # 16/28 lines exactly vs 2/28. Text TTFT measured unchanged (341 vs 343 ms p50).
+    $mmproj = '.runtime\models\mmproj-gemma-4-12b-it-qat-q4_0.gguf'
+    if (Test-Path $mmproj) { $llamaArgs += @('--mmproj', $mmproj, '-ub', '1120') }
     Start-Process -WindowStyle Hidden -FilePath .runtime\llama.cpp\b11539\llama-server.exe `
-        -ArgumentList '-m','.runtime\models\gemma-4-12b-it-qat-q4_0.gguf','-ngl','99','-c','32768','-np','2','-fa','on','-ctk','q8_0','-ctv','q8_0','--reasoning','off','--swa-full','--host','127.0.0.1','--port','8080' `
+        -ArgumentList $llamaArgs `
         -RedirectStandardError logs\llama-server.log -RedirectStandardOutput logs\llama-server.out.log
 }
 # Restart the speech server with -Restart (e.g. after changing config/speech.json).

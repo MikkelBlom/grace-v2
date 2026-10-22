@@ -881,46 +881,36 @@ def full_manifest(all_tools=False):
     return manifest() + reg + ([] if all_tools or len(registry.TOOLS) == len(reg) else discovery_tools())
 
 
-EMBED = ("127.0.0.1", 7812)
-TOOL_INSTRUCT = "Instruct: Given a request spoken to a voice assistant, retrieve the tool that carries it out\nQuery: "
-SUGGEST_N = 4
-SUGGEST_MIN = 0.42  # cosine below this: no tool fits well enough to mention
-
-
-def embed(texts, kind, instruct=None):
-    with socket.create_connection(EMBED, timeout=5) as s:
-        s.sendall((json.dumps({"id": 1, "kind": kind, "texts": texts,
-                               **({"instruct": instruct} if instruct else {})}) + "\n").encode())
-        line = s.makefile("rb").readline()
-    d = json.loads(line)
-    if "error" in d:
-        raise RuntimeError(d["error"])
-    return np.array(d["vectors"], dtype=np.float32)
+def first_sentence(text):
+    return re.split(r"(?<=[.!?])\s", text, 1)[0]
 
 
 class Suggester:
-    """The registry tools that fit what he said, by meaning (live sims: Gemma rarely called
-    find_tools on her own, 18/74). They go into his message, which is never cached, so the tool
-    list itself stays fixed. Danish words, English descriptions: the embedder is multilingual."""
+    """The registry tools that fit what he said (ADR 0021). On her own Gemma rarely looked past
+    the fixed tool list (tools sim: 18/74 on files + code); ranking by embeddings found the
+    right tool in the top 4 for 27/56 scenario lines, Gemma choosing from a one-line catalog
+    for 54/56 at 129 ms p50. The catalog is a fixed prefix, so llama-server keeps it cached;
+    the picks go into his message, never into the cached tool list."""
 
     def __init__(self):
-        self.names, self.vecs, self.lock = [], None, threading.Lock()
+        rows = [(n, first_sentence(f["function"]["description"])) for f in manifest() for n in [f["function"]["name"]]]
+        rows += [(t.name, first_sentence(t.description)) for t in sorted(registry.TOOLS.values(), key=lambda t: (t.group, t.name))]
+        self.offered = {f["function"]["name"] for f in manifest()} | {t.name for t in registry.TOOLS.values() if t.core}
+        self.system = ("You route requests for a voice assistant on Mikkel's Windows PC. Tools:\n"
+                       + "\n".join(f"{n}: {d}" for n, d in rows)
+                       + "\n\nGiven what Mikkel said (Danish, transcribed), name up to 3 tools from the list that would "
+                         "carry it out, best first, comma-separated. If none fits (chat, general knowledge), answer none.")
 
-    def ready(self):
-        with self.lock:
-            if self.vecs is None:
-                tools = [t for t in registry.TOOLS.values() if not t.core]
-                self.names = [t.name for t in tools]
-                self.vecs = embed([f"{t.name.replace('_', ' ')}: {t.description}" for t in tools], "document")
-                log(f"suggester: {len(tools)} tools embedded")
-        return self.vecs
-
-    def suggest(self, said, n=SUGGEST_N):
-        vecs = self.ready()
-        q = embed([said], "query", TOOL_INSTRUCT)[0]
-        sims = vecs @ q
-        best = np.argsort(-sims)[:n]
-        return [(self.names[i], float(sims[i])) for i in best if sims[i] >= SUGGEST_MIN]
+    def suggest(self, said, before=""):
+        user = (f'Before that he said: "{before}"\n' if before else "") + f'Mikkel said: "{said}"'
+        body = {"messages": [{"role": "system", "content": self.system}, {"role": "user", "content": user}],
+                "max_tokens": 24, "temperature": 0, "cache_prompt": True}
+        req = urllib.request.Request(f"{LLM}/v1/chat/completions", data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        out = json.loads(urllib.request.urlopen(req, timeout=5).read())["choices"][0]["message"]["content"]
+        picks = [x.strip().strip("`.*") for x in out.split(",")][:3]
+        # Tools she already has on every turn need no mention; only the hidden ones do.
+        return [n for n in picks if n in registry.TOOLS and n not in self.offered]
 
 
 def describe_tool(t):
@@ -1229,8 +1219,8 @@ class Handler(socketserver.StreamRequestHandler):
                        "slow": SLOW + [t.name for t in registry.TOOLS.values() if t.slow],
                        "risk": {**BUILTIN_RISK, **{t.name: t.risk for t in registry.TOOLS.values()}}}
             elif kind == "suggest":  # tools for this transcript, as text for his message
-                hits = srv.suggester.suggest(req["said"])
-                out = {"tools": hits, "text": "\n".join(describe_tool(registry.TOOLS[n]) for n, _ in hits)}
+                hits = srv.suggester.suggest(req["said"], req.get("before") or "")
+                out = {"tools": hits, "text": "\n".join(describe_tool(registry.TOOLS[n]) for n in hits)}
             elif kind == "events":  # due reminders, timers, watchers (grace_tools.time, docs/tools/time.md)
                 from grace_tools import time as gt
                 acked = [i for i in req.get("ack") or [] if gt.ack_event(srv.tools, i)]
@@ -1271,13 +1261,6 @@ class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
-def _try(f):
-    try:
-        f()
-    except Exception as e:
-        log("suggester not ready:", repr(e))
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="report what open_* would do, don't do it")
@@ -1290,7 +1273,6 @@ def main():
     server.keys, server.keys_lock = {}, threading.Lock()
     server.all_tools = args.all_tools
     server.suggester = Suggester()
-    threading.Thread(target=lambda: _try(server.suggester.ready), daemon=True).start()
     server.tools = Tools(server.checker, args.dry_run)
     log(f"tools server listening on 127.0.0.1:{args.port}{' (dry run)' if args.dry_run else ''}")
     server.serve_forever()

@@ -26,6 +26,8 @@ FILES = [
 MODELS = [
     # (repo, file): Google's quantization-aware-trained Q4_0, better than post-hoc Q4 at the same size.
     ("google/gemma-4-12B-it-qat-q4_0-gguf", "gemma-4-12b-it-qat-q4_0.gguf"),
+    # Gemma's vision projector from the same repo: look_at_screen, read_image (docs/tools/vision.md).
+    ("google/gemma-4-12B-it-qat-q4_0-gguf", "mmproj-gemma-4-12b-it-qat-q4_0.gguf"),
     # Smart Turn v3.2 full precision: the int8 "-cpu" build swings ±0.3 near the decision
     # threshold depending on ONNX Runtime settings (2026-10-11).
     ("pipecat-ai/smart-turn-v3", "smart-turn-v3.2-gpu.onnx"),

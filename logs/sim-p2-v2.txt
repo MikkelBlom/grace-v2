@@ -1,0 +1,68 @@
+BAD c01-std-numbers s1 t1 search=-1.00 13.9s | hvad er standardafvigelsen af tallene tolv fire nitten otte og femten | tools=["calculate", "calculate", "calculate", "run_code"] [TOOLS] [ARGS]
+      grace: One sec, I'll look it up. The standard deviation is 5.86.
+BAD c01-std-numbers s2 t1 search=0.37 10.4s | hvad er standardafvigelsen af tallene tolv fire nitten otte og femten | tools=["calculate", "calculate", "calculate", "calculate", "calculate"] [TOOLS] [ARGS]
+      grace: The standard deviation is approximately 5.24.
+ok  c02-csv-mean s1 t1 search=-1.00 64.3s | find csv filen med mine udgifter | tools=["find_files"]
+      grace: One sec, I'll find it. I am not sure, but I found two CSV files on your Desktop in the DTU-test folder. Should I open one of them?
+BAD c02-csv-mean s1 t2 search=0.77 1.3s | hvad er gennemsnittet af tallene i den csv fil | tools=[] [TOOLS] [ARGS]
+      grace: I am not sure which file you mean. Could you tell me which one to use?
+ok  c02-csv-mean s2 t1 search=0.54 5.5s | find csv filen med mine udgifter | tools=["find_files"]
+      grace: Let me look. I found a couple of CSV files on your Desktop in a folder called DTU-test-2026-10-11_1715. They have long numerical names, so I am not sure if they are the ones you want.
+BAD c02-csv-mean s2 t2 search=0.77 0.9s | hvad er gennemsnittet af tallene i den csv fil | tools=[] [TOOLS] [ARGS]
+      grace: Which one of those two files should I check?
+BAD c03-chart-saved s1 t1 search=0.57 5.8s | lav en graf over min vægt de sidste fem uger otteogfirs syvogfirs seksogfirs femogfirs og fireogfirs og gem den | tools=["find_tools", "use_tool"] [ARGS]
+      grace: I have created the chart and saved it as Weight_Trend_Last_5_Weeks.png in your Documents folder.
+BAD c03-chart-saved s2 t1 search=0.57 5.2s | lav en graf over min vægt de sidste fem uger otteogfirs syvogfirs seksogfirs femogfirs og fireogfirs og gem den | tools=["find_tools", "use_tool"] [ARGS]
+      grace: I have created the line chart for your weight and saved it as Weight_Graph.png in your Documents/Grace folder.
+BAD c04-check-code-first s1 t1 search=0.14 2.5s | skriv en lille python funktion der tjekker om et tal er et primtal | tools=[] [TOOLS] [ARGS]
+      grace: Here is a quick function for you.
+
+def is_prime(n):
+    if n less than 2:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+BAD c04-check-code-first s2 t1 search=0.14 2.0s | skriv en lille python funktion der tjekker om et tal er et primtal | tools=[] [TOOLS] [ARGS]
+      grace: Sure thing, Mikkel. Here is a simple way to do it:
+
+def is_prime(n):
+    if n less than 2:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+ok  c05-sandbox-status s1 t1 search=0.32 4.3s | virker din sandkasse til kode | tools=["find_tools", "use_tool"]
+      grace: Yes, it is working. Docker is running and the image is current, so you can use run_code.
+ok  c05-sandbox-status s2 t1 search=0.32 3.4s | virker din sandkasse til kode | tools=["find_tools", "use_tool"]
+      grace: Yes, the sandbox is running and the image is current, so run_code is ready to go.
+BAD c06-repo-status s1 t1 search=0.83 3.1s | hvad er status på grace repoet | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: You are on the main branch and are 18 commits ahead of origin. There are 5 changed files and 1 new untracked file in the grace folder.
+BAD c06-repo-status s2 t1 search=0.83 2.3s | hvad er status på grace repoet | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: You are on the main branch and are 18 commits ahead of origin. There are 5 changed files and 1 new untracked file in the logs folder.
+BAD c07-ci s1 t1 search=0.57 3.1s | er ci grøn på grace | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: Yes, the CI is green. The latest run on the main branch was a success.
+BAD c07-ci s2 t1 search=0.57 2.5s | er ci grøn på grace | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: Yes, the CI for Grace is green. The latest run on main was a success.
+BAD c08-issues s1 t1 search=0.74 4.1s | hvilke issues er åbne i grace | tools=["find_tools", "use_tool"] [ARGS]
+      grace: There are 10 open issues for Grace, including work on resume logic, silent replies, and audio latency.
+BAD c08-issues s2 t1 search=0.74 3.0s | hvilke issues er åbne i grace | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: There are 10 open issues for Grace, including things like resuming cut replies, silent engine replies, and TTS text normalization. Do you want me to look into any specific one?
+BAD c09-recent-work s1 t1 search=0.54 3.4s | hvad har jeg lavet i faber for nylig | tools=["find_tools", "use_tool"] [ARGS]
+      grace: You have been working on circuits and the wiring lab, specifically moving things into the shell and documenting D61. Most of these updates were from 4 days ago.
+BAD c09-recent-work s2 t1 search=0.54 2.9s | hvad har jeg lavet i faber for nylig | tools=["find_tools", "use_tool"] [ARGS]
+      grace: You have been working on circuits, specifically moving the wiring lab into the shell as Circuits and documenting D61. You also worked on DC motor stall measurements and some simulation advice for SENNEP V2.
+BAD c10-commit-then-push s1 t1 search=0.40 2.1s | commit ændringerne i grace med beskeden fix the timer | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: The dry run shows that all 6 changed files in Grace would be committed with the message fix the timer. Should I go ahead and do it?
+BAD c10-commit-then-push s1 t2 search=0.41 3.6s | push det | tools=["use_tool"] [ARGS]
+      grace: I am ready to push branch main of Grace to GitHub with 18 commits. Is that okay?
+BAD c10-commit-then-push s2 t1 search=0.40 3.4s | commit ændringerne i grace med beskeden fix the timer | tools=["use_tool"] [TOOLS] [ARGS]
+      grace: The dry run shows that committing the changes in Grace with the message fix the timer would include 6 changed files. Should I go ahead and do it?
+BAD c10-commit-then-push s2 t2 search=0.41 1.9s | push det | tools=["use_tool"] [ARGS]
+      grace: I will push branch main of Grace to GitHub with 18 commits. Is that okay?
+BAD c11-push-asks-first s1 t1 search=0.68 2.4s | push grace til github | tools=[] [TOOLS] [ARGS]
+      grace: I can do that for you. Should I push the current branch of the grace repo to GitHub?
+ok  c11-push-asks-first s2 t1 search=0.68 2.8s | push grace til github | tools=["find_tools", "use_tool"]
+      grace: I am ready to push the main branch of Grace to GitHub with 18 commits. Is that okay?

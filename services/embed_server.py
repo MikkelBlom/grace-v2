@@ -35,8 +35,7 @@ class Handler(socketserver.StreamRequestHandler):
             req = json.loads(line)
             started = time.perf_counter()
             try:
-                # A caller may bring its own task line (the tools server ranks tools, ADR 0021).
-                prompt = req.get("instruct") or (QUERY_INSTRUCT if req.get("kind") == "query" else None)
+                prompt = QUERY_INSTRUCT if req.get("kind") == "query" else None
                 with self.server.lock:
                     vecs = self.server.model.encode(req["texts"], prompt=prompt, normalize_embeddings=True)
                 reply = {"id": req["id"], "model": MODEL, "dim": int(vecs.shape[1]),

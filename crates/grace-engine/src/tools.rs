@@ -39,8 +39,23 @@ pub const HINT_AT: f64 = 0.5;
 // conversation each time (live run 8: up to 3,100 tokens, 1.5 s); chat bench 02 scored the same
 // with and without it (123/132 hard).
 pub const HINT: &str = "[This likely needs a web lookup.]";
-/// How long the reply waits for the tool suggestions (started at transcript time, ~50 ms).
-pub const SUGGEST_TIMEOUT: Duration = Duration::from_millis(150);
+/// The screen-edge overlay (crates/grace-overlay): it glows while Grace's tools run.
+const OVERLAY: &str = "127.0.0.1:7815";
+
+/// Turns the edge glow on or off; never waits (the overlay may not be running).
+pub fn glow(on: bool) {
+    tokio::spawn(async move {
+        let connect = tokio::time::timeout(Duration::from_millis(200), TcpStream::connect(OVERLAY));
+        if let Ok(Ok(mut s)) = connect.await {
+            let _ = s.write_all(format!("{{\"glow\":{on}}}
+").as_bytes()).await;
+        }
+    });
+}
+
+/// How long the reply waits for the tool suggestions (Gemma picks from a cached catalog, started
+/// at transcript time: 129 ms p50, 240 ms p90 on the scenario lines).
+pub const SUGGEST_TIMEOUT: Duration = Duration::from_millis(250);
 
 /// Tool calls per reply. Mikkel wants her to work a task out herself (2026-10-22): find the
 /// tool, find the file, read it, write the result, open it; find_tools + use_tool alone are two.
@@ -107,6 +122,8 @@ pub struct Tools {
     pending: Mutex<Option<Pending>>,
     /// The registry tools that fit each transcript, by meaning (ADR 0021), started with the hint.
     suggestions: Mutex<HashMap<String, Arc<tokio::sync::OnceCell<Option<String>>>>>,
+    /// His previous request, for follow-ups like "lav det om til pdf".
+    last_said: Mutex<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -160,6 +177,7 @@ impl Tools {
             hints: Mutex::new(HashMap::new()),
             pending: Mutex::new(None),
             suggestions: Mutex::new(HashMap::new()),
+            last_said: Mutex::new(String::new()),
         })
     }
 
@@ -176,6 +194,8 @@ impl Tools {
     /// Drops a question waiting for his yes (a new conversation in the sims).
     pub fn forget_pending(&self) {
         self.pending.lock().expect("pending poisoned").take();
+        self.last_said.lock().expect("last_said poisoned").clear();
+        self.suggestions.lock().expect("suggestions poisoned").clear();
     }
 
     /// Settles a destructive call waiting for his yes, from what he just said: runs it on a yes
@@ -249,7 +269,8 @@ impl Tools {
     }
 
     async fn fetch_suggestion(&self, said: &str) -> Option<String> {
-        match call(&self.addr, json!({ "kind": "suggest", "said": said })).await {
+        let before = self.last_said.lock().expect("last_said poisoned").clone();
+        match call(&self.addr, json!({ "kind": "suggest", "said": said, "before": before })).await {
             Ok(v) => v["text"].as_str().filter(|t| !t.is_empty()).map(str::to_owned),
             Err(e) => {
                 warn!(error = %e, "tool suggestions failed");
@@ -401,6 +422,9 @@ pub async fn reply<S: Sink + Send>(
             "{content}\n\n[Tools that may fit; run one with use_tool if it does what he asked:\n{text}]"
         ));
     }
+    if let Some(t) = tools {
+        *t.last_said.lock().expect("last_said poisoned") = said.to_owned();
+    }
     // His answer to a destructive call she asked about last turn.
     if let Some(t) = tools
         && let Some((name, args, out)) = t.settle(said, span).await
@@ -549,6 +573,8 @@ pub async fn reply<S: Sink + Send>(
         }
         let mut tool_calls = Vec::new();
         let mut results = Vec::new();
+        glow(true);
+        let _glow_off = GlowOff;
         for (i, (id, name, args)) in calls.into_iter().enumerate() {
             if calls_made >= MAX_CALLS {
                 break;
@@ -619,6 +645,17 @@ pub async fn reply<S: Sink + Send>(
         req.messages.extend(results);
         if calls_made >= MAX_CALLS {
             req.tools.clear();
+        }
+    }
+}
+
+/// Turns the glow off when a pass of tool calls ends, however it ends (cancelled, failed).
+struct GlowOff;
+
+impl Drop for GlowOff {
+    fn drop(&mut self) {
+        if tokio::runtime::Handle::try_current().is_ok() {
+            glow(false);
         }
     }
 }

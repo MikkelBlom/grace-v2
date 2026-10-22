@@ -67,6 +67,11 @@ if ($toolsVenv -and -not (Test-Port 7813)) {
     Start-Process -WindowStyle Hidden -FilePath bench\.venv-openvino\Scripts\python.exe -ArgumentList 'services\tools_server.py' `
         -RedirectStandardError logs\tools-server.log -RedirectStandardOutput logs\tools-server.out.log
 }
+# The screen-edge glow and focus boxes (crates/grace-overlay); click-through, never takes focus.
+if ((Test-Path target\release\grace-overlay.exe) -and -not (Test-Port 7815)) {
+    Start-Process -WindowStyle Hidden -FilePath target\release\grace-overlay.exe `
+        -RedirectStandardError logs\overlay.log -RedirectStandardOutput logs\overlay.out.log
+}
 Wait-Port 8080 'llama-server' 120
 Wait-Port 7811 'speech server' 120
 Wait-Port 7812 'embed server' 120

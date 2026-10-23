@@ -78,6 +78,10 @@ struct Args {
     /// Only scenarios whose id starts with this.
     #[arg(long)]
     only: Option<String>,
+    /// Skip scenarios whose id starts with this (13: its live search trips Mikkel's antivirus
+    /// on radarsuper.com, see WORKING_NOTES).
+    #[arg(long)]
+    skip: Vec<String>,
     /// Runs per scenario (seeds 1..=n), so one lucky sample doesn't decide a prompt change.
     #[arg(long, default_value_t = 3)]
     seeds: u64,
@@ -654,7 +658,9 @@ async fn main() -> anyhow::Result<()> {
             ],
         };
         for sc in many {
-            if args.only.as_deref().is_none_or(|o| sc.id.starts_with(o)) {
+            if args.only.as_deref().is_none_or(|o| sc.id.starts_with(o))
+                && !args.skip.iter().any(|k| sc.id.starts_with(k.as_str()))
+            {
                 scenarios.push(sc);
             }
         }

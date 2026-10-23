@@ -94,10 +94,43 @@ class Confirmations:
         return v
 
 
+def usage(t):
+    """The tool's arguments in one line, for a call that got them wrong."""
+    parts = []
+    for k, p in t.params.items():
+        enum = f" (one of: {', '.join(p['enum'])})" if p.get("enum") else ""
+        parts.append(f"{k}{'' if k in t.required else ' [optional]'}: {p.get('description', p.get('type', ''))}{enum}")
+    return "; ".join(parts) or "no arguments"
+
+
+def problems(t, args):
+    """What is wrong with a call's arguments, in words, or [] when it can run: only missing
+    required ones (each tool normalises its own values: "Python", aliases). The failed values
+    are not echoed back: small models repeat a call they see quoted (arXiv 2608.23651), and our
+    tools sim showed 8 identical use_tool calls in a row."""
+    if not isinstance(args, dict):
+        return ["the arguments were not a set of named values"]
+    out = []
+    missing = [k for k in t.required if args.get(k) in (None, "", [], {})]
+    if missing:
+        out.append(f"missing {', '.join(missing)}")
+        # Unknown names only matter when something is missing: they are usually the right
+        # value under the wrong name (path for file). Extra keys are otherwise ignored.
+        unknown = [k for k in args if k not in t.params and k != "heard"]
+        if unknown:
+            out.append(f"{', '.join(unknown)} {'is' if len(unknown) == 1 else 'are'} not among its arguments")
+    return out
+
+
 def run(ctx, name, args, alive, confirmed=False):
     t = TOOLS.get(name)
     if t is None:
         return None
+    wrong = problems(t, args)
+    if wrong:
+        return {"ok": False, "invalid_args": True,
+                "result": f"Not run: {'; '.join(wrong)}. {t.name} takes: {usage(t)}. Call it once more with "
+                          f"those arguments, or ask him for what is missing."}
     if t.risk == "destructive" and not confirmed:
         return ctx.confirmations.ask(t, args)
     out = t.fn(ctx, args, alive)

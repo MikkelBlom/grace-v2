@@ -47,3 +47,23 @@ def test_find_matches_words():
         assert registry.find("frobnicate some widgets")[0].name == "test_frobnicate"
     finally:
         registry.TOOLS.pop("test_frobnicate")
+
+
+def test_bad_arguments_are_described_not_run(ctx):
+    calls = []
+
+    @registry.tool("test_paint", "Paints a wall.", {"wall": registry.s("Which wall."),
+                                                    "colour": registry.s("Colour.", ["red", "blue"])}, ["wall"])
+    def paint(ctx, a, alive):
+        calls.append(a)
+        return {"result": "Painted."}
+
+    try:
+        out = registry.run(ctx, "test_paint", {"side": "north"}, lambda: True)
+        assert not out["ok"] and out["invalid_args"] and not calls
+        assert "missing wall" in out["result"] and "side is not among" in out["result"]
+        assert "wall: Which wall." in out["result"] and "north" not in out["result"]
+        out = registry.run(ctx, "test_paint", {"wall": "north", "extra": 1}, lambda: True)
+        assert out["result"] == "Painted."
+    finally:
+        registry.TOOLS.pop("test_paint")

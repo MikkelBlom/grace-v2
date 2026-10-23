@@ -128,6 +128,29 @@ impl tools::Sink for SimSink {
     }
 }
 
+/// The built-in tools of services/tools_server.py; every other tool name is a registry tool.
+const BUILTIN: &[&str] = &[
+    "web_search", "read_page", "weather", "calculate", "media", "open_app", "open_url",
+    "find_files", "list_folder", "open_file", "find_tools", "use_tool",
+];
+
+/// The names a call answers to and its arguments as `{"name", "args"}`: use_tool(x) is also x,
+/// and a registry tool called directly is also a use_tool call of it.
+fn call_views(c: &(String, Value, Value)) -> (Vec<String>, String) {
+    let (name, args, _) = c;
+    if name == "use_tool" {
+        let inner = args["name"].as_str().unwrap_or("").to_owned();
+        return (vec![name.clone(), inner], args.to_string());
+    }
+    if BUILTIN.contains(&name.as_str()) {
+        return (vec![name.clone()], args.to_string());
+    }
+    (
+        vec![name.clone(), "use_tool".into()],
+        json!({ "name": name, "args": args }).to_string(),
+    )
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -222,19 +245,25 @@ async fn main() -> anyhow::Result<()> {
                 history.push(("assistant", reply.clone()));
 
                 let called: Vec<&str> = sink.calls.iter().map(|c| c.0.as_str()).collect();
+                // A registry tool counts the same whether Gemma reached it through use_tool or
+                // called it directly (core tools); find_tools is a route, never a requirement.
+                let views: Vec<(Vec<String>, String)> = sink.calls.iter().map(|c| call_views(c)).collect();
                 let t_ok = match &turn.tools {
                     None => true,
                     Some(want) if want.is_empty() => called.is_empty(),
                     Some(want) => {
-                        let mut it = called.iter();
-                        want.iter().all(|w| it.any(|c| c == w))
+                        let mut it = views.iter();
+                        want.iter()
+                            .filter(|w| *w != "find_tools")
+                            .all(|w| it.any(|(labels, _)| labels.iter().any(|l| l == w)))
                     }
                 };
                 let a_ok = turn.args.iter().all(|(tool, re)| {
                     let re = Regex::new(re).expect("args regex");
-                    sink.calls
-                        .iter()
-                        .any(|c| c.0 == *tool && re.is_match(&c.1.to_string()))
+                    sink.calls.iter().zip(&views).any(|(c, (labels, inner))| {
+                        (c.0 == *tool && re.is_match(&c.1.to_string()))
+                            || (labels.iter().any(|l| l == tool) && re.is_match(inner))
+                    })
                 });
                 let earlier: String = history
                     .iter()

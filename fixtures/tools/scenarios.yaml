@@ -126,11 +126,11 @@
   turns:
     - say: hej grace
       tools: []
-- id: s22-cant-timer
+- id: s22-timer
   turns:
     - say: sæt en timer på ti minutter
-      tools: []
-      answer: "(?i)can't|cannot|not able"
+      tools: [set_reminder]
+      not_answer: "(?i)can't|cannot|not able"
 - id: s23-weather-now
   memory: "What you know about Mikkel:
 - He lives on Trøjborg in Aarhus.

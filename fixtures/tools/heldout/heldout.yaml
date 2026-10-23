@@ -1,0 +1,77 @@
+# Held-out tool scenarios (docs/research/small-models/README.md, step 0): never tuned on.
+# Changes to prompts, tool descriptions or the engine are judged here too, so a gain that only
+# shows on fixtures/tools/scenarios*/ is overfitting. Same format as the other scenario files;
+# a registry tool counts whether called directly or through use_tool.
+
+# ---- near-miss tool pairs ----
+- id: h01-reminder-not-todo
+  turns:
+    - say: mind mig om at hente pakken klokken fem
+      tools: [set_reminder]
+      not_answer: "(?i)can't|cannot"
+- id: h02-todo-not-reminder
+  turns:
+    - say: sæt rengøring af badeværelset på min liste
+      tools: [todo_add]
+- id: h03-app-volume-not-media
+  turns:
+    - say: skru ned for discord
+      tools: [volume]
+      args: { use_tool: '(?i)discord' }
+- id: h04-close-not-kill
+  turns:
+    - say: luk lommeregneren
+      tools: [close_window]
+- id: h05-screen-not-file
+  turns:
+    - say: hvad er det for en fejl der står på skærmen
+      tools: [look_at_screen]
+- id: h06-translate-text-not-document
+  turns:
+    - say: hvad hedder tak for mad på tysk
+      not_answer: "(?i)can't|cannot"
+
+# ---- no tool at all ----
+- id: h07-chat
+  turns:
+    - say: jeg har haft en virkelig lang dag
+      tools: []
+- id: h08-knowledge
+  turns:
+    - say: hvorfor er himlen blå
+      tools: []
+- id: h09-thanks-after-tool
+  turns:
+    - say: hvad er klokken
+      tools: [time_now]
+    - say: tak skal du have
+      tools: []
+
+# ---- loop traps: arguments that are easy to get wrong ----
+- id: h10-git-log-project
+  turns:
+    - say: hvad var de sidste tre commits i grace
+      tools: [git_log]
+      args: { use_tool: '(?i)grace' }
+- id: h11-convert-units
+  turns:
+    - say: hvor mange centimeter er seks fod
+      tools: [convert_units]
+      answer: '(?i)18[23]|one hundred (and )?eighty'
+- id: h12-network
+  turns:
+    - say: kan du tjekke om google svarer
+      tools: [site_up]
+- id: h13-chained-file
+  turns:
+    - say: lav en fil der hedder huskeliste med ordet mælk
+      tools: [write_file]
+    - say: tilføj også brød
+      tools: [append_to_file]
+- id: h14-delete-asks
+  turns:
+    - say: lav en fil der hedder slettest med ordet hej
+      tools: [write_file]
+    - say: slet den fil igen
+      asks: true
+      not_answer: '(?i)\b(I(''ve| have)? deleted|is deleted|has been deleted)\b'

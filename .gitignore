@@ -21,3 +21,4 @@ __pycache__/
 
 # machine-specific install logs
 logs/intel-drivers-*.json
+/logs/

@@ -410,6 +410,9 @@ pub async fn reply<S: Sink + Send>(
         req.tools = t.manifest.clone();
     }
     let mut calls_made = 0;
+    // Calls already made in this reply: the tools sim showed 8 identical use_tool calls in a
+    // row when the first one failed; a repeat gets a note instead of running again.
+    let mut made: HashSet<String> = HashSet::new();
     // The tools that fit his words go into his (uncached) message: on her own Gemma rarely
     // looked past the fixed list (tools sim, files + code groups: 18/74).
     if let Some(t) = tools
@@ -599,6 +602,15 @@ pub async fn reply<S: Sink + Send>(
             let inner = if name == "use_tool" { parsed["name"].as_str().unwrap_or("") } else { &name };
             if tools.is_slow(inner) && sink.silent() {
                 sink.filler(filler(reply_id, &name));
+            }
+            let key = format!("{name} {parsed}");
+            if !made.insert(key) {
+                warn!(parent: span, tool = %name, args = %parsed, "repeated tool call, not run");
+                tool_calls.push(json!({ "id": id, "type": "function",
+                                        "function": { "name": name, "arguments": args } }));
+                results.push(json!({ "role": "tool", "tool_call_id": id, "content":
+                    "Not run again: you already made this exact call in this reply, and its result is above.                      Answer from it, change the arguments, or tell him it didn't work." }));
+                continue;
             }
             let stage = info_span!(parent: span, "stage", stage = "tool", model = name.as_str());
             let out = tokio::select! {

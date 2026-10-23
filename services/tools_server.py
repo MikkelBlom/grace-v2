@@ -947,7 +947,11 @@ class Tools:
             out = registry.run(self, name, args, alive, confirmed)
         except Exception as e:
             log(f"tool {name} failed: {e!r}")
-            return {"ok": False, "result": f"The {name} tool failed: {e}. Say it didn't work, or try another way."}
+            # Described, not echoed: a raw exception with the failed values makes small models
+            # repeat the same call (registry.problems).
+            why = str(e).splitlines()[0][:160] if str(e) else type(e).__name__
+            return {"ok": False, "result": f"The {name} tool could not do it ({why}). Try a different way once, "
+                                           f"or tell him it didn't work."}
         if out is None:
             hits = registry.find(name.replace("_", " "), 3)
             alt = f" Maybe: {', '.join(t.name for t in hits)}." if hits else ""

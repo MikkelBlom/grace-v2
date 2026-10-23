@@ -3,6 +3,13 @@
 Parked so they don't derail the current milestone. Promote to a GitHub issue when it's time.
 
 ## Speech
+- **NVIDIA PersonaPlex 7B (researched 2026-10-23, not adopted).** Full-duplex speech-to-speech on
+  Moshi (listens and talks at once, 0.17 s turn-taking, backchannels). Blockers for Grace: English
+  only (trained on Fisher English, no Danish), no tool calling (GitHub issue #93, unanswered), no
+  text injection mid-conversation (memory, tool results), Linux/A100-H100 only officially, and ~16 GB
+  in bf16 next to Gemma's 13 GB on a 24 GB GPU. Revisit if a multilingual/Danish or tool-capable
+  version appears. Possible later use: an English full-duplex simulated user to stress Grace's
+  barge-in and pause handling in the turn sim (if it runs under WSL).
 - **Turn-taking follow-ups (ADR 0018):** Danish articles "en"/"et" as hanging words (a sim
   miss committed on "Danmark er en"); a softer stop when a merge retracts audible speech (fade
   + short "mm"?) if the stop-start feels abrupt live; keep the paused reply's LLM stream alive

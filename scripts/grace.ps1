@@ -68,8 +68,10 @@ if ($toolsVenv -and -not (Test-Port 7813)) {
         -RedirectStandardError logs\tools-server.log -RedirectStandardOutput logs\tools-server.out.log
 }
 # The screen-edge glow and focus boxes (crates/grace-overlay); click-through, never takes focus.
-if ((Test-Path target\release\grace-overlay.exe) -and -not (Test-Port 7815)) {
-    Start-Process -WindowStyle Hidden -FilePath target\release\grace-overlay.exe `
+# Binaries live in the shared CARGO_TARGET_DIR when it is set, else in ./target.
+$bin = Join-Path $(if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'target' }) 'release'
+if ((Test-Path (Join-Path $bin 'grace-overlay.exe')) -and -not (Test-Port 7815)) {
+    Start-Process -WindowStyle Hidden -FilePath (Join-Path $bin 'grace-overlay.exe') `
         -RedirectStandardError logs\overlay.log -RedirectStandardOutput logs\overlay.out.log
 }
 Wait-Port 8080 'llama-server' 120
@@ -85,4 +87,4 @@ if ($LASTEXITCODE -ne 0) { throw 'engine build failed' }
 $engineArgs = @()
 if ($SelfTest) { $engineArgs += '--selftest' }
 if ($Memory) { $engineArgs += '--memory', $Memory }
-& ./target/release/grace.exe @engineArgs
+& (Join-Path $bin 'grace.exe') @engineArgs

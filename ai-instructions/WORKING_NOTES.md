@@ -13,6 +13,15 @@
 - **CoRal v3 is gated** (auto-approve): Mikkel must click "request access" on HF.
 - **GitHub project board** needs the `project` token scope: `gh auth refresh -s project`
   (interactive, Mikkel runs it).
+- **Shared Cargo target (2026-11-06):** user env `CARGO_TARGET_DIR=C:\Users\mikke\.cargo-target\grace`,
+  so worktrees no longer each grow a 1-11 GB `target/`. Binaries are in that folder's `release\`,
+  not `./target`; `scripts/grace.ps1`, `scripts/bench-all.ps1` and `bench/sim/stt_matrix.sh` read
+  the variable (fallback `./target`). Gotchas: parallel builds wait on one lock, and a build in
+  one worktree overwrites the binaries another worktree's bench is about to run. For a bench
+  that must run a specific branch's binary (or parallel sessions), override per shell:
+  `$env:CARGO_TARGET_DIR = "$PWD\target"`. Worktrees may junction main's `.runtime`,
+  `bench-results` and `fixtures/*`: unlink those (`[IO.Directory]::Delete(p, $false)`) before
+  deleting a worktree by hand.
 
 ## Measurements so far (details in docs/MODELS.md)
 - Whisper-family STT has a near-fixed cost (encoder runs a padded 30 s window): edda on

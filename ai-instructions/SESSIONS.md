@@ -265,3 +265,12 @@ notes, read documents, active window/screen, system controls).
   suggestions; six agent-built groups merged with 384 tests. Sim 57/162 (scenarios need updating).
 - Next: fix the scenario `tools:` lists, add expected-args to use_tool errors, run research
   scenarios, then the radarsuper proposal (on his yes), then a live test with --mmproj.
+
+## 2026-11-06 (Claude Code): disk cleanup + shared Cargo target
+- Removed 6 merged, clean worktrees (5 agent-*, turn-taking-b1ffdc; its junctions to main's data
+  unlinked first) and every `target/` (main 11 GB, worktrees ~5 GB). ~19 GB freed (C: 38 -> 57 GB).
+- Kept worktrees determined-euler-3136d2, personality-eval-304546 (unique bench-results logs) and
+  agent-aa2a2d44de242f315 (.runtime/grace-data, 28 KB); their target/ is gone.
+- Set user-level CARGO_TARGET_DIR (see WORKING_NOTES gotchas); scripts follow it.
+- Next: delete the merged worktree-agent-* branches; decide on the 3 kept worktrees and the
+  bench venvs (~7.7 GB, .venv-smartturn 4.8 GB).

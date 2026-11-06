@@ -6,7 +6,9 @@
 param([Parameter(Mandatory)][string]$Label, [int]$Seeds = 2, [switch]$NoChat)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
-$sim = 'target\release\grace-tools-sim.exe'
+# Binaries live in the shared CARGO_TARGET_DIR when it is set, else in ./target.
+$bin = Join-Path $(if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'target' }) 'release'
+$sim = Join-Path $bin 'grace-tools-sim.exe'
 foreach ($set in @(@('groups', 'fixtures/tools/scenarios'), @('builtin', 'fixtures/tools/scenarios.yaml'), @('heldout', 'fixtures/tools/heldout'))) {
     $name = "$Label-$($set[0])"
     & $sim --label $name --scenarios $set[1] --seeds $Seeds --rules-from data/memory.db *> "logs\sim-$name.txt"
@@ -15,6 +17,6 @@ foreach ($set in @(@('groups', 'fixtures/tools/scenarios'), @('builtin', 'fixtur
 }
 if (-not $NoChat) {
     # 13 (opening hours) is skipped: its live search trips the antivirus on radarsuper.com.
-    & target\release\grace-chat-bench.exe --label "$Label-chat" --tools 127.0.0.1:7814 --skip 13 *> "logs\chat-$Label.txt"
+    & (Join-Path $bin 'grace-chat-bench.exe') --label "$Label-chat" --tools 127.0.0.1:7814 --skip 13 *> "logs\chat-$Label.txt"
     Get-Content "logs\chat-$Label.txt" | Select-String '"score"|"hard"' | ForEach-Object { Write-Host "$Label-chat $($_.Line.Trim())" }
 }

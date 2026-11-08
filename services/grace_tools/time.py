@@ -78,6 +78,9 @@ class Store:
         self.lock = threading.RLock()
         with self.db() as c:
             c.executescript(SCHEMA)
+            # Added after the first release: repeating reminders ('daily', 'weekdays', 'weekly').
+            if "repeat" not in [r[1] for r in c.execute("pragma table_info(items)")]:
+                c.execute("alter table items add column repeat text")
 
     @contextmanager
     def db(self):
@@ -128,6 +131,12 @@ def tick(st, now, checks=None, watchers=True):
                 continue
             say = r["say"]
             due = dt_of(r["due"])
+            if r["repeat"]:
+                # The next one in the series is its own pending row: snoozing this one leaves the
+                # series alone, and cancel_reminder on the pending one ends it.
+                c.execute("insert into items(kind, text, due, created, say, repeat) values (?,?,?,?,?,?)",
+                          (r["kind"], r["text"], iso(tp.next_repeat(due, r["repeat"], now)), iso(now),
+                           r["say"], r["repeat"]))
             if (now - due).total_seconds() > LATE_S:
                 say += f" (It was due {tp.say_when(due, now)}; I couldn't say it then.)"
             fired.append(add_event(c, now, "now", r["kind"], r["id"], say))
@@ -411,7 +420,8 @@ def _describe_item(r, now):
     left = tp.say_span((due - now).total_seconds())
     what = {"timer": "timer", "focus": "focus timer", "reminder": "reminder"}.get(r["kind"], r["kind"])
     text = f" \"{r['text']}\"" if r["text"] else ""
-    return f"[{r['id']}] {what}{text} {tp.say_when(due, now)} (in {left})"
+    rep = f", repeating {tp.say_repeat(r['repeat'], due)}" if r["repeat"] else ""
+    return f"[{r['id']}] {what}{text} {tp.say_when(due, now)} (in {left}){rep}"
 
 
 @tool("set_reminder",
@@ -420,13 +430,22 @@ def _describe_item(r, now):
       {"text": s("What to remind him of, short and in English (e.g. 'call mom'). Empty for a plain timer."),
        "when": s("When, in his own words and language exactly as he said it ('om tyve minutter', "
                  "'på fredag klokken ni', 'halv fire', 'i morgen tidlig'). Don't translate or convert it."),
-       "kind": s("timer for a countdown (sæt en timer), else reminder.", ["reminder", "timer"])},
+       "kind": s("timer for a countdown (sæt en timer), else reminder.", ["reminder", "timer"]),
+       "repeat": s("Only if he says it repeats ('hver dag', 'hver mandag', 'på hverdage').",
+                   ["daily", "weekdays", "weekly"])},
       ["when"], risk="visible", core=True)
 def set_reminder(ctx, a, alive):
     now = now_of(ctx)
     text = _first(a, "text")
     heard = _first(a, "heard")  # his own words, when the engine adds them (as for calculate)
-    w, used = _parse_any(now, _first(a, "when"), heard, text)
+    repeat, when = tp.take_repeat(_first(a, "when"))
+    if heard:
+        heard_repeat, heard_rest = tp.take_repeat(heard)
+        if heard_repeat:
+            repeat, heard = repeat or heard_repeat, heard_rest
+    if not repeat and a.get("repeat") in tp.REPEATS:
+        repeat = a["repeat"]
+    w, used = _parse_any(now, when, heard, text)
     if heard and used != heard and re.search(r"\b(?:halv|kvart)\b", tp.norm(heard)) \
             and not re.search(r"\b(?:halv|kvart)\b", tp.norm(used or "")):
         # Gemma translated a Danish clock phrase: "halv fire" became "half four" (16:30, British).
@@ -434,19 +453,29 @@ def set_reminder(ctx, a, alive):
         w = w2 or w
     if w is None:
         return {"ok": False, "result": f"I couldn't tell when from {a.get('when')!r}. Ask him when."}
+    if repeat and w.dt <= now:
+        w.dt = tp.next_repeat(w.dt, repeat, now)  # "hver dag klokken otte" said at 10: from tomorrow
     if w.dt <= now:
         return {"ok": False, "result": f"{tp.say_when(w.dt, now).capitalize()} has already passed. Ask him when he means."}
     if w.dt > now + timedelta(days=MAX_AHEAD_DAYS):
         return {"ok": False, "result": "That is more than a year ahead; reminders go up to a year. Say so."}
     if text and tp.parse(text, now) is not None:
         text = tp.without_time(text)  # "call mom in an hour" -> "call mom"
+    if text and tp.take_repeat(text)[0]:
+        text = tp.take_repeat(text)[1]  # "take vitamins every day" -> "take vitamins"
     kind = "timer" if a.get("kind") == "timer" or (not text and w.relative) else "reminder"
+    if repeat and (kind == "timer" or w.relative):
+        repeat = None  # "every 20 minutes" isn't supported; a countdown runs once
+    if repeat == "weekdays" and w.dt.weekday() >= 5:
+        w.dt = tp.next_repeat(w.dt, "weekdays")  # "på hverdage klokken 7" said on a Saturday
     span = tp.say_span((w.dt - now).total_seconds())
     if kind == "timer":
         say = f"The timer for {text} is done." if text else f"Your timer for {span} is done."
     else:
         say = f"Reminder: {text or 'you asked me to remind you now'}."
     note = "" if w.has_time else f" He gave no time, so it is set for {w.dt:%H:%M}; say so."
+    if repeat:
+        note = f" It repeats {tp.say_repeat(repeat, w.dt)} until he cancels it." + note
     if ctx.dry:
         return {"result": f"Dry run: would set a {kind} for {tp.say_when(w.dt, now)} (in {span})"
                           + (f": {text}" if text else "") + "." + note}
@@ -454,9 +483,9 @@ def set_reminder(ctx, a, alive):
         dup = c.execute("select id from items where state='pending' and kind=? and coalesce(text,'')=? and due between ? and ?",
                         (kind, text, iso(w.dt - timedelta(minutes=1)), iso(w.dt + timedelta(minutes=1)))).fetchone()
         rid = dup["id"] if dup else c.execute(
-            "insert into items(kind, text, due, created, say) values (?,?,?,?,?)",
-            (kind, text, iso(w.dt), iso(now), say)).lastrowid
-    return {"detail": {"id": rid, "due": iso(w.dt), "kind": kind},
+            "insert into items(kind, text, due, created, say, repeat) values (?,?,?,?,?,?)",
+            (kind, text, iso(w.dt), iso(now), say, repeat)).lastrowid
+    return {"detail": {"id": rid, "due": iso(w.dt), "kind": kind, "repeat": repeat},
             "result": f"{kind.capitalize()} set for {tp.say_when(w.dt, now)} (in {span})" + (f": {text}" if text else "")
                       + f". Id {rid}. I'll say it out loud then." + note}
 
@@ -526,7 +555,10 @@ def snooze_reminder(ctx, a, alive):
             due = now + timedelta(minutes=max(1, min(mins, 24 * 60)))
         if ctx.dry:
             return {"result": f"Dry run: would snooze it to {tp.say_when(due, now)}."}
-        c.execute("update items set state='pending', due=?, snoozes=snoozes+1 where id=?", (iso(due), r["id"]))
+        # A fired repeating reminder already queued its next one: the snoozed copy is a one-off,
+        # or the series would fork. A pending one that is moved keeps its series.
+        c.execute("update items set state='pending', due=?, snoozes=snoozes+1, "
+                  "repeat=case when state='fired' then null else repeat end where id=?", (iso(due), r["id"]))
         c.execute("update events set acked=? where source=? and ref=? and acked is null", (iso(now), r["kind"], r["id"]))
     label = f" \"{r['text']}\"" if r["text"] else ""
     return {"result": f"Snoozed the {r['kind']}{label} to {tp.say_when(due, now)} (in {tp.say_span((due - now).total_seconds())})."}

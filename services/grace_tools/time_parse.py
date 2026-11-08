@@ -571,3 +571,52 @@ def say_span(seconds):
     if d:
         parts = parts[:2]
     return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+# ---- repeating reminders ----------------------------------------------------------------------
+
+REPEATS = ("daily", "weekdays", "weekly")
+_WD = "|".join(WEEKDAYS)
+REPEAT_PATTERNS = [
+    ("weekdays", r"\b(?:hver|alle|på) hverdag(?:e|ene)?\b|\bevery weekday\b|\bon weekdays\b|\bweekdays\b"),
+    ("daily", r"\bhver(?:t)? dag\b|\bdagligt?\b|\bevery day\b|\bdaily\b|\bhver morgen\b|\bevery morning\b"
+              r"|\bhver aften\b|\bevery evening\b"),
+    ("weekly", rf"\bhver (?=(?:{_WD})s?\b)|\bevery (?=(?:{_WD})\b)|\bhver uge\b|\bevery week\b|\bugentligt?\b"
+               r"|\bweekly\b"),
+]
+# What "hver morgen" / "hver aften" leave behind, so parse() still knows the part of the day.
+REPEAT_KEEP = {"hver morgen": "om morgenen", "every morning": "in the morning", "hver aften": "om aftenen",
+               "every evening": "in the evening"}
+
+
+def take_repeat(text):
+    """('daily' | 'weekdays' | 'weekly' | None, the text without the repeat words).
+    'hver mandag klokken ni' -> ('weekly', 'mandag klokken ni')."""
+    t = (text or "").lower()
+    for kind, pat in REPEAT_PATTERNS:
+        m = re.search(pat, t)
+        if m:
+            keep = REPEAT_KEEP.get(m.group(0).strip(), "")
+            rest = t[:m.start()] + " " + keep + " " + t[m.end():]
+            rest = re.sub(rf"\b({_WD})s\b", r"\1", rest)  # "hver mandags" -> "mandag"
+            return kind, " ".join(rest.split())
+    return None, text
+
+
+def next_repeat(due, repeat, now=None):
+    """The next time a repeating reminder is due after `due` (and after `now`, skipping the ones
+    missed while the PC was off)."""
+    step = timedelta(days=7 if repeat == "weekly" else 1)
+    d = due + step
+    while True:
+        if repeat == "weekdays":
+            while d.weekday() >= 5:
+                d += timedelta(days=1)
+        if now is None or d > now:
+            return d
+        d += step
+
+
+def say_repeat(repeat, dt):
+    return {"daily": "every day", "weekdays": "every weekday",
+            "weekly": f"every {DAY_NAMES[dt.weekday()]}"}.get(repeat, "") + f" at {dt:%H:%M}"

@@ -15,7 +15,7 @@ a fake clock), else `datetime.now`; naive local times, Europe/Copenhagen.
 | Tool | Risk | Core | What it does |
 |---|---|---|---|
 | `time_now` | read | yes | Time, date, weekday, ISO week; the time in another city or country |
-| `set_reminder` | visible | yes | A reminder or timer from his own time words; spoken when due |
+| `set_reminder` | visible | yes | A reminder or timer from his own time words; spoken when due. Repeats daily, on weekdays or weekly ("hver dag klokken otte", "hver mandag", "på hverdage"; or `repeat`); each firing queues the next as its own row |
 | `date_info` | read | | Days until a date or holiday, weekday of a date, dates of a week number, date maths |
 | `list_reminders` | read | | Upcoming reminders, timers and focus steps with time left |
 | `cancel_reminder` | visible | | Cancel one (by id or words); several matches -> asks which |
@@ -152,6 +152,7 @@ stop and list across a restart; event ordering.
 - The real OS calls: `psutil` process listing, `urllib` page fetches, `gh` itself, and the
   ECB download (tests replace them; the ECB fixture is a real response recorded on 2026-10-22).
 - The background threads (off under pytest); `tick()` is what they call and is fully tested.
-- Live use with speech: the events request isn't wired into the engine yet.
-- Repeating reminders ("hver dag klokken 8") and spoken years ("tyve seksogtyve") aren't
+- Live use with speech: the engine polls events every second (`conductor::maybe_announce`), but
+  no spoken reminder has been heard in a live run yet.
+- Repeating timers ("hver tyvende minut") and spoken years ("tyve seksogtyve") aren't
   supported. Time zones beyond the built-in city list fall back to IANA names.

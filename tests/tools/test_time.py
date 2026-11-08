@@ -727,3 +727,95 @@ def test_now_events_come_first(ctx, clock, monkeypatch):
     clock.advance(seconds=5)
     tick(ctx, checks)
     assert [e["priority"] for e in gt.pending_events(ctx)] == ["now", "next_pause"]
+
+
+# ---- repeating reminders ----------------------------------------------------------------------
+
+@pytest.mark.parametrize("said, kind, rest", [
+    ("hver dag klokken otte", "daily", "klokken otte"),
+    ("hver morgen klokken syv", "daily", "om morgenen klokken syv"),
+    ("hver mandag klokken ni", "weekly", "mandag klokken ni"),
+    ("på hverdage klokken halv otte", "weekdays", "klokken halv otte"),
+    ("every friday at 5 pm", "weekly", "friday at 5 pm"),
+    ("i morgen klokken otte", None, "i morgen klokken otte"),
+])
+def test_take_repeat(said, kind, rest):
+    assert tp.take_repeat(said) == (kind, rest)
+
+
+def test_next_repeat_skips_weekends_and_missed_days():
+    fri = datetime(2026, 10, 23, 7, 30)
+    assert tp.next_repeat(fri, "weekdays") == datetime(2026, 10, 26, 7, 30)  # Monday
+    assert tp.next_repeat(fri, "weekly") == datetime(2026, 10, 30, 7, 30)
+    # The PC was off for three days: the next one is after now, not a pile of missed ones.
+    assert tp.next_repeat(fri, "daily", now=datetime(2026, 10, 26, 12, 0)) == datetime(2026, 10, 27, 7, 30)
+
+
+def test_daily_reminder_fires_every_day(ctx, clock):
+    out = call(ctx, "set_reminder", text="take vitamins", when="hver morgen klokken otte")
+    assert out["ok"] and "every day at 08:00" in out["result"] and out["detail"]["repeat"] == "daily"
+    assert "tomorrow" in out["result"]  # 10:00 now, so the first is tomorrow 08:00
+    for day in range(3):
+        clock.t = datetime(2026, 10, 23 + day, 8, 0)
+        tick(ctx)
+        assert says(ctx) == ["Reminder: take vitamins."]
+        ack_all(ctx)
+    listed = call(ctx, "list_reminders")["result"]
+    assert listed.startswith("1 upcoming") and "repeating every day at 08:00" in listed
+
+
+def test_cancel_ends_the_series(ctx, clock):
+    call(ctx, "set_reminder", text="stand up", when="hver dag klokken tolv")
+    assert call(ctx, "cancel_reminder", which="stand up")["ok"]
+    clock.advance(days=3)
+    tick(ctx)
+    assert says(ctx) == [] and "no reminders" in call(ctx, "list_reminders")["result"]
+
+
+def test_weekly_from_the_repeat_argument(ctx, clock):
+    out = call(ctx, "set_reminder", text="team meeting", when="mandag klokken ni", repeat="weekly")
+    assert "every Monday at 09:00" in out["result"]
+    clock.t = datetime(2026, 10, 26, 9, 0)
+    tick(ctx)
+    ack_all(ctx)
+    assert "Monday 2 November" in call(ctx, "list_reminders")["result"]
+
+
+def test_weekdays_said_on_a_saturday_starts_monday(ctx, clock):
+    clock.t = datetime(2026, 10, 24, 6, 0)  # Saturday
+    out = call(ctx, "set_reminder", text="leave for school", when="på hverdage klokken halv otte")
+    assert out["detail"]["due"] == "2026-10-26T07:30:00"
+
+
+def test_snoozing_a_fired_repeat_does_not_fork_the_series(ctx, clock):
+    call(ctx, "set_reminder", text="stretch", when="hver dag klokken elleve")
+    clock.t = datetime(2026, 10, 22, 11, 0)
+    tick(ctx)
+    ack_all(ctx)
+    assert call(ctx, "snooze_reminder", minutes=10)["ok"]
+    clock.t = datetime(2026, 10, 22, 11, 10)
+    tick(ctx)
+    ack_all(ctx)
+    clock.t = datetime(2026, 10, 23, 11, 0)
+    tick(ctx)
+    assert says(ctx) == ["Reminder: stretch."]  # one, not two
+    with gt.store(ctx).db() as c:
+        assert c.execute("select count(*) from items where state='pending'").fetchone()[0] == 1
+
+
+def test_a_timer_never_repeats(ctx, clock):
+    out = call(ctx, "set_reminder", when="om ti minutter", kind="timer", repeat="daily")
+    assert out["detail"]["repeat"] is None
+
+
+def test_old_database_gets_the_repeat_column(tmp_path):
+    import sqlite3
+    p = tmp_path / "old" / "time.sqlite3"
+    p.parent.mkdir()
+    c = sqlite3.connect(p)
+    c.execute("create table items(id integer primary key, kind text, text text, due text, created text, "
+              "state text default 'pending', fired_at text, grp text, say text, snoozes integer default 0)")
+    c.commit()
+    c.close()
+    gt.Store(p)
+    assert "repeat" in [r[1] for r in sqlite3.connect(p).execute("pragma table_info(items)")]

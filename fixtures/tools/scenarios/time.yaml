@@ -100,3 +100,10 @@
     - say: hvilken uge er det
       tools: [time_now]
       answer: "(?i)week \\d+|uge \\d+"
+- id: t16-repeat-daily
+  turns:
+    - say: mind mig om at tage mine vitaminer hver morgen klokken otte
+      tools: [set_reminder]
+      args: { set_reminder: '(?i)hver morgen|every (day|morning)|daily' }
+      answer: '(?i)every|each|daily'
+      not_answer: "(?i)can't|cannot|only once"

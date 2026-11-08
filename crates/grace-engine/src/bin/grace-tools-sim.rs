@@ -134,8 +134,18 @@ impl tools::Sink for SimSink {
 
 /// The built-in tools of services/tools_server.py; every other tool name is a registry tool.
 const BUILTIN: &[&str] = &[
-    "web_search", "read_page", "weather", "calculate", "media", "open_app", "open_url",
-    "find_files", "list_folder", "open_file", "find_tools", "use_tool",
+    "web_search",
+    "read_page",
+    "weather",
+    "calculate",
+    "media",
+    "open_app",
+    "open_url",
+    "find_files",
+    "list_folder",
+    "open_file",
+    "find_tools",
+    "use_tool",
 ];
 
 /// The names a call answers to and its arguments as `{"name", "args"}`: use_tool(x) is also x,
@@ -150,7 +160,10 @@ fn call_views(c: &(String, Value, Value)) -> (Vec<String>, String) {
     if BUILTIN.contains(&name.as_str()) {
         return (vec![name.clone()], args.to_string());
     }
-    (vec![name.clone(), "use_tool".into()], use_tool_view(name, args))
+    (
+        vec![name.clone(), "use_tool".into()],
+        use_tool_view(name, args),
+    )
 }
 
 /// `{"name":..,"args":..}` with the name first, as scenarios write their regexes
@@ -176,12 +189,12 @@ async fn main() -> anyhow::Result<()> {
     };
     let mut text = String::new();
     for f in &files {
-        text.push_str(&std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?);
+        text.push_str(
+            &std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?,
+        );
         text.push('\n');
     }
-    let scenarios: Vec<Scenario> = serde_yaml::from_str(
-        &text,
-    )?;
+    let scenarios: Vec<Scenario> = serde_yaml::from_str(&text)?;
     let llm = LlmClient::new(LLM_URL);
     let tools = std::sync::Arc::new(tools::Tools::connect(&args.tools).await?);
     let now = chrono::DateTime::parse_from_rfc3339("2026-10-21T14:10:00+02:00")?
@@ -258,7 +271,7 @@ async fn main() -> anyhow::Result<()> {
                 let called: Vec<&str> = sink.calls.iter().map(|c| c.0.as_str()).collect();
                 // A registry tool counts the same whether Gemma reached it through use_tool or
                 // called it directly (core tools); find_tools is a route, never a requirement.
-                let views: Vec<(Vec<String>, String)> = sink.calls.iter().map(|c| call_views(c)).collect();
+                let views: Vec<(Vec<String>, String)> = sink.calls.iter().map(call_views).collect();
                 let t_ok = match &turn.tools {
                     None => true,
                     Some(want) if want.is_empty() => called.is_empty(),
@@ -403,7 +416,10 @@ mod tests {
         );
         let (labels, view) = call_views(&call);
         assert_eq!(labels, ["use_tool", "git_status"]);
-        assert!(Regex::new("(?i)git_status.*grace").unwrap().is_match(&view), "{view}");
+        assert!(
+            Regex::new("(?i)git_status.*grace").unwrap().is_match(&view),
+            "{view}"
+        );
     }
 
     #[test]

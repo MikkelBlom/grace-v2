@@ -47,8 +47,15 @@ pub fn glow(on: bool) {
     tokio::spawn(async move {
         let connect = tokio::time::timeout(Duration::from_millis(200), TcpStream::connect(OVERLAY));
         if let Ok(Ok(mut s)) = connect.await {
-            let _ = s.write_all(format!("{{\"glow\":{on}}}
-").as_bytes()).await;
+            let _ = s
+                .write_all(
+                    format!(
+                        "{{\"glow\":{on}}}
+"
+                    )
+                    .as_bytes(),
+                )
+                .await;
         }
     });
 }
@@ -144,16 +151,37 @@ pub fn answer_to(said: &str) -> Option<bool> {
         .collect();
     let has = |set: &[&str]| words.iter().any(|w| set.contains(w));
     let phrase = |p: &str| format!(" {} ", words.join(" ")).contains(&format!(" {p} "));
-    const NO: [&str; 9] = ["nej", "no", "nope", "ikke", "stop", "vent", "fortryd", "annuller", "wait"];
+    const NO: [&str; 9] = [
+        "nej", "no", "nope", "ikke", "stop", "vent", "fortryd", "annuller", "wait",
+    ];
     if has(&NO) || phrase("lad være") || phrase("lad vær") {
         return Some(false);
     }
     const YES: [&str; 12] = [
-        "ja", "jo", "jep", "jeps", "yes", "yeah", "yep", "okay", "ok", "kør", "sure", "selvfølgelig",
+        "ja",
+        "jo",
+        "jep",
+        "jeps",
+        "yes",
+        "yeah",
+        "yep",
+        "okay",
+        "ok",
+        "kør",
+        "sure",
+        "selvfølgelig",
     ];
-    let yes = has(&YES) || phrase("gør det") || phrase("go ahead") || phrase("det er fint")
-        || phrase("fint nok") || phrase("bare gør");
-    if yes && words.len() <= 8 { Some(true) } else { None }
+    let yes = has(&YES)
+        || phrase("gør det")
+        || phrase("go ahead")
+        || phrase("det er fint")
+        || phrase("fint nok")
+        || phrase("bare gør");
+    if yes && words.len() <= 8 {
+        Some(true)
+    } else {
+        None
+    }
 }
 
 impl Tools {
@@ -195,7 +223,10 @@ impl Tools {
     pub fn forget_pending(&self) {
         self.pending.lock().expect("pending poisoned").take();
         self.last_said.lock().expect("last_said poisoned").clear();
-        self.suggestions.lock().expect("suggestions poisoned").clear();
+        self.suggestions
+            .lock()
+            .expect("suggestions poisoned")
+            .clear();
     }
 
     /// Settles a destructive call waiting for his yes, from what he just said: runs it on a yes
@@ -270,8 +301,16 @@ impl Tools {
 
     async fn fetch_suggestion(&self, said: &str) -> Option<String> {
         let before = self.last_said.lock().expect("last_said poisoned").clone();
-        match call(&self.addr, json!({ "kind": "suggest", "said": said, "before": before })).await {
-            Ok(v) => v["text"].as_str().filter(|t| !t.is_empty()).map(str::to_owned),
+        match call(
+            &self.addr,
+            json!({ "kind": "suggest", "said": said, "before": before }),
+        )
+        .await
+        {
+            Ok(v) => v["text"]
+                .as_str()
+                .filter(|t| !t.is_empty())
+                .map(str::to_owned),
             Err(e) => {
                 warn!(error = %e, "tool suggestions failed");
                 None
@@ -282,10 +321,13 @@ impl Tools {
     /// The tools that may fit `said`, as text for his message, or None (none fit, or late).
     pub async fn suggestion(&self, said: &str) -> Option<String> {
         let cell = self.suggest_cell(said);
-        tokio::time::timeout(SUGGEST_TIMEOUT, cell.get_or_init(|| self.fetch_suggestion(said)))
-            .await
-            .ok()
-            .and_then(Option::clone)
+        tokio::time::timeout(
+            SUGGEST_TIMEOUT,
+            cell.get_or_init(|| self.fetch_suggestion(said)),
+        )
+        .await
+        .ok()
+        .and_then(Option::clone)
     }
 
     /// Starts the needs-lookup check for a fresh transcript, so the reply finds it done.
@@ -598,14 +640,26 @@ pub async fn reply<S: Sink + Send>(
             // The calculator reads his own transcribed words: Gemma rewrote "12.213" as
             // "tolv tusinde to hundrede treogtyve" (grace-tools-sim, live run 7).
             // set_reminder too: "halv fire" is 15:30, and Gemma writes "half four" (16:30).
-            let target = if name == "use_tool" { parsed["name"].as_str().unwrap_or("").to_owned() } else { name.clone() };
-            let slot = if name == "use_tool" { parsed.get_mut("args") } else { Some(&mut parsed) };
+            let target = if name == "use_tool" {
+                parsed["name"].as_str().unwrap_or("").to_owned()
+            } else {
+                name.clone()
+            };
+            let slot = if name == "use_tool" {
+                parsed.get_mut("args")
+            } else {
+                Some(&mut parsed)
+            };
             if matches!(target.as_str(), "calculate" | "set_reminder")
                 && let Some(o) = slot.and_then(Value::as_object_mut)
             {
                 o.insert("heard".into(), json!(said));
             }
-            let inner = if name == "use_tool" { parsed["name"].as_str().unwrap_or("") } else { &name };
+            let inner = if name == "use_tool" {
+                parsed["name"].as_str().unwrap_or("")
+            } else {
+                &name
+            };
             if tools.is_slow(inner) && sink.silent() {
                 sink.filler(filler(reply_id, &name));
             }
@@ -643,8 +697,16 @@ pub async fn reply<S: Sink + Send>(
                 // She asks now; it runs only on his next utterance's yes.
                 *tools.pending.lock().expect("pending poisoned") = Some(Pending {
                     token: out["confirm"]["token"].as_str().unwrap_or("").to_owned(),
-                    name: if name == "use_tool" { parsed["name"].as_str().unwrap_or("").to_owned() } else { name.clone() },
-                    args: if name == "use_tool" { parsed["args"].clone() } else { parsed.clone() },
+                    name: if name == "use_tool" {
+                        parsed["name"].as_str().unwrap_or("").to_owned()
+                    } else {
+                        name.clone()
+                    },
+                    args: if name == "use_tool" {
+                        parsed["args"].clone()
+                    } else {
+                        parsed.clone()
+                    },
                     summary: out["confirm"]["summary"].as_str().unwrap_or("").to_owned(),
                 });
                 calls_made = MAX_CALLS;
@@ -813,8 +875,12 @@ mod tests {
         assert!(!claims_action("The store is open until ten."));
         assert!(claims_action("Okay. Opening VS Code now."));
         assert!(claims_action("Opening YouTube for you now."));
-        assert!(claims_action("Okay. I'm opening the calculator for you now."));
-        assert!(claims_action("Okay. I am opening Notepad and writing the note for you."));
+        assert!(claims_action(
+            "Okay. I'm opening the calculator for you now."
+        ));
+        assert!(claims_action(
+            "Okay. I am opening Notepad and writing the note for you."
+        ));
         assert!(claims_action("Sure thing, playing some music."));
         assert!(!claims_action("Opening hours on Sundays are ten to four."));
         assert!(!claims_action("I'm writing that down in my head."));
@@ -828,14 +894,33 @@ mod tests {
 
     #[test]
     fn only_a_plain_yes_confirms() {
-        for yes in ["ja", "Ja tak.", "jep gør det", "okay", "ja det er fint", "yes go ahead", "bare gør det"] {
+        for yes in [
+            "ja",
+            "Ja tak.",
+            "jep gør det",
+            "okay",
+            "ja det er fint",
+            "yes go ahead",
+            "bare gør det",
+        ] {
             assert_eq!(answer_to(yes), Some(true), "{yes}");
         }
-        for no in ["nej", "nej lad være", "ja nej vent", "stop", "ikke endnu", "no"] {
+        for no in [
+            "nej",
+            "nej lad være",
+            "ja nej vent",
+            "stop",
+            "ikke endnu",
+            "no",
+        ] {
             assert_eq!(answer_to(no), Some(false), "{no}");
         }
-        for neither in ["hvad er klokken", "hvilke filer er det", "",
-                        "ja men først skal du lige fortælle mig hvad der ligger i mappen"] {
+        for neither in [
+            "hvad er klokken",
+            "hvilke filer er det",
+            "",
+            "ja men først skal du lige fortælle mig hvad der ligger i mappen",
+        ] {
             assert_eq!(answer_to(neither), None, "{neither}");
         }
     }

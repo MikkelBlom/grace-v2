@@ -60,3 +60,23 @@ Parked so they don't derail the current milestone. Promote to a GitHub issue whe
   fixtures/style scenario from an entry, for a person to edit.
 - **[low]** Fold a style preference fact and its rule together (today both can exist; dropping
   the rule by voice doesn't guarantee the fact closes).
+
+## Tools (from the 2026-11-08 sim session)
+- **[high]** Sensitive files: `Downloads/Chrome-adgangskoder.csv` (a plaintext Chrome password
+  export) is reachable by find_files, read_document, search_in_files and run_code. A small deny
+  list (names like *password*, *adgangskode*, *.kdbx, .ssh, .env) in the file index and the
+  readers would keep Grace from ever reading one aloud. Needs Mikkel's go (and he may just want
+  to delete that export).
+- **[medium]** Notes live twice: note_add (time group, SQLite) and write_file (a .md file). "Skriv
+  en note" goes to note_add, which has no append or edit, so "tilføj at jeg også skal købe kaffe"
+  went to the shopping list. Either note_append/note_edit, or notes as files in Documents/Grace.
+- **[medium]** Calendar (TOOLS-ROADMAP P1): read/create needs a decision on which calendar
+  (Google via OAuth client id, Outlook, or a local .ics) before it can be built.
+- **[medium]** A tools-sim fixture home: scenarios that need a real CSV, CV pair or picture
+  (c02, f11, v06) depend on what is on Mikkel's PC. A fixture folder added to the file index for
+  benches only (index_folders can do it) would make them deterministic.
+- **[low]** `explorer` acts on the last Explorer window Shell.Application lists, not necessarily
+  the one in front; match the foreground HWND when several are open.
+- **[low]** use_tool's `name` collides with tools that take a `name` argument; the server repairs
+  it (registry.unpack_use_tool). Renaming use_tool's field to `tool` would remove the cause but
+  touches the engine (tools.rs reads `name` for risk, timeouts and `heard`).

@@ -1162,7 +1162,8 @@ def type_summary(a):
 
 
 @tool("type_text", "Type text at the cursor in the window in front, as if he typed it (dictation into a document, "
-      "a chat or a form).", {"text": s("Exactly the text to type.")}, ["text"], risk="destructive",
+      "a chat or a form). Also for writing into a program he just had opened (\"åbn notesblok og skriv ...\"): "
+      "open_app first, then this; not a note or a file.", {"text": s("Exactly the text to type.")}, ["text"], risk="destructive",
       summary=type_summary)
 def type_text(ctx, a, alive):
     text = a.get("text") or ""

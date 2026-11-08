@@ -85,6 +85,11 @@ def test_unpack_file_name_and_tool_swapped():
         ("create_document", {"format": "csv", "title": "Budget", "name": "Budget.csv"}, None)
 
 
+def test_unpack_drops_the_tool_name_repeated_as_a_file_name():
+    call = {"name": "write_file", "args": {"name": "write_file", "content": "hej"}}
+    assert registry.unpack_use_tool(call, KNOWN) == ("write_file", {"content": "hej"}, None)
+
+
 def test_unpack_moves_stray_keys_inside():
     call = {"name": "make_chart", "title": "Weight", "args": {"values": [1, 2]}}
     assert registry.unpack_use_tool(call, KNOWN) == ("make_chart", {"title": "Weight", "values": [1, 2]}, None)

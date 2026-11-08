@@ -143,6 +143,8 @@ def unpack_use_tool(args, known):
     for cand in (outer, args.get("tool"), inner.get("tool")):
         if isinstance(cand, str) and cand.strip() in known:
             out = {k: v for k, v in inner.items() if k != "tool"}
+            if out.get("name") == cand.strip():
+                del out["name"]  # the tool's name repeated as its file name: write_file.txt (f03)
             return cand.strip(), out, None
     if isinstance(inner.get("name"), str) and inner["name"].strip() in known:
         tool_name = inner["name"].strip()

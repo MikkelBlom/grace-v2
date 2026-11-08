@@ -426,6 +426,115 @@ pub fn promises_action(text: &str) -> bool {
     PROMISE.is_match(text)
 }
 
+/// Where Gemma 4's own tool-call syntax starts. llama-server normally turns it into a tool call,
+/// but when a call is long or nested it sometimes arrives as plain text instead (tools sim
+/// 2026-11-08: `<|tool_call>call:use_tool{args:{kind:<|"|>line<|"|>,...}}<tool_call|>` in c03 and
+/// f07), which the voice would read out.
+const CALL_OPEN: &str = "<|tool_call>";
+const CALL_CLOSE: &str = "<tool_call|>";
+
+/// Keeps leaked tool-call text away from the voice: `feed` returns what may be spoken and holds
+/// back anything that is, or may become, a leaked call.
+#[derive(Default)]
+pub struct LeakFilter {
+    held: String,
+    pub leaked: String,
+}
+
+impl LeakFilter {
+    pub fn feed(&mut self, text: &str) -> String {
+        if !self.leaked.is_empty() {
+            self.leaked.push_str(text);
+            return String::new();
+        }
+        self.held.push_str(text);
+        if let Some(i) = self.held.find(CALL_OPEN) {
+            self.leaked = self.held.split_off(i);
+            return std::mem::take(&mut self.held);
+        }
+        // A tail that could still grow into "<|tool_call>" waits for the next piece.
+        let keep = (1..CALL_OPEN.len())
+            .rev()
+            .find(|&n| self.held.ends_with(&CALL_OPEN[..n]))
+            .unwrap_or(0);
+        let speak_to = self.held.len() - keep;
+        let rest = self.held.split_off(speak_to);
+        std::mem::replace(&mut self.held, rest)
+    }
+
+    /// At the end of the stream: whatever was held back and turned out to be ordinary text.
+    pub fn finish(&mut self) -> String {
+        std::mem::take(&mut self.held)
+    }
+}
+
+/// Gemma 4's call syntax as JSON: strings are `<|"|>...<|"|>`, keys are bare words.
+/// `{args:{kind:<|"|>line<|"|>},name:<|"|>make_chart<|"|>}` -> `{"args":{"kind":"line"},"name":"make_chart"}`.
+pub fn gemma_args_to_json(s: &str) -> Option<Value> {
+    const Q: &str = "<|\"|>";
+    let mut out = String::with_capacity(s.len() + 16);
+    let mut rest = s.trim();
+    while !rest.is_empty() {
+        if let Some(after) = rest.strip_prefix(Q) {
+            let end = after.find(Q)?;
+            out.push_str(&Value::from(&after[..end]).to_string());
+            rest = &after[end + Q.len()..];
+            continue;
+        }
+        let c = rest.chars().next()?;
+        if c.is_alphabetic() || c == '_' {
+            let word: String = rest
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            let after = rest[word.len()..].trim_start();
+            if after.starts_with(':') {
+                out.push_str(&Value::from(word.as_str()).to_string());
+            } else {
+                out.push_str(&word); // true, false, null
+            }
+            rest = &rest[word.len()..];
+            continue;
+        }
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    serde_json::from_str(&out).ok()
+}
+
+/// The calls in leaked call text: `<|tool_call>call:NAME{...}<tool_call|>`, one or more.
+pub fn parse_leaked_calls(text: &str) -> Vec<(String, Value)> {
+    let mut found = Vec::new();
+    for part in text.split(CALL_OPEN).skip(1) {
+        let body = part.split(CALL_CLOSE).next().unwrap_or("").trim();
+        let Some(body) = body.strip_prefix("call:") else {
+            continue;
+        };
+        let Some(brace) = body.find('{') else {
+            continue;
+        };
+        let name = body[..brace].trim();
+        if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            continue;
+        }
+        if let Some(args) = gemma_args_to_json(&body[brace..]) {
+            found.push((name.to_owned(), args));
+        }
+    }
+    found
+}
+
+/// A call's arguments as JSON: plain JSON, else Gemma's own syntax, else None (never `{}`
+/// silently: run_code ran with no arguments in the tools sim and the turn ended in silence).
+pub fn parse_args(args: &str) -> Option<Value> {
+    if args.trim().is_empty() {
+        return Some(json!({}));
+    }
+    serde_json::from_str(args)
+        .ok()
+        .or_else(|| gemma_args_to_json(args))
+}
+
 /// What the reply loop needs from its caller: where the words go and whether it may go on.
 pub trait Sink {
     /// Streamed reply text.
@@ -496,6 +605,7 @@ pub async fn reply<S: Sink + Send>(
         }
     }
     let mut retried_claim = false;
+    let mut asked_to_answer = false;
     loop {
         // (id, name, arguments) per tool call index, assembled from their pieces.
         let mut calls: Vec<(String, String, String)> = Vec::new();
@@ -509,6 +619,8 @@ pub async fn reply<S: Sink + Send>(
         let mut seen = String::new();
         let mut claimed = false;
         let mut suspect = false;
+        let mut leak = LeakFilter::default();
+        let mut pass_chars = 0usize;
         let mut opened = llm.stream(&req).await;
         // Live run 7: after 17 minutes the request outgrew the context and every reply after
         // that was silence. Drop the oldest half of the conversation and try again.
@@ -533,6 +645,17 @@ pub async fn reply<S: Sink + Send>(
                 if sink.is_cancelled() {
                     return;
                 }
+                let delta = match delta {
+                    Some(Ok(Delta::Content(text))) => {
+                        let text = leak.feed(&text);
+                        if text.is_empty() {
+                            continue;
+                        }
+                        pass_chars += text.trim().len();
+                        Some(Ok(Delta::Content(text)))
+                    }
+                    other => other,
+                };
                 match delta {
                     Some(Ok(Delta::Content(text))) if guard => {
                         pending.push_str(&text);
@@ -589,6 +712,24 @@ pub async fn reply<S: Sink + Send>(
                 return;
             }
         }
+        // Held-back text that never became a call is ordinary text after all.
+        let tail = leak.finish();
+        if !tail.is_empty() {
+            pass_chars += tail.trim().len();
+            if guard {
+                pending.push_str(&tail);
+                seen.push_str(&tail);
+            } else {
+                sink.text(&tail);
+            }
+        }
+        if !leak.leaked.is_empty() {
+            let found = parse_leaked_calls(&leak.leaked);
+            warn!(parent: span, text = %leak.leaked, calls = found.len(), "tool call came as text, not spoken");
+            for (name, args) in found {
+                calls.push((String::new(), name, args.to_string()));
+            }
+        }
         if guard && !seen.is_empty() {
             let unbacked = claims_action(&seen) || promises_action(&seen);
             if unbacked && calls.iter().all(|c| c.1.is_empty()) {
@@ -615,6 +756,16 @@ pub async fn reply<S: Sink + Send>(
         }
         calls.retain(|c| !c.1.is_empty());
         let Some(tools) = tools else { return };
+        if calls.is_empty() && calls_made > 0 && pass_chars == 0 && !asked_to_answer {
+            // Tools ran but this pass said nothing (tools sim: s30 and c02 ended in silence or
+            // only "One sec"): one more pass, without tools, to say what came of it.
+            warn!(parent: span, "silent after tools, asking for an answer");
+            asked_to_answer = true;
+            req.tools.clear();
+            req.messages.push(json!({ "role": "user", "content":
+                "[Tell him in one or two short sentences what came of it: the answer, or that it didn't work and why.]" }));
+            continue;
+        }
         if calls.is_empty() || calls_made >= MAX_CALLS {
             return;
         }
@@ -636,7 +787,14 @@ pub async fn reply<S: Sink + Send>(
             } else {
                 id
             };
-            let mut parsed: Value = serde_json::from_str(&args).unwrap_or_else(|_| json!({}));
+            let Some(mut parsed) = parse_args(&args) else {
+                warn!(parent: span, tool = %name, args = %args, "tool arguments are not JSON, not run");
+                tool_calls.push(json!({ "id": id, "type": "function",
+                                        "function": { "name": name, "arguments": "{}" } }));
+                results.push(json!({ "role": "tool", "tool_call_id": id, "content":
+                    "Not run: the arguments were not valid JSON. Call it once more with plain JSON arguments, or tell him it didn't work." }));
+                continue;
+            };
             // The calculator reads his own transcribed words: Gemma rewrote "12.213" as
             // "tolv tusinde to hundrede treogtyve" (grace-tools-sim, live run 7).
             // set_reminder too: "halv fire" is 15:30, and Gemma writes "half four" (16:30).
@@ -669,7 +827,7 @@ pub async fn reply<S: Sink + Send>(
                 tool_calls.push(json!({ "id": id, "type": "function",
                                         "function": { "name": name, "arguments": args } }));
                 results.push(json!({ "role": "tool", "tool_call_id": id, "content":
-                    "Not run again: you already made this exact call in this reply, and its result is above.                      Answer from it, change the arguments, or tell him it didn't work." }));
+                    "Not run again: you already made this exact call in this reply, and its result is above. Answer from it, change the arguments, or tell him it didn't work." }));
                 continue;
             }
             let stage = info_span!(parent: span, "stage", stage = "tool", model = name.as_str());
@@ -862,6 +1020,52 @@ mod tests {
         assert!(m.len() < 22);
         let mut only = vec![json!({ "role": "system" }), json!({ "role": "user" })];
         assert!(!shrink(&mut only));
+    }
+
+    #[test]
+    fn leaked_calls_are_held_back_and_parsed() {
+        let mut f = LeakFilter::default();
+        let mut spoken = String::new();
+        for piece in [
+            "Okay. <",
+            "|tool_",
+            "call>call:use_tool{args:{kind:<|\"|>line<|\"|>,",
+            "values:[88,87]},name:<|\"|>make_chart<|\"|>}<tool_call|>",
+        ] {
+            spoken.push_str(&f.feed(piece));
+        }
+        spoken.push_str(&f.finish());
+        assert_eq!(spoken, "Okay. ");
+        let calls = parse_leaked_calls(&f.leaked);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "use_tool");
+        assert_eq!(
+            calls[0].1,
+            json!({ "args": { "kind": "line", "values": [88, 87] }, "name": "make_chart" })
+        );
+    }
+
+    #[test]
+    fn a_lone_angle_bracket_is_still_spoken() {
+        let mut f = LeakFilter::default();
+        let mut spoken = f.feed("3 <");
+        spoken.push_str(&f.feed(" 4, and"));
+        spoken.push_str(&f.finish());
+        assert_eq!(spoken, "3 < 4, and");
+        assert!(f.leaked.is_empty());
+    }
+
+    #[test]
+    fn gemma_syntax_keeps_colons_and_quotes_inside_strings() {
+        let v =
+            gemma_args_to_json(r#"{when:<|"|>kl. 10:30 "i morgen"<|"|>,ok:true,n:null}"#).unwrap();
+        assert_eq!(
+            v,
+            json!({ "when": "kl. 10:30 \"i morgen\"", "ok": true, "n": null })
+        );
+        assert_eq!(parse_args(r#"{"a": 1}"#), Some(json!({ "a": 1 })));
+        assert_eq!(parse_args(""), Some(json!({})));
+        assert_eq!(parse_args("{not json"), None);
     }
 
     #[test]

@@ -104,3 +104,23 @@
       args: { use_tool: '(?s)edit_file' }
       answer: '(?i)\?|okay|sure|confirm|vil du|skal jeg'
       not_answer: "(?i)(i've|i have) (changed|updated)|er rettet"
+# ---- P1 (files_explorer.py): move the open Explorer window, extra folders for find_files ----
+- id: f14-explorer-up
+  turns:
+    - say: åbn mappen dokumenter
+      tools: [list_folder]
+    - say: gå en mappe op
+      tools: [use_tool]
+      args: { use_tool: '(?s)explorer.*"up"' }
+      not_answer: "(?i)can't|cannot"
+- id: f15-explorer-select
+  turns:
+    - say: find min rapport i dokumenter og marker den i stifinder
+      tools: [use_tool]
+      args: { use_tool: '(?s)explorer.*select' }
+- id: f16-index-extra-folder
+  turns:
+    - say: søg også i mappen projekter på d drevet når du leder efter filer
+      tools: [use_tool]
+      args: { use_tool: '(?s)index_folders.*add.*(?i:projekter)' }
+      not_answer: "(?i)can't|cannot"

@@ -53,6 +53,10 @@ struct Args {
     tools: String,
     #[arg(long)]
     only: Option<String>,
+    /// Skip scenarios whose id starts with this (s17: its live search trips Mikkel's antivirus
+    /// on radarsuper.com, see WORKING_NOTES).
+    #[arg(long)]
+    skip: Vec<String>,
     #[arg(long, default_value_t = 2)]
     seeds: u64,
     /// Time between the transcript and the reply start, when the engine has already started the
@@ -140,15 +144,20 @@ fn call_views(c: &(String, Value, Value)) -> (Vec<String>, String) {
     let (name, args, _) = c;
     if name == "use_tool" {
         let inner = args["name"].as_str().unwrap_or("").to_owned();
-        return (vec![name.clone(), inner], args.to_string());
+        let view = use_tool_view(&inner, &args["args"]);
+        return (vec![name.clone(), inner], view);
     }
     if BUILTIN.contains(&name.as_str()) {
         return (vec![name.clone()], args.to_string());
     }
-    (
-        vec![name.clone(), "use_tool".into()],
-        json!({ "name": name, "args": args }).to_string(),
-    )
+    (vec![name.clone(), "use_tool".into()], use_tool_view(name, args))
+}
+
+/// `{"name":..,"args":..}` with the name first, as scenarios write their regexes
+/// (`git_status.*grace`). serde_json sorts object keys, which put "args" first and failed every
+/// such regex: most of the 57/162 run's [ARGS] marks were this, not Grace.
+fn use_tool_view(name: &str, args: &Value) -> String {
+    format!(r#"{{"name":{},"args":{}}}"#, Value::from(name), args)
 }
 
 #[tokio::main]
@@ -193,7 +202,9 @@ async fn main() -> anyhow::Result<()> {
     let (mut turns_n, mut tool_ok, mut args_ok, mut answer_ok, mut all_ok) = (0, 0, 0, 0, 0);
     let mut english_ok = 0;
     for sc in &scenarios {
-        if args.only.as_deref().is_some_and(|o| !sc.id.starts_with(o)) {
+        if args.only.as_deref().is_some_and(|o| !sc.id.starts_with(o))
+            || args.skip.iter().any(|k| sc.id.starts_with(k.as_str()))
+        {
             continue;
         }
         for seed in 1..=args.seeds {
@@ -377,4 +388,29 @@ async fn main() -> anyhow::Result<()> {
         serde_json::to_string_pretty(&report)?,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn use_tool_view_puts_the_name_first() {
+        let call = (
+            "use_tool".to_string(),
+            json!({ "name": "git_status", "args": { "repo": "grace" } }),
+            json!({}),
+        );
+        let (labels, view) = call_views(&call);
+        assert_eq!(labels, ["use_tool", "git_status"]);
+        assert!(Regex::new("(?i)git_status.*grace").unwrap().is_match(&view), "{view}");
+    }
+
+    #[test]
+    fn a_direct_registry_call_counts_as_use_tool() {
+        let call = ("system_status".to_string(), json!({}), json!({}));
+        let (labels, view) = call_views(&call);
+        assert_eq!(labels, ["system_status", "use_tool"]);
+        assert_eq!(view, r#"{"name":"system_status","args":{}}"#);
+    }
 }

@@ -27,6 +27,8 @@ charts, comparing, converting). Tests: `tests/tools/test_files.py`. Sim scenario
 | `edit_file` | destructive | | Replace or remove text in a text, Markdown or Word file, or replace a text file's whole content. |
 | `replace_file` | destructive | | Move or copy a file onto an existing one (what move/copy refuse). |
 | `delete_files` | destructive | | To the Recycle Bin (send2trash), never a hard delete. |
+| `explorer` | visible | | Moves the open File Explorer window: where, up, back, forward, go to a folder, select a file (`files_explorer.py`). Opens a new window only for go/select when none is open. |
+| `index_folders` | visible | | Extra folders for find_files (a D: drive folder, a projects folder): list, add, remove. Stored in `.runtime/grace-data/index-folders.json`; tools_server re-indexes at once. Refuses system, program, hidden and other users' folders and a whole system drive. |
 
 Risk is static per tool (the registry enforces it), so "move onto an existing file" is its own
 destructive tool, `replace_file`; `move_file` and `copy_file` refuse and name it.
@@ -72,6 +74,13 @@ from a walk and from the server's index; a multi-step shopping list Word -> PDF 
 Home is a tmp folder, the Recycle Bin a folder, Office and LibreOffice switched off.
 
 ## Not tested, and why
+- `explorer` drives Explorer through Shell.Application in PowerShell (`shell_explorer`); tests
+  replace it. Checked by hand once (2026-11-08) on a scratch folder window: where, up, back,
+  forward, select (SelectedItems confirmed the file) and navigate all worked. Not tried by voice,
+  nor with several Explorer windows open (it uses the last one Shell.Application lists, which is
+  not necessarily the one in front).
+- `index_folders` re-index: Files.reindex wakes the walk loop; checked by reading the code, not by
+  a test of tools_server (importing it loads OpenVINO).
 - Real COM conversions run only in the by-hand check above (tests must not start Office).
 - The real Recycle Bin (send2trash) is replaced in tests; it is a thin, well-used library.
 - The sim scenarios were written but not run (the organiser runs grace-tools-sim).

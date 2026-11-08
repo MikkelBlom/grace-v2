@@ -39,7 +39,7 @@ from jevk5.prompt import LETTERS, answer, decision_options, prompt_text
 from transformers import AutoTokenizer
 
 import grace_tools
-from grace_tools import registry
+from grace_tools import files_explorer, media_spotify, registry
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL = ROOT / ".runtime/models/jevk5-ov/4b-int8-stateless"
@@ -544,12 +544,12 @@ def resolve_url(target):
 
 # ---- files ------------------------------------------------------------------------------------
 
-def walk_roots():
-    """(path, name, is_dir, mtime, haystack) for every file and folder under FILE_ROOTS. Runs in a
-    child process (see Files)."""
+def walk_roots(extra=()):
+    """(path, name, is_dir, mtime, haystack) for every file and folder under FILE_ROOTS and the
+    folders he added (grace_tools.files_explorer, index_folders). Runs in a child process (see Files)."""
     home = str(HOME).lower()
     entries = []
-    for root in FILE_ROOTS:
+    for root in FILE_ROOTS + [Path(e) for e in extra]:
         if not root.exists():
             continue
         for dirpath, dirnames, filenames in os.walk(root):
@@ -568,10 +568,16 @@ class Files:
     child process: in this process it held the GIL for ~30 s each time and the checker's hint
     missed its 400 ms cap (grace-tools-sim v1)."""
 
-    def __init__(self):
+    def __init__(self, data_dir):
         self.entries = []  # (path, name_lower, is_dir, mtime, haystack)
+        self.data_dir = data_dir
         self.ready = threading.Event()
+        self.wake = threading.Event()
         threading.Thread(target=self._loop, daemon=True).start()
+
+    def reindex(self):
+        """index_folders changed the folder list: walk again now, not in up to 10 minutes."""
+        self.wake.set()
 
     def _loop(self):
         import multiprocessing as mp
@@ -580,13 +586,15 @@ class Files:
         while True:
             t0 = time.perf_counter()
             try:
+                extra = [str(p) for p in files_explorer.extra_roots(self.data_dir)]
                 with ctx.Pool(1) as pool:
-                    self.entries = pool.apply(walk_roots)
+                    self.entries = pool.apply(walk_roots, (extra,))
             except Exception as e:
                 log("file index failed:", e)
             self.ready.set()
             log(f"files: {len(self.entries)} indexed in {time.perf_counter() - t0:.1f} s")
-            time.sleep(600)
+            self.wake.wait(600)
+            self.wake.clear()
 
     def candidates(self, description, limit=20, kind="any"):
         self.ready.wait(60)
@@ -645,7 +653,8 @@ def inside_roots(path):
         rp = Path(path).resolve()
     except OSError:
         return False
-    return any(rp == r.resolve() or r.resolve() in rp.parents for r in FILE_ROOTS if r.exists())
+    roots = FILE_ROOTS + files_explorer.extra_roots(ROOT / ".runtime/grace-data")
+    return any(rp == r.resolve() or r.resolve() in rp.parents for r in roots if r.exists())
 
 
 def describe(path, is_dir, mtime):
@@ -823,12 +832,14 @@ def manifest():
             "expression": s("The same as digits, e.g. 17*23 (used only if the words can't be read).")}, ["spoken"]),
         fn("read_page", "Read a web page or article (a link from an earlier result) and return its text, to summarise "
            "or answer questions about it.", {"url": s("The page's link, from an earlier tool result.")}, ["url"]),
-        fn("media", "Music and video on the PC. play: play a song or artist on Spotify now (query = song and/or "
-           "artist). play_pause, next, previous, volume_up, volume_down, mute act on whatever is playing. "
-           "now_playing says what Spotify is playing. search opens a Spotify search.",
+        fn("media", "Music and video on the PC. play: play a song, playlist, album or artist on Spotify now (query = "
+           "its name and/or the artist). play_pause, next, previous, volume_up, volume_down, mute act on whatever "
+           "is playing. now_playing says what Spotify is playing. search opens a Spotify search.",
            {"action": s("What to do.", ["play", "play_pause", "next", "previous", "volume_up", "volume_down", "mute",
                                          "now_playing", "search"]),
-            "query": s("For play/search: the song and/or artist, e.g. 'Peace and Love Gilli'.")}, ["action"]),
+            "query": s("For play/search: the song and/or artist, e.g. 'Peace and Love Gilli'."),
+            "kind": s("For play: what it is (track if he names a song or isn't clear).",
+                      ["track", "playlist", "album", "artist"])}, ["action"]),
         fn("open_app", "Open a program on Mikkel's PC by name (Spotify, Discord, VS Code, Word, Chrome...). "
            "Danish names work too: stifinder (File Explorer), lommeregner, indstillinger, notesblok.",
            {"name": s("The program's name.")}, ["name"]),
@@ -924,9 +935,9 @@ class Tools:
     def __init__(self, checker, dry):
         self.checker, self.dry = checker, dry
         self.apps = Apps()
-        self.files = Files()
-        self.confirmations = registry.Confirmations()
         self.data_dir = ROOT / ".runtime/grace-data"
+        self.files = Files(self.data_dir)
+        self.confirmations = registry.Confirmations()
         self.scratch_dir = self.data_dir / "scratch"
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
         self.gemma = gemma
@@ -1040,6 +1051,9 @@ class Tools:
             # the song he asked for. Opening a track link makes the Spotify app play that track.
             if not q:
                 return {"ok": False, "result": "No song or artist was given. Ask what to play."}
+            kind = media_spotify.kind_of(a.get("query"), a.get("kind"))
+            if kind != "track":
+                return self.play_collection(kind, media_spotify.clean_query(a.get("query")) or q)
             hits, _ = search(f"site:open.spotify.com/track {q}")
             tracks = [(t, u) for t, u, _ in hits if "open.spotify.com/track/" in u]
             if not tracks:
@@ -1084,6 +1098,29 @@ class Tools:
                 "previous": "Went back a track.", "volume_up": "Turned the volume up.",
                 "volume_down": "Turned the volume down.", "mute": "Toggled mute."}[action]
         return {"ok": True, "detail": {"dry_run": self.dry}, "result": said}
+
+    def play_collection(self, kind, q):
+        """A playlist, album or artist: opening its link only shows it in Spotify, so check the
+        window title and say whether it really started (live run 9's lesson: never claim it)."""
+        hits, _ = search(f"site:open.spotify.com/{kind} {q}")
+        found = media_spotify.pick(hits, kind)
+        if not found:
+            return {"ok": False, "result": f"Couldn't find a {kind} called {q} on Spotify. Say so."}
+        title, url, sid = found
+        if self.dry:
+            return {"ok": True, "detail": {kind: url, "dry_run": True},
+                    "result": f"Opened the {kind} {title} in Spotify."}
+        before = spotify_title()
+        os.startfile(f"spotify:{kind}:{sid}")
+        playing = None
+        for _ in range(8):
+            time.sleep(0.5)
+            playing = spotify_title()
+            if media_spotify.started(before, playing):
+                return {"ok": True, "detail": {kind: url}, "result": f"Playing the {kind} {title}: now {playing}."}
+        return {"ok": True, "detail": {kind: url, "playing": playing},
+                "result": f"Opened the {kind} {title} in Spotify, but it isn't playing yet: Spotify only shows "
+                          f"a {kind} when opened from here. Tell him it's open and he can press play."}
 
     def t_open_app(self, a, alive):
         name = (a.get("name") or "").strip()

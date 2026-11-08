@@ -227,6 +227,17 @@
       tools: [media]
       args: { media: '(?i)"play"' }
       answer: '(?i)playing|peace'
+- id: s35b-play-album
+  turns:
+    - say: afspil albummet euforia af gilli
+      tools: [media]
+      args: { media: '(?i)"play".*(album|euforia)|album.*"play"' }
+      not_answer: '(?i)can only play songs|can''t play albums'
+- id: s35c-play-playlist
+  turns:
+    - say: sæt en chill playlist på spotify
+      tools: [media]
+      args: { media: '(?i)playlist' }
 - id: s36-warm-today
   memory: "What you know about Mikkel:\n- He lives in Odense.\n"
   turns:

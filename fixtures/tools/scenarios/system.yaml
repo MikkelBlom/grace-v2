@@ -97,3 +97,16 @@
       args: { use_tool: "(?i)type_text.*(hej|kommer)" }
       answer: "(?i)\\?|okay|sure|want me"
       not_answer: "(?i)\\b(i've|i have) typed|\\bhas been typed"
+# ---- P1: computer control flows across tools ----
+- id: sys16-write-in-notepad-asks
+  turns:
+    - say: åbn notesblok og skriv husk at købe mælk
+      tools: [open_app, use_tool]
+      args: { use_tool: '(?si)type_text.*mælk' }
+      asks: true
+      not_answer: "(?i)\b(i've|i have) (typed|written)|\bhave written\b"
+- id: sys17-clipboard-to-text
+  turns:
+    - say: hvad står der på min udklipsholder
+      tools: [use_tool]
+      args: { use_tool: 'clipboard_read' }

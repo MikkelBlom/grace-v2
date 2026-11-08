@@ -186,8 +186,9 @@ def save_roots(ctx, roots):
         reindex()
 
 
-@tool("index_folders", "Choose which extra folders find_files searches besides his user folders (Desktop, "
-      "Documents, Downloads...): add a folder (\"søg også i D-drevet projekter\"), remove one, or list them.",
+@tool("index_folders", "Add a folder to the file search (find_files), remove one, or list the added ones: for "
+      "folders outside his user folders (Desktop, Documents, Downloads...), e.g. a drive or projects folder "
+      "(\"søg også i D-drevet projekter\").",
       {"action": s("What to do.", ["list", "add", "remove"]),
        "folder": s("For add/remove: the folder's full path, e.g. D:\\Projekter.")},
       ["action"], risk="visible")

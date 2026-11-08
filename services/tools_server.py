@@ -39,6 +39,7 @@ from jevk5.prompt import LETTERS, answer, decision_options, prompt_text
 from transformers import AutoTokenizer
 
 import grace_tools
+from grace_tools import files as gfiles
 from grace_tools import files_explorer, media_spotify, registry
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -833,8 +834,9 @@ def manifest():
         fn("read_page", "Read a web page or article (a link from an earlier result) and return its text, to summarise "
            "or answer questions about it.", {"url": s("The page's link, from an earlier tool result.")}, ["url"]),
         fn("media", "Music and video on the PC. play: play a song, playlist, album or artist on Spotify now (query = "
-           "its name and/or the artist). play_pause, next, previous, volume_up, volume_down, mute act on whatever "
-           "is playing. now_playing says what Spotify is playing. search opens a Spotify search.",
+           "its name and/or the artist). play_pause, next, previous, mute act on whatever is playing; volume_up "
+           "and volume_down change the whole PC's sound (for one app, 'skru ned for spotify', or an exact %, "
+           "use the volume tool). now_playing says what Spotify is playing. search opens a Spotify search.",
            {"action": s("What to do.", ["play", "play_pause", "next", "previous", "volume_up", "volume_down", "mute",
                                          "now_playing", "search"]),
             "query": s("For play/search: the song and/or artist, e.g. 'Peace and Love Gilli'."),
@@ -879,8 +881,9 @@ def discovery_tools():
             "name": "use_tool",
             "description": "Run a tool found with find_tools.",
             "parameters": {"type": "object", "properties": {
-                "name": s("The tool's name from find_tools."),
-                "args": {"type": "object", "description": "Its arguments, as find_tools described them."}},
+                "name": s("The tool's own name from find_tools, e.g. create_document (never a file name)."),
+                "args": {"type": "object", "description": "Its arguments, as find_tools described them; a file "
+                                                          "name goes here."}},
                 "required": ["name", "args"]}}},
     ]
 
@@ -927,7 +930,10 @@ class Suggester:
 def describe_tool(t):
     params = "; ".join(f"{k}: {v.get('description', '')}" + (f" (one of {', '.join(v['enum'])})" if v.get("enum") else "")
                        + ("" if k in t.required else " [optional]") for k, v in t.params.items())
-    ask = " Needs his yes first (the tool asks)." if t.risk == "destructive" else ""
+    # "Needs his yes first" made her ask in her own words without calling it (tools sim
+    # 2026-11-08: t04, sys15), so his yes had no pending call to confirm.
+    ask = (" Needs his yes: call it right away and it asks him itself; don't ask him first."
+           if t.risk == "destructive" else "")
     return f"- {t.name}: {t.description}{ask} Args: {params or 'none'}"
 
 
@@ -948,12 +954,17 @@ class Tools:
         if f is not None:
             return f(args, alive)
         if name == "use_tool":
-            inner = (args.get("name") or "").strip()
-            if inner in ("use_tool", "find_tools"):
+            if (args.get("name") or "") in ("use_tool", "find_tools"):
                 return {"ok": False, "result": "use_tool runs tools found with find_tools."}
+            known = set(registry.TOOLS) | {f["function"]["name"] for f in manifest()}
+            inner, inner_args, why = registry.unpack_use_tool(args, known)
+            if inner is None:
+                hits = registry.find(str(args.get("name") or "").replace("_", " "), 3) if args.get("name") else []
+                alt = f" Maybe: {', '.join(t.name for t in hits)}." if hits else ""
+                return {"ok": False, "invalid_args": True, "result": why + alt}
             if getattr(self, f"t_{inner}", None) is not None:
-                return getattr(self, f"t_{inner}")(args.get("args") or {}, alive)
-            name, args = inner, args.get("args") or {}
+                return getattr(self, f"t_{inner}")(inner_args, alive)
+            name, args = inner, inner_args
         try:
             out = registry.run(self, name, args, alive, confirmed)
         except Exception as e:
@@ -1124,6 +1135,11 @@ class Tools:
 
     def t_open_app(self, a, alive):
         name = (a.get("name") or "").strip()
+        folder = gfiles.aliases().get(name.lower()) if name.lower() != "grace" else None
+        if folder is not None and folder.is_dir():
+            # "åbn mappen dokumenter" came in as open_app("Dokumenter") and opened dokumenter.dk
+            # (tools sim 2026-11-08): a folder name opens the folder.
+            return self.t_open_file({"path": str(folder)}, alive)
         app = self.apps.find(name)
         if not app:
             # "åbn youtube" came in as open_app (tools sim): no such program, so open the site, but
@@ -1181,7 +1197,7 @@ class Tools:
                           "never read out a path."}
 
     def t_list_folder(self, a, alive):
-        f = (a.get("folder") or "").strip()
+        f = "/".join(gfiles.collapse([x for x in re.split(r"[/\\]+", (a.get("folder") or "").strip()) if x]))
         path = FOLDER_ALIASES.get(f.lower().strip(" /\\"))
         if path is None:
             # "skrivebordet/projects", "skrivebord projects": a known folder, then names below it
@@ -1220,6 +1236,13 @@ class Tools:
     def t_open_file(self, a, alive):
         path = (a.get("path") or "").strip().strip('"')
         p = Path(os.path.expandvars(path.replace("~", str(HOME))))
+        if not p.exists():
+            # "Dokumenter" is his Documents folder; the file index matched momsdokumenter.pdf
+            # instead (tools sim 2026-11-08).
+            try:
+                p = gfiles.expand(path) or p
+            except gfiles.PathError:
+                pass
         if not p.exists():
             hits = self.files.candidates(path, 1)
             p = Path(hits[0][1]) if hits else p

@@ -88,6 +88,24 @@ def rel(p):
         return str(p)
 
 
+def collapse(parts):
+    """Gemma writes a folder in both languages, "Overførsler/Downloads" or "Overførsler (Downloads)":
+    one folder, not Downloads\\Downloads (tools sim 2026-11-08). Drops the parts after the first that
+    name the same known folder."""
+    if not parts:
+        return parts
+    first = ALIAS_NAMES.get(re.sub(r"\s*\(.*\)$", "", parts[0]).strip().lower())
+    if first is None:
+        return parts
+    m = re.fullmatch(r"(.*?)\s*\((.*)\)", parts[0])
+    if m and ALIAS_NAMES.get(m.group(2).strip().lower()) == first:
+        parts = [m.group(1)] + parts[1:]
+    i = 1
+    while i < len(parts) and ALIAS_NAMES.get(parts[i].strip().lower()) == first:
+        i += 1
+    return [parts[0]] + parts[i:]
+
+
 def expand(text):
     """A spoken or earlier-result path as a Path, or None when it is a bare relative name."""
     t = (text or "").strip().strip("\"'").strip()
@@ -96,7 +114,7 @@ def expand(text):
     t = os.path.expandvars(t)
     if t.startswith("~"):
         t = str(HOME) + t[1:]
-    parts = [x for x in re.split(r"[\\/]+", t) if x]
+    parts = collapse([x for x in re.split(r"[\\/]+", t) if x])
     al = aliases()
     if parts and parts[0].lower() in al:
         return al[parts[0].lower()].joinpath(*parts[1:])

@@ -560,3 +560,20 @@ def test_every_files_tool_registered_with_sane_risk():
     assert destructive == {"edit_file", "replace_file", "delete_files"}
     reads = {n for n, t in tools.items() if t.risk == "read"}
     assert reads == {"read_document", "search_in_files", "recent_files", "compare_files"}
+
+
+@pytest.mark.parametrize("said,want", [
+    ("Overførsler/Downloads", ["Overførsler"]),
+    ("Overførsler (Downloads)/x.pdf", ["Overførsler", "x.pdf"]),
+    ("dokumenter/Documents/rapport.docx", ["dokumenter", "rapport.docx"]),
+    ("skrivebordet/projects", ["skrivebordet", "projects"]),
+    ("Downloads/Downloads", ["Downloads"]),
+    ("Projekter/Downloads", ["Projekter", "Downloads"]),  # not a known folder first: untouched
+])
+def test_collapse_bilingual_folder_names(said, want):
+    assert F.collapse(said.split("/")) == want
+
+
+def test_recent_files_in_bilingual_downloads(ctx, home):
+    (home / "Downloads" / "faktura.pdf").write_bytes(b"%PDF-1.4")
+    assert F.expand("Overførsler/Downloads") == home / "Downloads"

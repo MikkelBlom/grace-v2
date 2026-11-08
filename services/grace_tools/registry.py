@@ -122,6 +122,39 @@ def problems(t, args):
     return out
 
 
+USE_TOOL_HELP = ("use_tool takes name = the tool's own name from find_tools (e.g. create_document) and args = "
+                 "its arguments; a file or folder name goes inside args. Call it once more that way.")
+
+
+def unpack_use_tool(args, known):
+    """(tool name, its args, None) from a use_tool call, or (None, None, a message for Gemma).
+
+    Tools with an argument called `name` (create_document, make_chart, write_file...) collide with
+    use_tool's own `name`: the tools sim (2026-11-08) saw `{"name": "Budget.csv", "args": {"name":
+    "create_document", ...}}`, the tool's keys beside `args`, and four retries of the same mistake.
+    These are repaired here, never guessed: only a name that is a real tool is used as one."""
+    if not isinstance(args, dict):
+        return None, None, USE_TOOL_HELP
+    outer = args.get("name") if isinstance(args.get("name"), str) else ""
+    inner = args.get("args") if isinstance(args.get("args"), dict) else {}
+    # Keys Gemma put next to `args` that belong inside it ("title" beside "args").
+    extra = {k: v for k, v in args.items() if k not in ("name", "args", "tool")}
+    inner = {**extra, **inner}
+    for cand in (outer, args.get("tool"), inner.get("tool")):
+        if isinstance(cand, str) and cand.strip() in known:
+            out = {k: v for k, v in inner.items() if k != "tool"}
+            return cand.strip(), out, None
+    if isinstance(inner.get("name"), str) and inner["name"].strip() in known:
+        tool_name = inner["name"].strip()
+        out = {k: v for k, v in inner.items() if k != "name"}
+        if outer:
+            out["name"] = outer  # the file name that took the tool's place
+        return tool_name, out, None
+    if outer:
+        return None, None, f"There is no tool called {outer}. {USE_TOOL_HELP}"
+    return None, None, USE_TOOL_HELP
+
+
 def run(ctx, name, args, alive, confirmed=False):
     t = TOOLS.get(name)
     if t is None:

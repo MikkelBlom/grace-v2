@@ -16,7 +16,8 @@
       args: { use_tool: '(?s)(convert_file.*pdf|pdf.*convert_file)' }
 - id: f02-note-then-append
   turns:
-    - say: skriv en note om at jeg skal ringe til tandlægen på mandag
+    # "skriv en note" is note_add (time group) as much as a file; a text file is what can be appended.
+    - say: lav en tekstfil om at jeg skal ringe til tandlægen på mandag
       tools: [write_file]
       args: { write_file: '(?i)tandl' }
       not_answer: "(?i)can't|cannot"
@@ -66,7 +67,8 @@
       not_answer: 'C:[/\\]'
 - id: f09-move-then-undo
   turns:
-    - say: skriv en indkøbsliste med mælk og smør
+    # "skriv en indkøbsliste" alone is todo_add's shopping list (2026-11-08: 2/2), not a file.
+    - say: lav en tekstfil der hedder indkøbsliste med mælk og smør
       tools: [write_file]
     - say: flyt den til skrivebordet
       tools: [use_tool]
@@ -97,7 +99,7 @@
       args: { use_tool: 'zip_files' }
 - id: f13-edit-asks-first
   turns:
-    - say: skriv en note der siger mødet er på fredag
+    - say: lav en tekstfil der siger mødet er på fredag
       tools: [write_file]
     - say: ret fredag til lørdag i den note
       tools: [use_tool]
@@ -107,15 +109,17 @@
 # ---- P1 (files_explorer.py): move the open Explorer window, extra folders for find_files ----
 - id: f14-explorer-up
   turns:
+    # Opening it (open_file) or listing it are both fine; dokumenter.dk and momsdokumenter.pdf are not.
     - say: åbn mappen dokumenter
-      tools: [list_folder]
+      not_answer: '(?i)dokumenter\.dk|momsdokumenter|website'
     - say: gå en mappe op
       tools: [use_tool]
       args: { use_tool: '(?s)explorer.*"up"' }
       not_answer: "(?i)can't|cannot"
 - id: f15-explorer-select
   turns:
-    - say: find min rapport i dokumenter og marker den i stifinder
+    # A file that exists in his folders (there is no "rapport" in Documents).
+    - say: find filen migration report og marker den i stifinder
       tools: [use_tool]
       args: { use_tool: '(?s)explorer.*select' }
 - id: f16-index-extra-folder

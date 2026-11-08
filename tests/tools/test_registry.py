@@ -67,3 +67,37 @@ def test_bad_arguments_are_described_not_run(ctx):
         assert out["result"] == "Painted."
     finally:
         registry.TOOLS.pop("test_paint")
+
+
+# ---- use_tool unpacking (tools sim 2026-11-08: file names in use_tool's `name`) ---------------
+
+KNOWN = {"create_document", "make_chart", "write_file", "media"}
+
+
+def test_unpack_plain_call():
+    assert registry.unpack_use_tool({"name": "write_file", "args": {"name": "liste.md", "content": "x"}}, KNOWN) == \
+        ("write_file", {"name": "liste.md", "content": "x"}, None)
+
+
+def test_unpack_file_name_and_tool_swapped():
+    call = {"name": "Budget.csv", "args": {"name": "create_document", "format": "csv", "title": "Budget"}}
+    assert registry.unpack_use_tool(call, KNOWN) == \
+        ("create_document", {"format": "csv", "title": "Budget", "name": "Budget.csv"}, None)
+
+
+def test_unpack_moves_stray_keys_inside():
+    call = {"name": "make_chart", "title": "Weight", "args": {"values": [1, 2]}}
+    assert registry.unpack_use_tool(call, KNOWN) == ("make_chart", {"title": "Weight", "values": [1, 2]}, None)
+
+
+def test_unpack_accepts_a_tool_key():
+    assert registry.unpack_use_tool({"tool": "media", "args": {"action": "next"}}, KNOWN)[:2] == \
+        ("media", {"action": "next"})
+
+
+def test_unpack_without_a_tool_explains_the_shape():
+    tool, args, why = registry.unpack_use_tool({"args": {"format": "csv"}, "title": "Budget.csv"}, KNOWN)
+    assert tool is None and "a file or folder name goes inside args" in why
+    tool, _, why = registry.unpack_use_tool({"name": "Why_Eat_Vegetables.pptx", "args": {"format": "pptx"}}, KNOWN)
+    assert tool is None and why.startswith("There is no tool called Why_Eat_Vegetables.pptx.")
+    assert registry.unpack_use_tool("nonsense", KNOWN)[0] is None

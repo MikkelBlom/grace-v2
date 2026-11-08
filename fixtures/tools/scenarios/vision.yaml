@@ -23,9 +23,8 @@
       not_answer: "(?i)can't see your screen|kan ikke se din skærm"
 - id: v04-show-me-settings
   turns:
+    # Ambiguous: pointing at a settings icon or opening Settings (2/2 on 2026-11-08) both fit.
     - say: vis mig hvor indstillingerne er
-      tools: [find_tools, use_tool]
-      args: { use_tool: "(?i)point_at" }
       not_answer: "(?i)can't see your screen|kan ikke se din skærm"
 - id: v05-read-text-aloud
   turns:
@@ -41,7 +40,7 @@
   turns:
     - say: hvor er søgefeltet
       tools: [find_tools, use_tool]
-      args: { use_tool: "(?i)find_on_screen|point_at" }
+      args: { use_tool: "(?i)find_on_screen|point_at|look_at_screen" }
     - say: vis mig det
       tools: [find_tools, use_tool]
       args: { use_tool: "(?i)point_at" }

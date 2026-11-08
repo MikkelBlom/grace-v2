@@ -24,7 +24,9 @@
 | Harness split | Planned | Conversation logic in its own process (now inside the engine's conductor) | — | engine | — |
 | Memory | Implemented (ADR 0015), not yet re-tested live | Code-rendered block, commitments table, quoted evidence, scope, calendar; 216-217/246 on the bench | 2026-10-11 | embed server | — |
 | Embed server | Implemented | `services/embed_server.py` (harrier-270m, CPU, :7812) | 2026-10-11 | bench/.venv-embed | — |
-| Tools | Planned (v0.3) | ADR 0010: web search, open program, file search | — | harness | — |
+| Tools | Superseded | ADR 0010 plan; built as ADR 0019/0020/0021 (rows below) | — | — | — |
+| Tool registry + groups (ADR 0021) | Implemented, not used live | `services/grace_tools/`: files, code, system, time, research, vision; risk classes, confirm flow by spoken yes, find_tools/use_tool, spoken announcements | 2026-10-22 | tools server | live run |
+| P1 tools (TOOLS-ROADMAP) | Implemented, not used live | Clipboard, type_text (asks), reminders/timers (now repeating), notes, read_document, active window/selected text, screen, system controls (phase 0-2); Explorer navigation, extra index folders, Spotify albums/playlists (2026-11-08) | 2026-11-08 | registry | live run; calendar needs Mikkel's choice |
 | `grace-sim` | Implemented | Real frontend on simulated rooms (CoRal + Grace's voice + DEMAND/ESC-50), ~35× real time; VAD/gate/DTD switches | 2026-10-11 | corpora | — |
 | `grace-memory-bench` | Implemented | 40 Danish multi-session scenarios, fake clock, real answer path; `--reconcile` experimental | 2026-10-11 | llama + embed | — |
 | Style rules (ADR 0017) | Implemented, not yet used live | Feedback on how Grace talks becomes quoted, capped (10) rules in their own block; listed/removed by voice; taken out of fact extraction | 2026-10-20 | llama slot 2 | — |

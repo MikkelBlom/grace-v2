@@ -358,11 +358,17 @@ fn shrink(messages: &mut Vec<Value>) -> bool {
 pub fn claims_action(text: &str) -> bool {
     static CLAIM: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(
-            r"(?i)\bI(?:'ve| have)?\s+(?:just\s+|now\s+)?(?:opened|launched|started|played|paused|skipped|turned (?:it |the volume )?(?:up|down)|muted)\b|\b(?:is|are) now (?:open|opened|playing|running)\b|\b(?:is|are) (?:playing|running)\b|\bhas been (?:opened|started|launched)\b",
+            // The last two branches: the present progressive, "Opening VS Code now." / "I'm opening
+            // the calculator" with no tool call (tools sim 2026-11-08, s07/s19/s34/sys16).
+            r"(?i)\bI(?:'ve| have)?\s+(?:just\s+|now\s+)?(?:opened|launched|started|played|paused|skipped|turned (?:it |the volume )?(?:up|down)|muted)\b|\b(?:is|are) now (?:open|opened|playing|running)\b|\b(?:is|are) (?:playing|running)\b|\bhas been (?:opened|started|launched)\b|\bI(?:'m| am)\s+(?:now\s+|just\s+)?(?:opening|launching|starting|playing|closing|typing|writing (?:it|that|this) (?:in|into))\b|(?:^|[.!?]\s+)(?:(?:okay|ok|sure|alright|sure thing)[,.!]?\s+)?(?:opening|launching|starting|playing|closing|typing)\s+(?:up\s+)?(?:the\s+|your\s+)?[A-Z\w]",
         )
         .expect("claim regex")
     });
-    CLAIM.is_match(text)
+    // "Opening hours ..." is a noun, not an action (and the regex crate has no lookahead).
+    static HOURS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)\bopening (?:hours|times)\b").expect("hours regex")
+    });
+    CLAIM.is_match(&HOURS.replace_all(text, "hours"))
 }
 
 /// A sentence that promises a tool action instead of doing it ("Let me double check that for
@@ -805,6 +811,14 @@ mod tests {
         assert!(!claims_action("I found that on The Mentalist Wiki."));
         assert!(!claims_action("I can open that for you."));
         assert!(!claims_action("The store is open until ten."));
+        assert!(claims_action("Okay. Opening VS Code now."));
+        assert!(claims_action("Opening YouTube for you now."));
+        assert!(claims_action("Okay. I'm opening the calculator for you now."));
+        assert!(claims_action("Okay. I am opening Notepad and writing the note for you."));
+        assert!(claims_action("Sure thing, playing some music."));
+        assert!(!claims_action("Opening hours on Sundays are ten to four."));
+        assert!(!claims_action("I'm writing that down in my head."));
+        assert!(!claims_action("What should I start with?"));
         assert!(promises_action("Let me double check that for you."));
         assert!(promises_action("I will look it up."));
         assert!(promises_action("I'll open it now."));
